@@ -125,31 +125,36 @@ export default function App() {
   };
 
   const handleQRISSuccess = (listingId: string, type: MonetizationType) => {
-    setListings((prev) =>
-      prev.map((item) => {
-        if (item.id === listingId) {
-          if (type === 'sundul') {
-            return {
-              ...item,
-              createdAt: new Date().toISOString(),
-            };
-          } else if (type === 'superbu') {
-            return {
-              ...item,
-              isSuperBU: true,
-              superBUExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            };
-          }
-        }
-        return item;
-      })
-    );
+    const now = new Date().toISOString();
+    let updatedTitle = '';
+
+    setListings((prev) => {
+      const idx = prev.findIndex((item) => item.id === listingId);
+      if (idx === -1) return prev;
+
+      const target = { ...prev[idx] };
+      updatedTitle = target.title;
+      target.createdAt = now;
+      target.sundulAt = now;
+
+      if (type === 'superbu') {
+        target.isSuperBU = true;
+        target.superBUExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      // Move directly to the very top (index 0) of the listings array
+      const remaining = prev.filter((item) => item.id !== listingId);
+      return [target, ...remaining];
+    });
 
     if (type === 'sundul') {
-      showToast('🚀 Iklan berhasil disundul ke urutan teratas feed!');
+      showToast('🚀 Iklan BERHASIL DISUNDUL! Naik ke urutan #1 teratas feed!');
     } else {
-      showToast('🔥 Badge SUPER BU aktif selama 24 jam dengan border bercahaya!');
+      showToast('🔥 Iklan berhasil diubah menjadi PALING BU! Highlight kuning penuh aktif.');
     }
+
+    // Switch to home feed so user immediately sees their listing at the very top
+    setActiveTab('home');
   };
 
   const handleDeleteListing = (id: string) => {
@@ -202,6 +207,16 @@ export default function App() {
         return true;
       })
       .sort((a, b) => {
+        // 1. Most recent sundul timestamp always places an item at the absolute #1 top
+        const aSundul = a.sundulAt ? new Date(a.sundulAt).getTime() : 0;
+        const bSundul = b.sundulAt ? new Date(b.sundulAt).getTime() : 0;
+        if (aSundul > 0 || bSundul > 0) {
+          if (aSundul !== bSundul) {
+            return bSundul - aSundul;
+          }
+        }
+
+        // 2. PALING BU (isSuperBU) listings always prioritized at the top of the feed
         if (a.isSuperBU && !b.isSuperBU) return -1;
         if (!a.isSuperBU && b.isSuperBU) return 1;
 

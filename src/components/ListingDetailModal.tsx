@@ -47,8 +47,8 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
               {listing.category}
             </span>
             {listing.isSuperBU && (
-              <span className="flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
-                <Flame className="w-3 h-3 fill-amber-500 text-amber-600" /> SUPER BU
+              <span className="flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-full bg-amber-300 text-amber-950 border border-amber-400 shadow-xs animate-pulse">
+                <Flame className="w-3.5 h-3.5 fill-red-600 text-red-600" /> PALING BU
               </span>
             )}
           </div>
@@ -93,6 +93,12 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             />
             {/* Distress Sale Ribbon */}
             <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+              {listing.isSuperBU && (
+                <span className="px-3 py-1.5 rounded-xl bg-amber-400 text-amber-950 font-black text-sm tracking-tight shadow-md flex items-center gap-1.5 border border-amber-500 animate-pulse">
+                  <Flame className="w-4 h-4 fill-red-600 text-red-600" />
+                  PALING BU
+                </span>
+              )}
               <span className="px-3 py-1.5 rounded-xl bg-red-600 text-white font-black text-sm tracking-tight shadow-md flex items-center gap-1.5">
                 <Flame className="w-4 h-4 fill-amber-300 text-amber-300" />
                 DISKON {listing.discountPercentage}% BU

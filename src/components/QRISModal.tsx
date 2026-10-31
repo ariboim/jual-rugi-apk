@@ -24,8 +24,8 @@ export const QRISModal: React.FC<QRISModalProps> = ({
   const price = type === 'sundul' ? 5000 : 15000;
   const title =
     type === 'sundul'
-      ? 'Sundul Iklan ke Urutan Teratas'
-      : 'Pasang Badge & Border SUPER BU (24 Jam)';
+      ? 'Sundul Iklan ke Urutan #1 Teratas Feed'
+      : 'Pasang Highlight Kuning & Label PALING BU (24 Jam)';
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -48,8 +48,8 @@ export const QRISModal: React.FC<QRISModalProps> = ({
       setTimeout(() => {
         onSuccess(listing.id, type);
         onClose();
-      }, 1400);
-    }, 1000);
+      }, 1200);
+    }, 800);
   };
 
   return (
@@ -82,7 +82,7 @@ export const QRISModal: React.FC<QRISModalProps> = ({
               )}
               <span>{title}</span>
             </div>
-            <p className="text-[11px] text-slate-500 truncate max-w-[280px] mx-auto">
+            <p className="text-[11px] text-slate-500 truncate max-w-[280px] mx-auto font-medium">
               Iklan: {listing.title}
             </p>
             <div className="mt-2 text-2xl font-black text-sky-950">
@@ -97,7 +97,11 @@ export const QRISModal: React.FC<QRISModalProps> = ({
               <div className="text-center text-slate-900 animate-scale-up">
                 <CheckCircle2 className="w-16 h-16 text-sky-600 mx-auto" />
                 <h4 className="font-black text-sm mt-2 text-sky-800">Pembayaran Berhasil!</h4>
-                <p className="text-[10px] text-slate-600">Fitur telah diaktifkan ke iklan Anda</p>
+                <p className="text-[11px] font-bold text-slate-700 mt-1">
+                  {type === 'sundul'
+                    ? '🚀 Iklan langsung disundul ke urutan #1 teratas!'
+                    : '🔥 Iklan aktif sebagai PALING BU dengan highlight kuning!'}
+                </p>
               </div>
             ) : (
               <>

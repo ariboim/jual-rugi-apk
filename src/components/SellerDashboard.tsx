@@ -32,9 +32,18 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   onOpenListingDetail,
   onOpenSafetyGuide,
 }) => {
-  const myListings = listings.filter(
-    (l) => l.seller.id === currentUser.id || l.seller.id === 'seller-agus'
-  );
+  const myListings = React.useMemo(() => {
+    return listings
+      .filter((l) => l.seller.id === currentUser.id || l.seller.id === 'seller-agus')
+      .sort((a, b) => {
+        const aSundul = a.sundulAt ? new Date(a.sundulAt).getTime() : 0;
+        const bSundul = b.sundulAt ? new Date(b.sundulAt).getTime() : 0;
+        if (aSundul !== bSundul) return bSundul - aSundul;
+        if (a.isSuperBU && !b.isSuperBU) return -1;
+        if (!a.isSuperBU && b.isSuperBU) return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+  }, [listings, currentUser.id]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-5 space-y-5 pb-24 text-slate-800">
@@ -97,24 +106,24 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
               </span>
             </h4>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Pindahkan posisi iklan Anda ke urutan paling atas di feed secara instan agar cepat laku dilirik calon pembeli COD.
+              Pindahkan posisi iklan Anda langsung ke urutan paling atas di feed secara instan agar cepat laku dilirik calon pembeli COD.
             </p>
           </div>
         </div>
 
-        <div className="bg-white border border-amber-200 p-4 rounded-2xl shadow-xs flex items-start gap-3">
-          <div className="p-2.5 rounded-xl bg-amber-50 text-amber-700 shrink-0">
-            <Flame className="w-5 h-5 fill-amber-500 text-amber-500" />
+        <div className="bg-white border border-amber-300 p-4 rounded-2xl shadow-xs flex items-start gap-3">
+          <div className="p-2.5 rounded-xl bg-amber-100 text-amber-700 shrink-0">
+            <Flame className="w-5 h-5 fill-red-600 text-red-600" />
           </div>
           <div>
             <h4 className="font-bold text-sm text-sky-950 flex items-center gap-1.5">
-              <span>Pasang Badge Super BU</span>
-              <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-xs">
+              <span>Pasang Badge Paling BU</span>
+              <span className="text-[10px] font-black bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded-xs">
                 Rp 15.000
               </span>
             </h4>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Dapatkan border emas menyala, label darurat SUPER BU, dan prioritas tampil di feed teratas selama 24 jam penuh.
+              Dapatkan highlight kuning penuh di seluruh iklan, label darurat PALING BU, dan prioritas tampil di feed teratas selama 24 jam penuh.
             </p>
           </div>
         </div>
@@ -157,10 +166,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           myListings.map((item) => (
             <div
               key={item.id}
-              className={`p-4 rounded-2xl bg-white border transition-all shadow-xs ${
+              className={`p-4 rounded-2xl transition-all shadow-xs ${
                 item.isSuperBU
-                  ? 'border-sky-400 ring-1 ring-sky-300/60'
-                  : 'border-sky-100'
+                  ? 'bg-amber-50/95 border-2 border-amber-400 ring-2 ring-amber-300 shadow-md shadow-amber-500/15'
+                  : 'bg-white border border-sky-100'
               }`}
             >
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -169,13 +178,15 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   onClick={() => onOpenListingDetail(item)}
                   className="flex items-start gap-3 cursor-pointer grow"
                 >
-                  <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-sky-50 shrink-0 border border-sky-100">
+                  <div className={`relative w-20 h-20 rounded-xl overflow-hidden shrink-0 border ${
+                    item.isSuperBU ? 'bg-amber-100 border-amber-300' : 'bg-sky-50 border-sky-100'
+                  }`}>
                     <img
                       src={item.imageUrl}
                       alt={item.title}
                       className="w-full h-full object-cover"
                     />
-                    <span className="absolute bottom-1 left-1 text-[9px] font-black px-1.5 py-0.2 rounded-xs bg-sky-500 text-white">
+                    <span className="absolute bottom-1 left-1 text-[9px] font-black px-1.5 py-0.2 rounded-xs bg-red-600 text-white">
                       -{item.discountPercentage}%
                     </span>
                   </div>
@@ -186,8 +197,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                         {item.category}
                       </span>
                       {item.isSuperBU && (
-                        <span className="flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
-                          <Flame className="w-3 h-3 fill-amber-500 text-amber-600" /> SUPER BU AKTIF
+                        <span className="flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-300 text-amber-950 border border-amber-400 shadow-xs animate-pulse">
+                          <Flame className="w-3 h-3 fill-red-600 text-red-600" /> PALING BU AKTIF
+                        </span>
+                      )}
+                      {item.sundulAt && (
+                        <span className="flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 border border-sky-300">
+                          <ArrowUp className="w-3 h-3 text-sky-600" /> SUNDUL TERATAS
                         </span>
                       )}
                       <span className="text-[10px] text-sky-700 font-bold flex items-center gap-1">
@@ -195,12 +211,16 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       </span>
                     </div>
 
-                    <h4 className="text-sm font-bold text-sky-950 hover:text-sky-600 line-clamp-1">
+                    <h4 className={`text-sm font-bold hover:text-sky-600 line-clamp-1 ${
+                      item.isSuperBU ? 'text-amber-950 font-black' : 'text-sky-950'
+                    }`}>
                       {item.title}
                     </h4>
 
                     <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-black text-sky-900">
+                      <span className={`text-sm font-black ${
+                        item.isSuperBU ? 'text-amber-950' : 'text-sky-900'
+                      }`}>
                         Rp {item.sellingPrice.toLocaleString('id-ID')}
                       </span>
                       <span className="text-xs text-slate-400 line-through">
@@ -231,25 +251,25 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   <button
                     onClick={() => onOpenQRIS(item, 'sundul')}
                     className="grow sm:grow-0 py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-xs"
-                    title="Sundul Iklan (Rp 5.000) - Naikkan ke posisi paling atas"
+                    title="Sundul Iklan (Rp 5.000) - Naikkan ke posisi paling atas feed"
                   >
                     <ArrowUp className="w-3.5 h-3.5 text-sky-600" />
                     <span>Sundul (Rp 5.000)</span>
                   </button>
 
-                  {/* Super BU Button */}
+                  {/* Paling BU Button */}
                   <button
                     onClick={() => onOpenQRIS(item, 'superbu')}
                     disabled={item.isSuperBU}
                     className={`grow sm:grow-0 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 ${
                       item.isSuperBU
-                        ? 'bg-amber-50 text-amber-800/60 border border-amber-200 cursor-default'
-                        : 'bg-amber-400 hover:bg-amber-500 text-amber-950 border border-amber-500/50 shadow-xs'
+                        ? 'bg-amber-200 text-amber-950/70 border border-amber-300 cursor-default'
+                        : 'bg-amber-400 hover:bg-amber-500 text-amber-950 border border-amber-500 font-black shadow-xs'
                     }`}
-                    title="Pasang Badge Super BU (Rp 15.000)"
+                    title="Pasang Highlight Kuning & Badge PALING BU (Rp 15.000)"
                   >
-                    <Flame className="w-3.5 h-3.5 fill-current" />
-                    <span>{item.isSuperBU ? 'Super BU Aktif' : 'Super BU (Rp 15.000)'}</span>
+                    <Flame className="w-3.5 h-3.5 fill-red-600 text-red-600" />
+                    <span>{item.isSuperBU ? 'Paling BU Aktif' : 'Paling BU (Rp 15.000)'}</span>
                   </button>
 
                   {/* Delete Button */}

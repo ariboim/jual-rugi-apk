@@ -36,6 +36,7 @@ export interface Listing {
   imageUrl: string;
   isSuperBU: boolean;
   superBUExpiresAt?: string;
+  sundulAt?: string;
   createdAt: string; // ISO string for sorting & "Sundul"
   seller: Seller;
   aiVerified: boolean;

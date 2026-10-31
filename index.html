@@ -18,8 +18,71 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
-      // Filter Vite HMR WebSocket connection warnings in AI Studio preview
+      // Intercept and satisfy Vite HMR WebSocket in Cloud Run/iFrame proxy environments where WebSockets cannot connect
       (function() {
+        if (typeof window === 'undefined') return;
+        var OrigWebSocket = window.WebSocket;
+
+        function FakeViteWebSocket(url, protocols) {
+          var emitter = new EventTarget();
+          this.url = String(url);
+          this.protocols = protocols;
+          this.readyState = 1; // OPEN
+          this.OPEN = 1;
+          this.CONNECTING = 0;
+          this.CLOSING = 2;
+          this.CLOSED = 3;
+          this.binaryType = 'blob';
+          this.bufferedAmount = 0;
+          this.extensions = '';
+          this.protocol = 'vite-hmr';
+
+          this.addEventListener = function(type, listener, options) {
+            emitter.addEventListener(type, listener, options);
+          };
+          this.removeEventListener = function(type, listener, options) {
+            emitter.removeEventListener(type, listener, options);
+          };
+          this.dispatchEvent = function(event) {
+            return emitter.dispatchEvent(event);
+          };
+          this.send = function() {};
+          this.close = function() {
+            this.readyState = 3;
+          };
+        }
+
+        FakeViteWebSocket.CONNECTING = 0;
+        FakeViteWebSocket.OPEN = 1;
+        FakeViteWebSocket.CLOSING = 2;
+        FakeViteWebSocket.CLOSED = 3;
+
+        function CustomWebSocket(url, protocols) {
+          var isVite = (protocols === 'vite-hmr') ||
+                       (Array.isArray(protocols) && protocols.indexOf('vite-hmr') !== -1) ||
+                       (typeof url === 'string' && (url.indexOf('token=') !== -1 || url.indexOf('vite-hmr') !== -1 || url.indexOf('@vite') !== -1));
+          if (isVite) {
+            return new FakeViteWebSocket(url, protocols);
+          }
+          return protocols !== undefined ? new OrigWebSocket(url, protocols) : new OrigWebSocket(url);
+        }
+
+        if (OrigWebSocket) {
+          CustomWebSocket.prototype = OrigWebSocket.prototype;
+          try {
+            Object.setPrototypeOf(CustomWebSocket, OrigWebSocket);
+          } catch(e) {}
+        }
+        CustomWebSocket.CONNECTING = 0;
+        CustomWebSocket.OPEN = 1;
+        CustomWebSocket.CLOSING = 2;
+        CustomWebSocket.CLOSED = 3;
+
+        try {
+          window.WebSocket = CustomWebSocket;
+        } catch(e) {}
+
+        // Filter Vite HMR WebSocket connection warnings in AI Studio preview
         function isViteWs(val) {
           if (!val) return false;
           var s = '';
