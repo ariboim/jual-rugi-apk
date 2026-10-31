@@ -39,9 +39,11 @@ export const PWAInstallButton: React.FC = () => {
           <div className="w-full max-w-sm rounded-2xl bg-white border border-sky-100 p-5 shadow-2xl text-slate-800">
             <div className="flex items-center justify-between pb-3 border-b border-sky-100">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center font-black text-white text-xs">
-                  JR
-                </div>
+                <img
+                  src="/assets/aistudio/logo_icon_transparent.png"
+                  alt="JualRugi.id"
+                  className="w-8 h-8 object-contain"
+                />
                 <div>
                   <h3 className="text-sm font-bold text-sky-950">Pasang JualRugi.id di iPhone</h3>
                   <p className="text-[11px] text-slate-500">Akses cepat tanpa buka browser</p>

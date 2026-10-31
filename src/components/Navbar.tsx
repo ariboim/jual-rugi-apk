@@ -37,31 +37,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Main Top Header */}
       <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
-        {/* Brand */}
+        {/* Brand - Transparent Official Logo without any frame */}
         <div className="flex items-center gap-2.5">
-          <div className="relative">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center font-black text-white text-base shadow-sm shadow-sky-500/25 border border-sky-300">
-              JR
-            </div>
-            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+          <div className="flex items-center gap-2 select-none cursor-pointer">
+            <img
+              src="/assets/aistudio/logo_transparent.png"
+              alt="JualRugi.id"
+              className="h-8 sm:h-9.5 md:h-10 w-auto object-contain select-none"
+            />
+            <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-sky-50 text-sky-700 border border-sky-200 font-extrabold uppercase tracking-wider hidden md:inline-block">
+              Distress Sale
             </span>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-black text-lg sm:text-xl tracking-tight text-sky-950">
-                Jual<span className="text-sky-500">Rugi</span>
-                <span className="text-xs text-amber-500 font-extrabold">.id</span>
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-sky-50 text-sky-700 border border-sky-200 font-extrabold uppercase tracking-wider">
-                Distress Sale
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-500 -mt-0.5 font-medium hidden sm:block">
-              Bursa Barang Bekas Butuh Uang (BU) Diskon Ekstrim • 100% COD
-            </p>
           </div>
         </div>
 

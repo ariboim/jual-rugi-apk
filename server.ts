@@ -1,3 +1,4 @@
+import http from 'http';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
@@ -12,6 +13,7 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
+  const httpServer = http.createServer(app);
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   // JSON body parser with limit for base64 images
@@ -193,6 +195,9 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     res.json({ status: 'ok', service: 'JualRugi.id API', timestamp: new Date().toISOString() });
   });
 
+  // Serve static assets from public directory
+  app.use(express.static(path.resolve(__dirname, 'public')));
+
   // Vite middleware in dev or static in prod
   if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.resolve(__dirname, 'dist')));
@@ -201,13 +206,16 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     });
   } else {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 JualRugi.id server running at http://0.0.0.0:${PORT}`);
   });
 }

@@ -149,17 +149,14 @@ export const QRISModal: React.FC<QRISModalProps> = ({
                     <rect x="60" y="78" width="6" height="6" fill="#0284c7" />
                     <rect x="78" y="84" width="6" height="6" fill="#0284c7" />
 
-                    <circle cx="50" cy="50" r="10" fill="#38bdf8" />
-                    <text
-                      x="50"
-                      y="53"
-                      fontSize="7"
-                      fontWeight="bold"
-                      fill="#ffffff"
-                      textAnchor="middle"
-                    >
-                      JR
-                    </text>
+                    <circle cx="50" cy="50" r="10" fill="#ffffff" />
+                    <image
+                      href="/assets/aistudio/logo_icon_transparent.png"
+                      x="42"
+                      y="42"
+                      width="16"
+                      height="16"
+                    />
                   </svg>
 
                   <div className="text-[8px] text-slate-500 font-mono">

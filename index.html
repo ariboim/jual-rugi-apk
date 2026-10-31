@@ -17,6 +17,52 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      // Filter Vite HMR WebSocket connection warnings in AI Studio preview
+      (function() {
+        function isViteWs(val) {
+          if (!val) return false;
+          var s = '';
+          if (typeof val === 'string') s = val;
+          else if (val.message) s = val.message + ' ' + (val.stack || '');
+          else {
+            try { s = JSON.stringify(val); } catch(e) { s = String(val); }
+          }
+          return s.indexOf('[vite]') !== -1 || s.indexOf('WebSocket') !== -1;
+        }
+
+        var origConsoleError = console.error;
+        console.error = function() {
+          for (var i = 0; i < arguments.length; i++) {
+            if (isViteWs(arguments[i])) return;
+          }
+          origConsoleError.apply(console, arguments);
+        };
+
+        var origConsoleWarn = console.warn;
+        console.warn = function() {
+          for (var i = 0; i < arguments.length; i++) {
+            if (isViteWs(arguments[i])) return;
+          }
+          origConsoleWarn.apply(console, arguments);
+        };
+
+        window.addEventListener('error', function(event) {
+          if (isViteWs(event.message) || isViteWs(event.error)) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return false;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isViteWs(event.reason)) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+      })();
+    </script>
   </head>
   <body class="bg-[#f0f9ff] text-slate-800 antialiased selection:bg-sky-500 selection:text-white">
     <div id="root"></div>

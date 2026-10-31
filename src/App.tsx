@@ -243,29 +243,32 @@ export default function App() {
         onOpenNewListing={() => setIsPostModalOpen(true)}
       />
 
-      {/* In-App Push Notification Banner for AI Approval */}
+      {/* In-App Push Notification Banner for AI Approval - Lowered position for clear visibility */}
       {aiApprovalNotification && (
-        <div className="bg-sky-500 text-white px-4 py-3 shadow-md border-b border-sky-400 sticky top-[72px] z-30 animate-bounce-once flex items-center justify-between">
-          <div className="flex items-center gap-2.5 max-w-4xl mx-auto grow">
-            <span className="p-1 rounded-full bg-white/20">
-              <CheckCircle2 className="w-5 h-5 text-white" />
-            </span>
-            <div className="text-xs sm:text-sm font-black tracking-wide leading-tight">
-              {aiApprovalNotification}
+        <div className="fixed top-24 sm:top-28 left-4 right-4 max-w-xl mx-auto z-50 animate-slide-down">
+          <div className="bg-sky-500 text-white px-4 py-3.5 rounded-2xl shadow-xl shadow-sky-900/25 border-2 border-white/40 flex items-center justify-between gap-3 backdrop-blur-sm">
+            <div className="flex items-center gap-3 grow">
+              <span className="p-1.5 rounded-xl bg-white/20 shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-white" />
+              </span>
+              <div className="text-xs sm:text-sm font-extrabold tracking-normal leading-snug">
+                {aiApprovalNotification}
+              </div>
             </div>
+            <button
+              onClick={() => setAiApprovalNotification(null)}
+              className="p-1.5 hover:bg-white/20 rounded-xl text-white shrink-0 cursor-pointer transition active:scale-90"
+              title="Tutup Notifikasi"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={() => setAiApprovalNotification(null)}
-            className="p-1 hover:bg-white/20 rounded-lg text-white"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
       )}
 
       {/* Floating System Toast */}
       {toastMessage && (
-        <div className="fixed top-20 right-4 z-50 bg-sky-600 text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold flex items-center gap-2 animate-fade-in border border-sky-400">
+        <div className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-50 bg-sky-600 text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold flex items-center gap-2 animate-fade-in border border-sky-400">
           <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
           <span>{toastMessage}</span>
         </div>
