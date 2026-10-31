@@ -79,14 +79,17 @@ export const ListingCard: React.FC<ListingCardProps> = ({
           </span>
         </div>
 
-        {/* Category Tag on bottom left */}
-        <div className="absolute bottom-2 left-2 z-10">
+        {/* Category Tag on bottom left & Multi-angle photo count on bottom right */}
+        <div className="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between">
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs ${
             listing.isSuperBU
               ? 'bg-amber-300 text-amber-950 border border-amber-400 font-black'
               : 'bg-white/95 text-sky-950 border border-sky-100'
           }`}>
             {listing.category}
+          </span>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs bg-sky-950/75 text-white flex items-center gap-1 border border-white/20">
+            <span>📸 4 Sudut</span>
           </span>
         </div>
 

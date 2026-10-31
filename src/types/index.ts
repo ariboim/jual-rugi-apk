@@ -23,6 +23,29 @@ export interface Seller {
   phoneMasked: string;
 }
 
+export interface PhotoAngle {
+  url: string;
+  label: string; // e.g. Tampak Depan, Tampak Belakang, Sisi Samping, Detail Minus
+  description?: string;
+}
+
+/**
+ * Interface data foto produk jualrugi.id
+ * Format data array yang digunakan:
+ * [
+ *   { id: '1', url: 'https://...', caption: 'Tampak depan layar nyala mulus' },
+ *   { id: '2', url: 'https://...', caption: 'Bagian belakang dan modul kamera' }
+ * ]
+ */
+export interface ProductPhoto {
+  id: string;
+  url: string;
+  caption?: string;
+  file?: File;
+  label?: string;
+  description?: string;
+}
+
 export interface Listing {
   id: string;
   title: string;
@@ -34,6 +57,9 @@ export interface Listing {
   condition: string;
   urgentReason: string;
   imageUrl: string;
+  images?: string[];
+  photoAngles?: PhotoAngle[];
+  photos?: ProductPhoto[];
   isSuperBU: boolean;
   superBUExpiresAt?: string;
   sundulAt?: string;

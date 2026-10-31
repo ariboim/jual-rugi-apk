@@ -1,17 +1,19 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   X,
   MapPin,
   Flame,
-  ShieldCheck,
   AlertTriangle,
   Clock,
   UserCheck,
   Share2,
   CheckCircle2,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 import { Listing } from '../types';
+import { getListingPhotos } from '../data/initialData';
+import { ProductGallery } from './gallery/ProductGallery';
 
 interface ListingDetailModalProps {
   listing: Listing;
@@ -37,8 +39,11 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
     Math.round((listing.sellingPrice * 0.9) / 50000) * 50000,
   ];
 
+  // Mengambil array foto produk (hingga 6 foto) dengan format terintegrasi [{ id, url, caption }]
+  const productPhotos = useMemo(() => getListingPhotos(listing), [listing]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-sky-950/35 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-sky-950/40 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
       <div className="relative w-full max-w-2xl rounded-3xl bg-white border border-sky-100 shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col text-slate-800">
         {/* Sticky Modal Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-sky-100 bg-white sticky top-0 z-20">
@@ -55,6 +60,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => {
                 if (navigator.share) {
                   navigator.share({
@@ -67,15 +73,16 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                   alert('Tautan iklan berhasil disalin!');
                 }
               }}
-              className="p-2 rounded-full bg-sky-50 text-sky-800 hover:bg-sky-100 cursor-pointer"
+              className="p-2 rounded-full bg-sky-50 text-sky-800 hover:bg-sky-100 cursor-pointer transition-colors"
               title="Bagikan Iklan"
             >
               <Share2 className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={onClose}
-              className="p-2 rounded-full bg-sky-50 text-sky-800 hover:bg-sky-100 cursor-pointer"
-              title="Tutup"
+              className="p-2 rounded-full bg-sky-50 text-sky-800 hover:bg-sky-100 cursor-pointer transition-colors"
+              title="Tutup (Esc)"
             >
               <X className="w-4 h-4" />
             </button>
@@ -83,37 +90,32 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
         </div>
 
         {/* Scrollable Body */}
-        <div className="overflow-y-auto grow p-4 sm:p-6 space-y-5 bg-[#f0f9ff]/50">
-          {/* Main Photo with urgent overlay */}
-          <div className="relative rounded-2xl overflow-hidden aspect-16/10 bg-sky-50 border border-sky-100">
-            <img
-              src={listing.imageUrl}
-              alt={listing.title}
-              className="w-full h-full object-cover"
-            />
-            {/* Distress Sale Ribbon */}
-            <div className="absolute top-3 left-3 flex flex-wrap gap-2">
-              {listing.isSuperBU && (
-                <span className="px-3 py-1.5 rounded-xl bg-amber-400 text-amber-950 font-black text-sm tracking-tight shadow-md flex items-center gap-1.5 border border-amber-500 animate-pulse">
-                  <Flame className="w-4 h-4 fill-red-600 text-red-600" />
-                  PALING BU
+        <div className="overflow-y-auto grow p-4 sm:p-6 space-y-4 bg-[#f0f9ff]/40">
+          {/* Modul Galeri Produk & Fullscreen Lightbox Terintegrasi */}
+          <ProductGallery
+            photos={productPhotos}
+            productTitle={listing.title}
+            badgeOverlay={
+              <div className="flex flex-wrap gap-2">
+                {listing.isSuperBU && (
+                  <span className="px-3 py-1 rounded-xl bg-amber-400 text-amber-950 font-black text-xs sm:text-sm tracking-tight shadow-md flex items-center gap-1.5 border border-amber-500 animate-pulse">
+                    <Flame className="w-3.5 h-3.5 fill-red-600 text-red-600" />
+                    PALING BU
+                  </span>
+                )}
+                <span className="px-3 py-1 rounded-xl bg-red-600 text-white font-black text-xs sm:text-sm tracking-tight shadow-md flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                  DISKON {listing.discountPercentage}% BU
                 </span>
-              )}
-              <span className="px-3 py-1.5 rounded-xl bg-red-600 text-white font-black text-sm tracking-tight shadow-md flex items-center gap-1.5">
-                <Flame className="w-4 h-4 fill-amber-300 text-amber-300" />
-                DISKON {listing.discountPercentage}% BU
-              </span>
-            </div>
-
-            {listing.aiVerified && (
-              <div className="absolute bottom-3 right-3">
-                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-600 text-white text-xs font-bold shadow-md">
-                  <ShieldCheck className="w-4 h-4 text-sky-200" />
-                  Foto Fisik Terverifikasi AI
-                </span>
+                {listing.aiVerified && (
+                  <span className="px-2.5 py-1 rounded-xl bg-sky-600 text-white font-bold text-xs shadow-md flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-sky-200" />
+                    Foto Fisik AI Verified
+                  </span>
+                )}
               </div>
-            )}
-          </div>
+            }
+          />
 
           {/* Pricing Box */}
           <div className="bg-white p-4 rounded-2xl border border-sky-100 shadow-xs space-y-2">
@@ -237,6 +239,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
               {quickOffers.map((offer, idx) => (
                 <button
                   key={idx}
+                  type="button"
                   onClick={() => onQuickMakeOffer(listing, offer)}
                   className="py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-xs font-semibold text-sky-950 transition text-center cursor-pointer active:scale-95 shadow-xs"
                 >
@@ -264,6 +267,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
         {/* Sticky Action Footer - Sky Blue CTA */}
         <div className="p-4 border-t border-sky-100 bg-white sticky bottom-0 z-20 flex items-center gap-3">
           <button
+            type="button"
             onClick={() => onOpenChat(listing)}
             className="grow py-3 px-4 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-sm shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
           >

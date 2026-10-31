@@ -5,11 +5,11 @@ import {
   AlertOctagon,
   Flame,
   CheckCircle2,
-  Camera,
   RefreshCw,
 } from 'lucide-react';
-import { Category, CATEGORIES, Listing, UserProfile } from '../types';
+import { Category, CATEGORIES, Listing, UserProfile, ProductPhoto } from '../types';
 import { DEMO_PRESET_IMAGES } from '../data/initialData';
+import { PhotoUploadManager } from './gallery/PhotoUploadManager';
 
 interface PostListingModalProps {
   onClose: () => void;
@@ -29,8 +29,9 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
   const [sellingPrice, setSellingPrice] = useState<number | ''>('');
   const [condition, setCondition] = useState('');
   const [urgentReason, setUrgentReason] = useState('');
-  const [imageBase64, setImageBase64] = useState<string>('');
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string>('');
+
+  // Sistem Upload & Manajemen Foto (Maksimal 6 Foto dengan Caption)
+  const [photos, setPhotos] = useState<ProductPhoto[]>([]);
 
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationStep, setVerificationStep] = useState('');
@@ -43,20 +44,6 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
       ? Math.round(((numNormal - numSelling) / numNormal) * 100)
       : 0;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        setImageBase64(result);
-        setImagePreviewUrl(result);
-        setRejectionNotice(null);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const loadPreset = (preset: (typeof DEMO_PRESET_IMAGES)[0]) => {
     setTitle(preset.sampleTitle);
     setCategory(preset.category);
@@ -64,21 +51,22 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
     setSellingPrice(preset.selling);
     setCondition(preset.condition);
     setUrgentReason(preset.urgentReason);
-    setImagePreviewUrl(preset.url);
 
-    fetch(preset.url)
-      .then((res) => res.blob())
-      .then((blob) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setImageBase64(reader.result as string);
-        };
-        reader.readAsDataURL(blob);
-      })
-      .catch(() => {
-        setImageBase64(preset.url);
-      });
+    // Memuat contoh foto multi-sudut dengan caption yang relevan
+    const presetPhotos: ProductPhoto[] = [
+      {
+        id: `preset-${Date.now()}-1`,
+        url: preset.url,
+        caption: `Tampak depan: ${preset.sampleTitle}`,
+      },
+      {
+        id: `preset-${Date.now()}-2`,
+        url: preset.url,
+        caption: 'Tampak sudut samping dan kondisi kelengkapan',
+      },
+    ];
 
+    setPhotos(presetPhotos);
     setRejectionNotice(null);
   };
 
@@ -98,8 +86,8 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
       alert('JualRugi.id mengkhususkan iklan Butuh Uang (BU) dengan diskon minimal 15%.');
       return;
     }
-    if (!imagePreviewUrl) {
-      alert('Mohon unggah foto fisik barang atau pilih preset contoh.');
+    if (photos.length === 0) {
+      alert('Mohon unggah minimal 1 foto fisik asli barang Anda (maksimal 6 foto).');
       return;
     }
 
@@ -115,6 +103,8 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
         setVerificationStep('📊 Menghitung kewajaran harga jual rugi & deskripsi minus...');
       }, 1500);
 
+      const primaryPhoto = photos[0];
+
       const response = await fetch('/api/verify-listing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -126,7 +116,7 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
           sellingPrice: Number(sellingPrice),
           condition: condition || 'Normal pemakaian, minus lecet pemakaian fisik.',
           urgentReason: urgentReason || 'Butuh dana darurat segera.',
-          imageBase64: imageBase64 || imagePreviewUrl,
+          imageBase64: primaryPhoto.url,
         }),
       });
 
@@ -144,7 +134,14 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
           location,
           condition: condition.trim() || 'Unit berfungsi normal, minus kosmetik pemakaian.',
           urgentReason: urgentReason.trim() || 'Butuh uang segera untuk keperluan mendesak.',
-          imageUrl: imagePreviewUrl,
+          imageUrl: primaryPhoto.url,
+          photos,
+          images: photos.map((p) => p.url),
+          photoAngles: photos.map((p, idx) => ({
+            url: p.url,
+            label: p.caption || (idx === 0 ? 'Tampak Depan' : `Sudut #${idx + 1}`),
+            description: p.caption,
+          })),
           isSuperBU: false,
           createdAt: new Date().toISOString(),
           seller: {
@@ -194,9 +191,10 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             disabled={isVerifying}
-            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-sky-50 cursor-pointer"
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-sky-50 cursor-pointer transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -209,14 +207,10 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
             <div className="p-3.5 rounded-2xl bg-red-50 border-2 border-red-500 text-red-950">
               <div className="flex items-start gap-2.5">
                 <AlertOctagon className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-bold text-red-800 text-sm">
-                    Verifikasi AI Ditolak:
-                  </h4>
-                  <p className="mt-1 text-xs text-red-900 leading-relaxed font-medium">
-                    {rejectionNotice}
-                  </p>
-                  <p className="mt-2 text-[11px] text-red-700">
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-red-900 text-xs">Iklan Ditolak Oleh Sistem</h4>
+                  <p className="text-[11px] leading-relaxed text-red-800">{rejectionNotice}</p>
+                  <p className="text-[10px] text-slate-500 pt-1">
                     💡 <em>Tips:</em> Unggah foto fisik barang asli dari kamera Anda (bukan brosur/flyer katalog Canva), dan pastikan potongan harga minimal 15% dari pasaran wajar.
                   </p>
                 </div>
@@ -254,67 +248,15 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
             </div>
           </div>
 
-          {/* Image Upload Area */}
-          <div className="space-y-1.5">
-            <label className="font-bold text-slate-700 flex items-center justify-between">
-              <span>Foto Fisik Barang (Wajib Asli, Bukan Brosur) *</span>
-              {imagePreviewUrl && (
-                <span className="text-[10px] text-sky-700 font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Foto Terpilih
-                </span>
-              )}
-            </label>
-
-            {imagePreviewUrl ? (
-              <div className="relative rounded-2xl overflow-hidden aspect-16/9 bg-sky-50 border border-sky-200 group">
-                <img
-                  src={imagePreviewUrl}
-                  alt="Preview Barang"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-sky-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-3">
-                  <label className="py-1.5 px-3 rounded-xl bg-sky-500 text-white font-bold text-xs cursor-pointer hover:bg-sky-600 shadow-sm">
-                    Ganti Foto
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImageBase64('');
-                      setImagePreviewUrl('');
-                    }}
-                    className="py-1.5 px-3 rounded-xl bg-red-600 text-white font-bold text-xs hover:bg-red-700"
-                  >
-                    Hapus
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <label className="border-2 border-dashed border-sky-200 hover:border-sky-500 rounded-2xl p-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition bg-white hover:bg-sky-50/50">
-                <div className="p-3 rounded-full bg-sky-100 text-sky-600">
-                  <Camera className="w-6 h-6" />
-                </div>
-                <div className="text-center">
-                  <span className="font-bold text-sky-950">
-                    Klik untuk Unggah Foto dari Kamera / Galeri
-                  </span>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Format JPG, PNG, WEBP (Maksimal 10MB)
-                  </p>
-                </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </label>
-            )}
+          {/* 1. Sistem Upload & Manajemen Foto (Maksimal 6 foto, validasi JPG/PNG/WebP, caption, tombol hapus) */}
+          <div className="bg-white p-4 rounded-2xl border border-sky-100 shadow-xs">
+            <PhotoUploadManager
+              photos={photos}
+              onChange={setPhotos}
+              maxPhotos={6}
+              maxSizeMB={5}
+              onError={(err) => setRejectionNotice(err)}
+            />
           </div>
 
           {/* Title */}
@@ -330,14 +272,14 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
             />
           </div>
 
-          {/* Strictly 4 Categories */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Category & Location */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="font-bold text-slate-700">Kategori (4 Kategori) *</label>
+              <label className="font-bold text-slate-700">Kategori *</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as Category)}
-                className="w-full px-3 py-2.5 rounded-xl bg-white border border-sky-200 focus:border-sky-500 text-slate-900 text-xs outline-none cursor-pointer shadow-xs"
+                className="w-full px-3 py-2.5 rounded-xl bg-white border border-sky-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-slate-900 text-xs outline-none shadow-xs"
               >
                 {CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
@@ -346,146 +288,148 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
                 ))}
               </select>
             </div>
-
-            {/* Location (City/Regency) */}
             <div className="space-y-1">
-              <label className="font-bold text-slate-700">Lokasi COD (Kota/Kabupaten) *</label>
+              <label className="font-bold text-slate-700">Lokasi COD *</label>
               <input
                 type="text"
                 required
-                placeholder="Contoh: Jakarta Selatan, Bekasi, Bandung"
+                placeholder="Contoh: Jakarta Selatan"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-white border border-sky-200 focus:border-sky-500 text-slate-900 placeholder-slate-400 text-xs outline-none shadow-xs"
+                className="w-full px-3 py-2.5 rounded-xl bg-white border border-sky-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-slate-900 text-xs outline-none shadow-xs"
               />
             </div>
           </div>
 
-          {/* Normal Price & Urgent Selling Price with Auto-Calculated Discount */}
-          <div className="bg-white p-3.5 rounded-2xl border border-sky-100 shadow-xs space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-500">Harga Pasaran Normal (Rp) *</label>
-                <input
-                  type="number"
-                  required
-                  min={10000}
-                  placeholder="Rp 10.000.000"
-                  value={normalPrice}
-                  onChange={(e) =>
-                    setNormalPrice(e.target.value ? Number(e.target.value) : '')
-                  }
-                  className="w-full px-3 py-2 rounded-xl bg-sky-50/50 border border-sky-200 text-slate-800 text-xs outline-none"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-sky-700">Harga Jual BU (Rp) *</label>
-                <input
-                  type="number"
-                  required
-                  min={10000}
-                  placeholder="Rp 6.500.000"
-                  value={sellingPrice}
-                  onChange={(e) =>
-                    setSellingPrice(e.target.value ? Number(e.target.value) : '')
-                  }
-                  className="w-full px-3 py-2 rounded-xl bg-sky-50/50 border border-sky-300 text-sky-950 font-black text-xs outline-none focus:border-sky-500"
-                />
-              </div>
+          {/* Pricing & Discount */}
+          <div className="grid grid-cols-2 gap-3 bg-white p-3.5 rounded-2xl border border-sky-100 shadow-xs">
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Harga Pasaran Normal (Rp) *</label>
+              <input
+                type="number"
+                required
+                min={10000}
+                placeholder="Contoh: 14500000"
+                value={normalPrice}
+                onChange={(e) => setNormalPrice(e.target.value ? Number(e.target.value) : '')}
+                className="w-full px-3 py-2 rounded-xl bg-sky-50/50 border border-sky-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 text-slate-900 text-xs font-semibold"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Harga Jual Cepat BU (Rp) *</label>
+              <input
+                type="number"
+                required
+                min={10000}
+                placeholder="Contoh: 8900000"
+                value={sellingPrice}
+                onChange={(e) => setSellingPrice(e.target.value ? Number(e.target.value) : '')}
+                className="w-full px-3 py-2 rounded-xl bg-sky-50/50 border border-sky-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 text-slate-900 text-xs font-bold text-sky-900"
+              />
             </div>
 
-            {/* Live Discount Gauge */}
-            <div className="p-2.5 rounded-xl bg-sky-50/80 border border-sky-100 flex items-center justify-between">
+            <div className="col-span-2 pt-2 border-t border-sky-50 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-sky-600 fill-sky-600 animate-pulse" />
-                <span className="font-bold text-slate-700">Kalkulasi Diskon Otomatis:</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`px-2.5 py-1 rounded-lg font-black text-xs ${
-                    discountPercentage >= 15
-                      ? 'bg-sky-500 text-white shadow-xs'
-                      : 'bg-slate-200 text-slate-600'
+                <Flame
+                  className={`w-4 h-4 ${
+                    discountPercentage >= 15 ? 'text-red-500 animate-pulse' : 'text-slate-300'
                   }`}
-                >
-                  Diskon {discountPercentage}% BU
+                />
+                <span className="font-extrabold text-xs text-slate-800">
+                  Potongan: {discountPercentage}%
                 </span>
-                {discountPercentage >= 15 ? (
-                  <span className="text-[10px] text-sky-700 font-bold">
-                    ✓ Syarat BU Terpenuhi
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-amber-700 font-bold">
-                    Min. 15% diskon
-                  </span>
-                )}
               </div>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  discountPercentage >= 15
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {discountPercentage >= 15
+                  ? '✅ Memenuhi Syarat Jual Rugi (Min 15%)'
+                  : '⚠️ Diskon Kurang Dari 15%'}
+              </span>
             </div>
           </div>
 
-          {/* Condition & Minus Description */}
+          {/* Condition and Physical Minus (Transparency Requirement) */}
           <div className="space-y-1">
-            <label className="font-bold text-slate-700">
-              Deskripsi Kondisi & Minus Barang *
+            <label className="font-bold text-slate-700 flex items-center justify-between">
+              <span>Kejujuran Kondisi & Minus Fisik *</span>
+              <span className="text-[10px] text-sky-700 font-semibold">
+                Transparansi Wajib
+              </span>
             </label>
             <textarea
               required
               rows={2}
-              placeholder="Jelaskan kondisi sejujurnya: kelengkapan (fullset/batangan), kondisi fisik, lecet pemakaian, fungsi tombol/layar/mesin..."
+              placeholder="Jelaskan kondisi fisik riil & kekurangan (contoh: Layar mulus 100%, ada lecet halus di bezel bawah dekat port charger)."
               value={condition}
               onChange={(e) => setCondition(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-white border border-sky-200 focus:border-sky-500 text-slate-900 placeholder-slate-400 text-xs outline-none resize-none shadow-xs"
+              className="w-full px-3 py-2 rounded-xl bg-white border border-sky-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-slate-900 placeholder-slate-400 text-xs outline-none shadow-xs"
             />
           </div>
 
           {/* Urgent Reason */}
           <div className="space-y-1">
-            <label className="font-bold text-sky-700">
-              Alasan Jual Rugi / Butuh Uang (BU)
+            <label className="font-bold text-slate-700 flex items-center gap-1">
+              <Flame className="w-3.5 h-3.5 text-red-500" />
+              <span>Alasan Jual Rugi / Butuh Uang Mendesak (BU) *</span>
             </label>
-            <input
-              type="text"
-              placeholder="Contoh: Butuh uang nebus obat, bayar kuliah, sewa kos hari ini"
+            <textarea
+              required
+              rows={2}
+              placeholder="Ceritakan alasan darurat Anda (contoh: Butuh uang tunai hari ini buat nebus obat & susu anak)."
               value={urgentReason}
               onChange={(e) => setUrgentReason(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-white border border-sky-200 focus:border-sky-500 text-slate-900 placeholder-slate-400 text-xs outline-none shadow-xs"
+              className="w-full px-3 py-2 rounded-xl bg-white border border-sky-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-slate-900 placeholder-slate-400 text-xs outline-none shadow-xs"
             />
           </div>
 
-          {/* Verification Scanning Overlay */}
+          {/* AI Gatekeeper Note */}
+          <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 flex items-center gap-2.5">
+            <Sparkles className="w-5 h-5 text-sky-600 shrink-0" />
+            <p className="text-[11px] text-sky-950 leading-relaxed font-medium">
+              Iklan akan diaudit secara otomatis oleh <strong>Gemini AI Gatekeeper</strong> untuk memastikan foto fisik asli barang dan harga benar-benar murah.
+            </p>
+          </div>
+
+          {/* Verification Progress Modal Overlay */}
           {isVerifying && (
-            <div className="p-4 rounded-2xl bg-sky-50 border border-sky-300 space-y-2">
-              <div className="flex items-center gap-2 text-sky-950 font-bold text-sm">
-                <RefreshCw className="w-4 h-4 animate-spin text-sky-600" />
-                <span>Memproses Gatekeeper AI Multimodal...</span>
+            <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center z-30">
+              <div className="w-16 h-16 rounded-2xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600 shadow-md mb-4 animate-bounce">
+                <RefreshCw className="w-8 h-8 animate-spin text-sky-600" />
               </div>
-              <p className="text-xs text-sky-800 font-mono animate-pulse">
+              <h3 className="font-extrabold text-base text-sky-950">
+                Audit Gatekeeper AI Berjalan
+              </h3>
+              <p className="text-xs text-sky-700 font-semibold mt-1">
                 {verificationStep}
               </p>
-              <div className="w-full bg-sky-200 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-sky-500 h-full w-3/4 animate-pulse" />
+              <div className="w-48 bg-sky-100 rounded-full h-1.5 mt-4 overflow-hidden">
+                <div className="bg-sky-500 h-full w-2/3 animate-pulse rounded-full" />
               </div>
             </div>
           )}
 
-          {/* Action Button - Sky Blue */}
-          <div className="pt-2">
+          {/* Modal Action Buttons */}
+          <div className="pt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isVerifying}
+              className="w-1/3 py-2.5 rounded-xl border border-sky-200 text-slate-600 font-bold hover:bg-sky-50 cursor-pointer transition text-xs"
+            >
+              Batal
+            </button>
             <button
               type="submit"
               disabled={isVerifying}
-              className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm tracking-wide transition shadow-md shadow-sky-500/25 cursor-pointer flex items-center justify-center gap-2 ${
-                isVerifying
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  : 'bg-sky-500 hover:bg-sky-600 text-white active:scale-98'
-              }`}
+              className="w-2/3 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold shadow-md shadow-sky-500/25 flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 transition text-xs"
             >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>{isVerifying ? 'Sedang Diverifikasi AI...' : 'Tayangkan Iklan (Verifikasi AI)'}</span>
+              <span>Verifikasi & Tayangkan Iklan</span>
             </button>
-            <p className="text-center text-[10px] text-slate-500 mt-2">
-              🛡️ Semua iklan wajib melewati kurasi ketat AI untuk mencegah penipuan foto katalog & harga palsu.
-            </p>
           </div>
         </form>
       </div>
