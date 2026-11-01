@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, User, ArrowRight, ShieldAlert, AlertCircle } from 'lucide-react';
+import {
+  X,
+  Lock,
+  Mail,
+  User,
+  ArrowRight,
+  ShieldAlert,
+  AlertCircle,
+  Plus,
+  Check,
+  ChevronRight,
+  ExternalLink,
+} from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface AuthModalProps {
@@ -47,6 +59,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // State Dialog Pemilih Akun Google (Google Account Chooser)
+  const [isGooglePickerOpen, setIsGooglePickerOpen] = useState(false);
+  const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
+  const [customGmail, setCustomGmail] = useState('');
+
   if (!isOpen) return null;
 
   const handleSwitchMode = (targetMode: 'login' | 'register') => {
@@ -54,26 +71,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMessage(null);
   };
 
-  const handleGoogleSignIn = () => {
-    // Validasi Disclaimer saat registrasi via Google
-    if (mode === 'register' && !agreedToDisclaimer) {
-      setErrorMessage('Silakan centang persetujuan Syarat & Ketentuan serta Disclaimer Transaksi terlebih dahulu.');
-      return;
-    }
-
-    setIsLoading(true);
+  // Buka Dialog Pemilih Akun Google
+  const handleOpenGooglePicker = () => {
     setErrorMessage(null);
+    setIsGooglePickerOpen(true);
+  };
+
+  // Pengguna memilih akun Google tertentu
+  const handleSelectGoogleAccount = (selectedName: string, selectedEmail: string, avatarUrl: string) => {
+    setIsLoading(true);
+    setAgreedToDisclaimer(true); // Memilih akun Google secara otomatis menyetujui disclaimer
 
     setTimeout(() => {
       setIsLoading(false);
+      setIsGooglePickerOpen(false);
+
       const googleUser: UserProfile = {
         id: `google-${Date.now()}`,
-        name: 'Pengguna Google (Member Baru)',
+        name: selectedName,
         role: 'buyer',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-        email: 'user.google@gmail.com',
+        avatar: avatarUrl,
+        email: selectedEmail,
         phone: '0812-8888-9999',
-        city: 'Jakarta',
+        city: 'Jakarta Selatan',
         freeListingUsed: false,
         listingQuota: 1, // 1 free listing for new signup
         activeListingCount: 0,
@@ -82,11 +102,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           cameraGalleryGranted: false,
         },
       };
+
       onLoginSuccess(googleUser);
       onClose();
-    }, 700);
+    }, 500);
   };
 
+  // Submit form pendaftaran manual (Email/WhatsApp)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -96,7 +118,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Validasi Disclaimer saat registrasi form standar
     if (mode === 'register' && !agreedToDisclaimer) {
       setErrorMessage('Anda wajib mencentang persetujuan Syarat & Ketentuan serta Disclaimer Transaksi sebelum mendaftar.');
       return;
@@ -127,7 +148,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 overflow-y-auto animate-fade-in">
       <div className="relative w-full max-w-md rounded-3xl bg-white border border-sky-100 shadow-2xl overflow-hidden my-auto p-5 sm:p-6 text-slate-800 max-h-[92vh] overflow-y-auto">
         {/* Close Button */}
         <button
@@ -153,7 +174,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             {mode === 'register'
-              ? 'Dapatkan akses eksklusif promo harga gila & distress sale harian!'
+              ? 'Dapatkan akses promo harga gila & distress sale harian!'
               : 'Pantau barang impian dan ajukan penawaran COD langsung ke penjual.'}
           </p>
         </div>
@@ -184,16 +205,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </div>
 
-        {/* Priority 1: Google OAuth Sign-In */}
+        {/* ========================================================= */}
+        {/* Tombol Utama: Google Sign-In (Membuka Pilihan Akun Google) */}
+        {/* ========================================================= */}
         <button
           type="button"
-          onClick={handleGoogleSignIn}
+          onClick={handleOpenGooglePicker}
           disabled={isLoading}
-          className="w-full py-3 px-4 rounded-2xl border-2 border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 font-bold text-xs sm:text-sm text-slate-800 flex items-center justify-center gap-3 shadow-xs cursor-pointer active:scale-98 transition mb-3"
+          className="w-full py-3.5 px-4 rounded-2xl border-2 border-slate-200 hover:border-sky-400 bg-white hover:bg-sky-50/50 font-bold text-xs sm:text-sm text-slate-800 flex items-center justify-center gap-3 shadow-xs cursor-pointer active:scale-98 transition mb-3 group"
         >
           <GoogleLogo />
-          <span>
-            {mode === 'register' ? 'Daftar dengan Google' : 'Lanjutkan dengan Google'}
+          <span className="group-hover:text-sky-950">
+            {mode === 'register' ? 'Daftar dengan Akun Google' : 'Lanjutkan dengan Google'}
           </span>
         </button>
 
@@ -201,12 +224,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="flex items-center gap-3 my-3">
           <div className="grow border-t border-slate-200" />
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            atau dengan email / no hp
+            atau dengan form manual
           </span>
           <div className="grow border-t border-slate-200" />
         </div>
 
-        {/* Standard Form */}
+        {/* Standard Manual Form */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {mode === 'register' && (
             <div>
@@ -334,7 +357,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          {/* Tombol Submit Registrasi / Login */}
+          {/* Tombol Submit Manual */}
           <button
             type="submit"
             disabled={isLoading || (mode === 'register' && !agreedToDisclaimer)}
@@ -359,6 +382,166 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           Dengan melanjutkan, Anda menyetujui Ketentuan Layanan & Protokol Transaksi COD Aman JualRugi.id.
         </p>
       </div>
+
+      {/* ======================================================== */}
+      {/* POPUP GOOGLE IDENTITY: PILIHAN AKUN GMAIL USER RESMI      */}
+      {/* ======================================================== */}
+      {isGooglePickerOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-sm rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden text-slate-800 p-6 animate-in zoom-in-95 duration-200">
+            {/* Header Google Identity */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <GoogleLogo />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
+                    Login dengan Google
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Pilih akun Gmail Anda untuk melanjutkan
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGooglePickerOpen(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* List Pilihan Akun Google Aktif */}
+            <div className="mt-4 space-y-2">
+              {/* Akun Gmail Pengguna Utama (bca.ccpl@gmail.com) */}
+              <button
+                type="button"
+                onClick={() =>
+                  handleSelectGoogleAccount(
+                    'Pengguna Google (BCA)',
+                    'bca.ccpl@gmail.com',
+                    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80'
+                  )
+                }
+                className="w-full p-3 rounded-2xl border border-slate-200 hover:border-sky-400 hover:bg-sky-50/50 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-98 group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+                    B
+                  </div>
+                  <div className="truncate">
+                    <p className="text-xs font-bold text-slate-900 group-hover:text-sky-950">
+                      Pengguna Google
+                    </p>
+                    <p className="text-[11px] text-slate-500 font-mono truncate">
+                      bca.ccpl@gmail.com
+                    </p>
+                  </div>
+                </div>
+                <div className="w-5 h-5 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+                  <Check className="w-3 h-3 stroke-[2.5]" />
+                </div>
+              </button>
+
+              {/* Akun Gmail Alternatif */}
+              <button
+                type="button"
+                onClick={() =>
+                  handleSelectGoogleAccount(
+                    'Rian Pratama (Google)',
+                    'rian.pratama@gmail.com',
+                    'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=200&q=80'
+                  )
+                }
+                className="w-full p-3 rounded-2xl border border-slate-200 hover:border-sky-400 hover:bg-sky-50/50 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-98 group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+                    R
+                  </div>
+                  <div className="truncate">
+                    <p className="text-xs font-bold text-slate-900 group-hover:text-sky-950">
+                      Rian Pratama
+                    </p>
+                    <p className="text-[11px] text-slate-500 font-mono truncate">
+                      rian.pratama@gmail.com
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-sky-600 shrink-0" />
+              </button>
+
+              {/* Pilihan: Masukkan Akun Google Lain */}
+              {!showCustomEmailInput ? (
+                <button
+                  type="button"
+                  onClick={() => setShowCustomEmailInput(true)}
+                  className="w-full p-3 rounded-2xl border border-dashed border-slate-300 hover:border-sky-400 hover:bg-slate-50 flex items-center gap-3 text-left transition cursor-pointer text-slate-600 hover:text-sky-950"
+                >
+                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                    <Plus className="w-4 h-4 text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-700">
+                      Gunakan akun Google lain
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      Masukkan alamat @gmail.com pribadi Anda
+                    </p>
+                  </div>
+                </button>
+              ) : (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-sky-200 space-y-2 animate-in fade-in">
+                  <label className="block text-[11px] font-bold text-slate-700">
+                    Ketik Alamat Gmail Anda:
+                  </label>
+                  <input
+                    type="email"
+                    autoFocus
+                    placeholder="namaanda@gmail.com"
+                    value={customGmail}
+                    onChange={(e) => setCustomGmail(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-sky-300 text-xs text-slate-900 outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={!customGmail.includes('@')}
+                      onClick={() => {
+                        const emailName = customGmail.split('@')[0];
+                        const formattedName =
+                          emailName.charAt(0).toUpperCase() + emailName.slice(1);
+                        handleSelectGoogleAccount(
+                          formattedName,
+                          customGmail,
+                          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80'
+                        );
+                      }}
+                      className="grow py-2 rounded-xl bg-sky-500 hover:bg-sky-600 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs transition cursor-pointer"
+                    >
+                      Masuk dengan Akun Ini
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomEmailInput(false)}
+                      className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Disclaimer & Keamanan Google */}
+            <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-400 leading-relaxed space-y-1">
+              <p>
+                Dengan memilih akun, Anda menyetujui bahwa Google akan membagikan nama, email, dan foto profil Anda ke <strong>JualRugi.id</strong> serta menyetujui seluruh <strong>Syarat, Ketentuan & Disclaimer Transaksi</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -44,6 +44,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   onLogin,
   onLogout,
 }) => {
+  const hasActiveAccount = isLoggedIn && currentUser.id !== 'guest';
+
   const myListings = React.useMemo(() => {
     return listings
       .filter((l) => l.seller.id === currentUser.id || l.seller.id === 'seller-agus')
@@ -104,9 +106,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             <span>Pasang Iklan Baru</span>
           </button>
 
-          {isLoggedIn ? (
+          {hasActiveAccount ? (
             onLogout && (
               <button
+                type="button"
                 onClick={onLogout}
                 title="Keluar dari akun Anda"
                 className="w-full sm:w-auto py-2.5 px-3 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-2xs"
@@ -118,6 +121,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           ) : (
             onLogin && (
               <button
+                type="button"
                 onClick={onLogin}
                 className="w-full sm:w-auto py-2.5 px-4 rounded-xl border border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-2xs"
               >
@@ -415,10 +419,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           </div>
           <div>
             <h4 className="font-extrabold text-sm text-sky-950">
-              {isLoggedIn ? 'Status Akun: Masuk (Aktif)' : 'Status Akun: Belum Masuk'}
+              {hasActiveAccount ? 'Status Akun: Masuk (Aktif)' : 'Status Akun: Belum Masuk'}
             </h4>
             <p className="text-xs text-slate-500 mt-0.5">
-              {isLoggedIn
+              {hasActiveAccount
                 ? `Terhubung sebagai ${currentUser.name} (${currentUser.email || currentUser.phone})`
                 : 'Masuk atau daftar akun untuk menyimpan favorit dan pasang iklan BU.'}
             </p>
@@ -426,9 +430,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         </div>
 
         <div>
-          {isLoggedIn ? (
+          {hasActiveAccount ? (
             onLogout && (
               <button
+                type="button"
                 onClick={onLogout}
                 className="w-full sm:w-auto py-2.5 px-4 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 shadow-xs"
               >
@@ -439,6 +444,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           ) : (
             onLogin && (
               <button
+                type="button"
                 onClick={onLogin}
                 className="w-full sm:w-auto py-2.5 px-5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 shadow-sm shadow-sky-500/25"
               >

@@ -16,6 +16,7 @@ import {
   Bike,
   X,
   CheckCircle2,
+  LogOut,
 } from 'lucide-react';
 
 import { Category, CATEGORIES, Listing, UserProfile, MonetizationPackage } from './types';
@@ -37,6 +38,23 @@ import { InFeedBanner } from './components/InFeedBanner';
 import { LocationPermissionModal } from './components/LocationPermissionModal';
 
 // User simulation profiles with Quota & Permissions
+const GUEST_USER: UserProfile = {
+  id: 'guest',
+  name: 'Tamu JualRugi',
+  role: 'buyer',
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+  email: '',
+  phone: '',
+  city: 'Jakarta Selatan',
+  freeListingUsed: false,
+  listingQuota: 1,
+  activeListingCount: 0,
+  permissions: {
+    locationGranted: false,
+    cameraGalleryGranted: false,
+  },
+};
+
 const BUYER_USER: UserProfile = {
   id: 'buyer-rian',
   name: 'Rian Pratama',
@@ -258,7 +276,14 @@ export default function App() {
   const [qrisType, setQrisType] = useState<MonetizationType>('sundul');
 
   // User Profile simulation state
-  const [currentUser, setCurrentUser] = useState<UserProfile>(BUYER_USER);
+  const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
+    try {
+      if (localStorage.getItem('jualrugi_is_logged_in') === 'false') {
+        return GUEST_USER;
+      }
+    } catch {}
+    return BUYER_USER;
+  });
 
   // Approval Push Notification Banner
   const [aiApprovalNotification, setAiApprovalNotification] = useState<string | null>(null);
@@ -273,13 +298,15 @@ export default function App() {
     }
   });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('jualrugi_is_logged_in') === 'true';
+      const stored = localStorage.getItem('jualrugi_is_logged_in');
+      return stored !== 'false';
     } catch {
-      return false;
+      return true;
     }
   });
 
@@ -312,16 +339,22 @@ export default function App() {
     setIsAuthModalOpen(true);
   };
 
-  const handleLogout = () => {
-    if (window.confirm('Apakah Anda yakin ingin keluar dari akun JualRugi.id?')) {
-      setIsLoggedIn(false);
-      try {
-        localStorage.removeItem('jualrugi_is_logged_in');
-      } catch (e) {
-        console.error(e);
-      }
-      showToast('👋 Anda telah berhasil keluar dari akun.');
+  // Membuka modal konfirmasi keluar (100% bebas dari batasan window.confirm di iframe)
+  const handlePromptLogout = () => {
+    setIsLogoutModalOpen(true);
+  };
+
+  // Konfirmasi logout dari dialog in-app
+  const handleConfirmLogout = () => {
+    setIsLogoutModalOpen(false);
+    setIsLoggedIn(false);
+    setCurrentUser(GUEST_USER);
+    try {
+      localStorage.setItem('jualrugi_is_logged_in', 'false');
+    } catch (e) {
+      console.error(e);
     }
+    showToast('👋 Anda telah berhasil keluar dari akun.');
   };
 
   const handleLoginSuccess = (user: UserProfile) => {
@@ -561,7 +594,7 @@ export default function App() {
         onOpenPromoBanner={() => setIsPromoBannerOpen(true)}
         isLoggedIn={isLoggedIn}
         onLogin={handleOpenLogin}
-        onLogout={handleLogout}
+        onLogout={handlePromptLogout}
       />
 
       {/* In-App Push Notification Banner for Approval - Lowered position for clear visibility */}
@@ -1020,7 +1053,7 @@ export default function App() {
             onOpenSafetyGuide={() => setIsSafetyGuideOpen(true)}
             isLoggedIn={isLoggedIn}
             onLogin={handleOpenLogin}
-            onLogout={handleLogout}
+            onLogout={handlePromptLogout}
           />
         )}
       </main>
@@ -1137,6 +1170,37 @@ export default function App() {
         onLoginSuccess={handleLoginSuccess}
         initialMode={authModalMode}
       />
+
+      {/* Modal Konfirmasi Keluar Akun (In-App React Dialog, Bebas Blokir Browser) */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3 shadow-xs">
+              <LogOut className="w-7 h-7" />
+            </div>
+            <h3 className="text-base font-black text-slate-950">Konfirmasi Keluar Akun</h3>
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              Apakah Anda yakin ingin keluar dari akun <strong className="text-slate-800">{currentUser.name}</strong>? Anda dapat masuk kembali dengan mudah kapan saja.
+            </p>
+            <div className="flex gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => setIsLogoutModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmLogout}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs transition cursor-pointer shadow-sm shadow-rose-600/30 active:scale-95"
+              >
+                Ya, Keluar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
