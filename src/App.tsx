@@ -18,7 +18,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 
-import { Category, CATEGORIES, Listing, UserProfile } from './types';
+import { Category, CATEGORIES, Listing, UserProfile, MonetizationPackage } from './types';
 import { INITIAL_LISTINGS } from './data/initialData';
 import { Navbar } from './components/Navbar';
 import { BottomNav, TabType } from './components/BottomNav';
@@ -31,8 +31,12 @@ import { SellerDashboard } from './components/SellerDashboard';
 import { CODSafetyGuideModal } from './components/CODSafetyGuideModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { CategoryFilter } from './components/CategoryFilter';
+import { PromoBannerModal } from './components/PromoBannerModal';
+import { AuthModal } from './components/AuthModal';
+import { InFeedBanner } from './components/InFeedBanner';
+import { LocationPermissionModal } from './components/LocationPermissionModal';
 
-// User simulation profiles
+// User simulation profiles with Quota & Permissions
 const BUYER_USER: UserProfile = {
   id: 'buyer-rian',
   name: 'Rian Pratama',
@@ -41,6 +45,13 @@ const BUYER_USER: UserProfile = {
   email: 'rian.pratama@gmail.com',
   phone: '0812-9988-7766',
   city: 'Jakarta Selatan',
+  freeListingUsed: false,
+  listingQuota: 1, // 1 free listing for new signup
+  activeListingCount: 0,
+  permissions: {
+    locationGranted: false,
+    cameraGalleryGranted: false,
+  },
 };
 
 const SELLER_USER: UserProfile = {
@@ -51,6 +62,13 @@ const SELLER_USER: UserProfile = {
   email: 'agus.setiawan@gmail.com',
   phone: '0812-8899-1234',
   city: 'Jakarta Selatan',
+  freeListingUsed: true,
+  listingQuota: 0, // Used initial quota, needs promotion boost
+  activeListingCount: 1,
+  permissions: {
+    locationGranted: true,
+    cameraGalleryGranted: true,
+  },
 };
 
 export default function App() {
@@ -100,6 +118,19 @@ export default function App() {
     const handleCheckDeepLink = () => {
       try {
         const params = new URLSearchParams(window.location.search);
+        const path = window.location.pathname.toLowerCase();
+
+        // Check category query param or pathname
+        const categoryParam = params.get('category');
+        if (
+          categoryParam === 'smartphone' ||
+          categoryParam === 'handphone' ||
+          path.includes('/kategori/smartphone') ||
+          path.includes('/kategori/handphone')
+        ) {
+          setSelectedCategory('Smartphone & Gadget');
+        }
+
         const dealId = params.get('deal') || window.location.hash.replace(/^#deal-/, '');
         if (dealId) {
           const match = listings.find((item) => item.id === dealId);
@@ -233,6 +264,60 @@ export default function App() {
   const [aiApprovalNotification, setAiApprovalNotification] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Interactive Vertical Opening Promo Banner (image_3.png) & Auth Modal state
+  const [isPromoBannerOpen, setIsPromoBannerOpen] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('jualrugi_banner_seen') !== 'true';
+    } catch {
+      return true;
+    }
+  });
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('jualrugi_is_logged_in') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleClosePromoBanner = () => {
+    setIsPromoBannerOpen(false);
+    try {
+      sessionStorage.setItem('jualrugi_banner_seen', 'true');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handlePromoBannerAction = () => {
+    handleClosePromoBanner();
+    if (!isLoggedIn) {
+      setIsAuthModalOpen(true);
+    } else {
+      showToast('🔥 Selamat datang kembali! Nikmati diskon sadis & clearance cuci gudang hari ini.');
+    }
+  };
+
+  const handleLoginSuccess = (user: UserProfile) => {
+    setCurrentUser(user);
+    setIsLoggedIn(true);
+    try {
+      localStorage.setItem('jualrugi_is_logged_in', 'true');
+    } catch (e) {
+      console.error(e);
+    }
+    showToast(`🎉 Berhasil masuk sebagai ${user.name}!`);
+
+    // Aturan Onboarding Lokasi: Cek status izin Geolocation API setelah pendaftaran
+    if (!user.permissions?.locationGranted) {
+      setTimeout(() => {
+        setIsLocationModalOpen(true);
+      }, 600);
+    }
+  };
+
   const handleSwitchUser = () => {
     setCurrentUser((prev) => (prev.id === BUYER_USER.id ? SELLER_USER : BUYER_USER));
     showToast(`Beralih profil ke: ${currentUser.id === BUYER_USER.id ? SELLER_USER.name + ' (Seller)' : BUYER_USER.name + ' (Buyer)'}`);
@@ -245,8 +330,32 @@ export default function App() {
     }, 3500);
   };
 
+  // Navigasi cepat saat banner in-feed diklik
+  const handleNavigateSmartphoneCategory = () => {
+    setSelectedCategory('Smartphone & Gadget');
+    setActiveTab('home');
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('category', 'smartphone');
+      window.history.pushState({ category: 'smartphone' }, '', url.toString());
+    } catch (e) {
+      console.error(e);
+    }
+    showToast('📱 Menampilkan katalog Smartphone & Gadget harga sadis!');
+    window.scrollTo({ top: 380, behavior: 'smooth' });
+  };
+
   const handleListingApproved = (newListing: Listing) => {
     setListings((prev) => [newListing, ...prev]);
+
+    // Potong 1 Kuota Listing User (Aturan Kuota Listing Aktif)
+    setCurrentUser((prev) => ({
+      ...prev,
+      freeListingUsed: true,
+      listingQuota: Math.max(0, prev.listingQuota - 1),
+      activeListingCount: (prev.activeListingCount || 0) + 1,
+    }));
+
     setAiApprovalNotification(
       `🎉 Selamat! Iklan ${newListing.title} Anda telah disetujui dalam moderasi dan telah tayang!`
     );
@@ -261,6 +370,12 @@ export default function App() {
     const now = new Date().toISOString();
     let updatedTitle = '';
 
+    // Tambah Kuota Posting +1 Slot Iklan Baru (Aturan Monetisasi Mayar)
+    setCurrentUser((prev) => ({
+      ...prev,
+      listingQuota: prev.listingQuota + 1,
+    }));
+
     setListings((prev) => {
       const idx = prev.findIndex((item) => item.id === listingId);
       if (idx === -1) return prev;
@@ -270,7 +385,7 @@ export default function App() {
       target.createdAt = now;
       target.sundulAt = now;
 
-      if (type === 'superbu') {
+      if (type === 'superbu' || type === 'prioritas_bu') {
         target.isSuperBU = true;
         target.superBUExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       }
@@ -281,9 +396,9 @@ export default function App() {
     });
 
     if (type === 'sundul') {
-      showToast('🚀 Iklan BERHASIL DISUNDUL! Naik ke urutan #1 teratas feed!');
+      showToast('🚀 Pembayaran Mayar Rp 25.000 Berhasil! Iklan Disundul ke #1 & Kuota +1 Slot Aktif!');
     } else {
-      showToast('🔥 Iklan berhasil diubah menjadi PALING BU! Highlight kuning penuh aktif.');
+      showToast('🔥 Pembayaran Mayar Rp 75.000 Berhasil! Highlight Emas Aktif 24 Jam & Kuota +1 Slot Aktif!');
     }
 
     // Switch to home feed so user immediately sees their listing at the very top
@@ -419,6 +534,7 @@ export default function App() {
         onSwitchUser={handleSwitchUser}
         onOpenSafetyGuide={() => setIsSafetyGuideOpen(true)}
         onOpenNewListing={() => setIsPostModalOpen(true)}
+        onOpenPromoBanner={() => setIsPromoBannerOpen(true)}
       />
 
       {/* In-App Push Notification Banner for Approval - Lowered position for clear visibility */}
@@ -674,17 +790,37 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4">
-                {filteredListings.map((item) => (
-                  <ListingCard
-                    key={item.id}
-                    listing={item}
-                    onClick={() => handleOpenListing(item)}
-                    onQuickChat={(e) => {
-                      e.stopPropagation();
-                      handleOpenChat(item);
-                    }}
-                  />
-                ))}
+                {filteredListings.map((item, index) => {
+                  // Pola OLX: Sisipkan banner setelah item ke-4 (index 3), atau di akhir jika daftar sedikit
+                  const shouldRenderBanner =
+                    index === 3 ||
+                    (filteredListings.length < 4 &&
+                      index === filteredListings.length - 1 &&
+                      selectedCategory !== 'Smartphone & Gadget');
+
+                  return (
+                    <React.Fragment key={item.id}>
+                      <ListingCard
+                        listing={item}
+                        onClick={() => handleOpenListing(item)}
+                        onQuickChat={(e) => {
+                          e.stopPropagation();
+                          handleOpenChat(item);
+                        }}
+                      />
+
+                      {/* Banner Iklan In-Feed Horizontal (Pola Layout Feed OLX) */}
+                      {shouldRenderBanner && (
+                        <InFeedBanner
+                          imageUrl="/assets/aistudio/banner-hp-jualrugi.png"
+                          targetUrl="/search?category=smartphone"
+                          badgeText="Pusatnya HP Butuh Uang"
+                          onClick={handleNavigateSmartphoneCategory}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -891,6 +1027,20 @@ export default function App() {
           onClose={() => setIsPostModalOpen(false)}
           currentUser={currentUser}
           onListingApproved={handleListingApproved}
+          onOpenMayarPromotion={(pkg) => {
+            setQrisListing(null);
+            setQrisType(pkg);
+            setIsQRISModalOpen(true);
+          }}
+          onUpdatePermissions={(perms) => {
+            setCurrentUser((prev) => ({
+              ...prev,
+              permissions: {
+                cameraGalleryGranted: perms.cameraGalleryGranted,
+                locationGranted: prev.permissions?.locationGranted || false,
+              },
+            }));
+          }}
         />
       )}
 
@@ -907,14 +1057,33 @@ export default function App() {
         />
       )}
 
-      {isQRISModalOpen && qrisListing && (
+      {isQRISModalOpen && (
         <QRISModal
           onClose={() => setIsQRISModalOpen(false)}
           listing={qrisListing}
           type={qrisType}
           onSuccess={handleQRISSuccess}
+          userId={currentUser.id}
+          userEmail={currentUser.email}
         />
       )}
+
+      {/* Onboarding Lokasi GPS Modal (Setelah Pendaftaran / Sign Up) */}
+      <LocationPermissionModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        onLocationGranted={(city) => {
+          setCurrentUser((prev) => ({
+            ...prev,
+            city,
+            permissions: {
+              locationGranted: true,
+              cameraGalleryGranted: prev.permissions?.cameraGalleryGranted || false,
+            },
+          }));
+          showToast(`📍 Lokasi COD berhasil diatur ke ${city}`);
+        }}
+      />
 
       {isSafetyGuideOpen && (
         <CODSafetyGuideModal
@@ -922,6 +1091,22 @@ export default function App() {
           onClose={() => setIsSafetyGuideOpen(false)}
         />
       )}
+
+      {/* Interactive Opening Vertical Banner (image_3.png) */}
+      <PromoBannerModal
+        isOpen={isPromoBannerOpen}
+        onClose={handleClosePromoBanner}
+        onBannerAction={handlePromoBannerAction}
+        isLoggedIn={isLoggedIn}
+      />
+
+      {/* Authentication Modal (Google Priority + Email/Phone) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
+        initialMode="register"
+      />
     </div>
   );
 }

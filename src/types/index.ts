@@ -86,6 +86,11 @@ export interface ChatMessage {
   codLocation?: string;
 }
 
+export interface UserPermissions {
+  locationGranted: boolean;
+  cameraGalleryGranted: boolean;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -94,4 +99,51 @@ export interface UserProfile {
   email: string;
   phone: string;
   city: string;
+  // Quota & Monetization tracking
+  freeListingUsed: boolean;
+  listingQuota: number;
+  activeListingCount: number;
+  permissions?: UserPermissions;
+}
+
+export type MonetizationPackage = 'sundul' | 'prioritas_bu';
+
+export interface MayarProductConfig {
+  id: MonetizationPackage;
+  name: string;
+  price: number; // 25000 or 75000
+  paymentUrl: string;
+  description: string;
+  features: string[];
+}
+
+export interface MayarTransaction {
+  id: string;
+  transactionId: string;
+  userId: string;
+  listingId?: string;
+  packageType: MonetizationPackage;
+  amount: number;
+  status: 'pending' | 'paid' | 'failed';
+  paymentMethod?: string;
+  paidAt?: string;
+  createdAt: string;
+}
+
+export interface MayarWebhookPayload {
+  event: 'payment.received' | 'transaction.paid';
+  data: {
+    id: string;
+    transaction_id: string;
+    amount: number;
+    status: string;
+    customer_email: string;
+    customer_name?: string;
+    metadata?: {
+      userId: string;
+      listingId?: string;
+      packageType: MonetizationPackage;
+    };
+    created_at: string;
+  };
 }

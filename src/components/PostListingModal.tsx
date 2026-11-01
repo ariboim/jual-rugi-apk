@@ -7,21 +7,28 @@ import {
   CheckCircle2,
   RefreshCw,
   ShieldCheck,
+  Lock,
 } from 'lucide-react';
-import { Category, CATEGORIES, Listing, UserProfile, ProductPhoto } from '../types';
+import { Category, CATEGORIES, Listing, UserProfile, ProductPhoto, MonetizationPackage } from '../types';
 import { DEMO_PRESET_IMAGES } from '../data/initialData';
 import { PhotoUploadManager } from './gallery/PhotoUploadManager';
+import { QuotaExceededModal } from './QuotaExceededModal';
+import { CameraGalleryPermissionModal } from './CameraGalleryPermissionModal';
 
 interface PostListingModalProps {
   onClose: () => void;
   currentUser: UserProfile;
   onListingApproved: (newListing: Listing) => void;
+  onOpenMayarPromotion?: (packageType: MonetizationPackage) => void;
+  onUpdatePermissions?: (perms: { cameraGalleryGranted: boolean }) => void;
 }
 
 export const PostListingModal: React.FC<PostListingModalProps> = ({
   onClose,
   currentUser,
   onListingApproved,
+  onOpenMayarPromotion,
+  onUpdatePermissions,
 }) => {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<Category>('Smartphone & Gadget');
@@ -30,6 +37,13 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
   const [sellingPrice, setSellingPrice] = useState<number | ''>('');
   const [condition, setCondition] = useState('');
   const [urgentReason, setUrgentReason] = useState('');
+
+  // Kuota & Permission States
+  const [isQuotaModalOpen, setIsQuotaModalOpen] = useState(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [cameraPermissionGranted, setCameraPermissionGranted] = useState(
+    Boolean(currentUser.permissions?.cameraGalleryGranted)
+  );
 
   // Sistem Upload & Manajemen Foto (Maksimal 6 Foto dengan Caption)
   const [photos, setPhotos] = useState<ProductPhoto[]>([]);
@@ -74,6 +88,12 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRejectionNotice(null);
+
+    // 1. Validasi Aturan Kuota Iklan (User Baru Kuota 1x Gratis, Berbayar via Mayar)
+    if (currentUser.listingQuota <= 0) {
+      setIsQuotaModalOpen(true);
+      return;
+    }
 
     if (!title.trim()) {
       alert('Mohon isi judul iklan barang Anda.');
@@ -203,6 +223,47 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto grow p-5 space-y-4 text-xs bg-[#f0f9ff]/40">
+          {/* Kuota Status Banner */}
+          <div
+            className={`p-3.5 rounded-2xl border flex items-center justify-between ${
+              currentUser.listingQuota > 0
+                ? 'bg-sky-50 border-sky-200 text-sky-950'
+                : 'bg-amber-50 border-amber-300 text-amber-950'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  currentUser.listingQuota > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                }`}
+              />
+              <div>
+                <span className="font-extrabold text-xs block">
+                  {currentUser.listingQuota > 0
+                    ? `Sisa Kuota: ${currentUser.listingQuota} Slot Iklan Tersedia`
+                    : 'Batas Kuota Iklan Anda Telah Habis'}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {!currentUser.freeListingUsed
+                    ? '🎁 Termasuk 1x Kuota Iklan Pertama Gratis untuk Member Baru'
+                    : currentUser.listingQuota > 0
+                    ? '💳 Kuota listing aktif siap ditayangkan'
+                    : 'Beli fitur promosi untuk membuka slot iklan baru'}
+                </span>
+              </div>
+            </div>
+
+            {currentUser.listingQuota <= 0 && (
+              <button
+                type="button"
+                onClick={() => setIsQuotaModalOpen(true)}
+                className="py-1.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-[11px] shrink-0 shadow-xs cursor-pointer"
+              >
+                Buka Slot (+1)
+              </button>
+            )}
+          </div>
+
           {/* Rejection Alert Box */}
           {rejectionNotice && (
             <div className="p-3.5 rounded-2xl bg-red-50 border-2 border-red-500 text-red-950">
@@ -257,6 +318,8 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
               maxPhotos={6}
               maxSizeMB={5}
               onError={(err) => setRejectionNotice(err)}
+              permissionGranted={cameraPermissionGranted}
+              onRequestPermission={() => setIsCameraModalOpen(true)}
             />
           </div>
 
@@ -434,6 +497,31 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Sub-Modal: Batas Kuota Terpakai (Monetisasi Mayar) */}
+      <QuotaExceededModal
+        isOpen={isQuotaModalOpen}
+        onClose={() => setIsQuotaModalOpen(false)}
+        currentUser={currentUser}
+        onSelectPromotion={(plan) => {
+          setIsQuotaModalOpen(false);
+          if (onOpenMayarPromotion) {
+            onOpenMayarPromotion(plan);
+          }
+        }}
+      />
+
+      {/* Sub-Modal: Izin Galeri & Kamera */}
+      <CameraGalleryPermissionModal
+        isOpen={isCameraModalOpen}
+        onClose={() => setIsCameraModalOpen(false)}
+        onGrantPermission={() => {
+          setCameraPermissionGranted(true);
+          if (onUpdatePermissions) {
+            onUpdatePermissions({ cameraGalleryGranted: true });
+          }
+        }}
+      />
     </div>
   );
 };

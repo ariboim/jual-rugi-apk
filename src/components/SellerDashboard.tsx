@@ -93,38 +93,83 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         </button>
       </div>
 
-      {/* Monetization Feature Callout Banner */}
+      {/* Quota & Monetization Tracker Card */}
+      <div className="bg-gradient-to-r from-sky-50 via-white to-amber-50/60 p-4 rounded-3xl border border-sky-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-sky-500 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+            {currentUser.listingQuota}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="font-extrabold text-sm text-sky-950">
+                Sisa Kuota Posting: {currentUser.listingQuota} Slot
+              </h4>
+              <span
+                className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                  currentUser.listingQuota > 0
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-red-100 text-red-800'
+                }`}
+              >
+                {currentUser.listingQuota > 0 ? 'Siap Pasang Iklan' : 'Kuota Habis'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {!currentUser.freeListingUsed
+                ? '🎁 Termasuk 1x Kuota Iklan Gratis untuk pendaftar baru.'
+                : 'Beli Sundul Iklan atau Prioritas BU Banget untuk membuka +1 slot iklan baru.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-stretch sm:self-auto">
+          <button
+            onClick={onOpenNewListing}
+            className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs shadow-xs cursor-pointer transition"
+          >
+            + Pasang Iklan
+          </button>
+        </div>
+      </div>
+
+      {/* Monetization Feature Callout Banner with Mayar Pricing */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="bg-white border border-sky-100 p-4 rounded-2xl shadow-xs flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-sky-50 text-sky-600 shrink-0">
-            <ArrowUp className="w-5 h-5" />
+            <ArrowUp className="w-5 h-5 stroke-[2.5]" />
           </div>
           <div>
-            <h4 className="font-bold text-sm text-sky-950 flex items-center gap-1.5">
-              <span>Sundul Iklan</span>
-              <span className="text-[10px] font-black bg-sky-100 text-sky-800 px-1.5 py-0.2 rounded-xs">
-                Rp 5.000
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="font-bold text-sm text-sky-950">Sundul Iklan</h4>
+              <span className="text-xs font-black bg-sky-100 text-sky-900 px-2 py-0.5 rounded-md">
+                Rp 25.000
               </span>
-            </h4>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Pindahkan posisi iklan Anda langsung ke urutan paling atas di feed secara instan agar cepat laku dilirik calon pembeli COD.
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                +1 Slot Kuota
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+              Pindahkan posisi iklan langsung ke urutan #1 teratas di feed secara instan + bonus otomatis 1 kuota posting iklan baru via Mayar.id.
             </p>
           </div>
         </div>
 
         <div className="bg-white border border-amber-300 p-4 rounded-2xl shadow-xs flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-amber-100 text-amber-700 shrink-0">
-            <Flame className="w-5 h-5 fill-red-600 text-red-600" />
+            <Flame className="w-5 h-5 fill-amber-500 text-amber-500" />
           </div>
           <div>
-            <h4 className="font-bold text-sm text-sky-950 flex items-center gap-1.5">
-              <span>Pasang Badge Paling BU</span>
-              <span className="text-[10px] font-black bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded-xs">
-                Rp 15.000
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="font-bold text-sm text-sky-950">Prioritas BU Banget</h4>
+              <span className="text-xs font-black bg-amber-200 text-amber-950 px-2 py-0.5 rounded-md">
+                Rp 75.000
               </span>
-            </h4>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Dapatkan highlight kuning penuh di seluruh iklan, label darurat PALING BU, dan prioritas tampil di feed teratas selama 24 jam penuh.
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                +1 Slot Kuota
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+              Highlight emas menyala & label darurat PALING BU selama 24 jam penuh + bonus otomatis 1 kuota posting iklan baru via Mayar.id.
             </p>
           </div>
         </div>

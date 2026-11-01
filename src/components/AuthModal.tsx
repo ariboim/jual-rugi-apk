@@ -59,6 +59,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         email: 'user.google@gmail.com',
         phone: '0812-8888-9999',
         city: 'Jakarta',
+        freeListingUsed: false,
+        listingQuota: 1, // 1 free listing for new signup
+        activeListingCount: 0,
+        permissions: {
+          locationGranted: false,
+          cameraGalleryGranted: false,
+        },
       };
       onLoginSuccess(googleUser);
       onClose();
@@ -82,6 +89,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         email: emailOrPhone.includes('@') ? emailOrPhone : 'member@jualrugi.id',
         phone: !emailOrPhone.includes('@') ? emailOrPhone : '0812-3344-5566',
         city: 'Jakarta Selatan',
+        freeListingUsed: false,
+        listingQuota: 1, // 1 free listing for new signup
+        activeListingCount: 0,
+        permissions: {
+          locationGranted: false,
+          cameraGalleryGranted: false,
+        },
       };
       onLoginSuccess(authenticatedUser);
       onClose();

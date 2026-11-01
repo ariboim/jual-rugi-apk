@@ -8,12 +8,14 @@ interface NavbarProps {
   onSwitchUser: () => void;
   onOpenSafetyGuide: () => void;
   onOpenNewListing: () => void;
+  onOpenPromoBanner?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   onSwitchUser,
   onOpenSafetyGuide,
+  onOpenPromoBanner,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-sky-100 shadow-xs">
@@ -26,13 +28,24 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="truncate px-2 font-medium text-[11px] text-sky-900">
           ⚠️ Wajib Transaksi COD Tatap Muka di Tempat Ramai • DILARANG Transfer DP / Uang Muka Apapun!
         </div>
-        <button
-          onClick={onOpenSafetyGuide}
-          className="shrink-0 flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-800 hover:underline font-bold cursor-pointer"
-        >
-          <ShieldCheck className="w-3.5 h-3.5 text-sky-600 inline" />
-          Tips Aman
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {onOpenPromoBanner && (
+            <button
+              onClick={onOpenPromoBanner}
+              className="px-2 py-0.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-extrabold text-[10px] tracking-wide flex items-center gap-1 shadow-xs animate-pulse cursor-pointer transition"
+              title="Lihat Promo Buka Aplikasi (image_3.png)"
+            >
+              <span>🔥 Promo Spesial</span>
+            </button>
+          )}
+          <button
+            onClick={onOpenSafetyGuide}
+            className="flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-800 hover:underline font-bold cursor-pointer"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-sky-600 inline" />
+            Tips Aman
+          </button>
+        </div>
       </div>
 
       {/* Main Top Header */}

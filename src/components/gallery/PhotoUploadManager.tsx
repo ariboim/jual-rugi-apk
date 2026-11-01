@@ -44,6 +44,8 @@ export interface PhotoUploadManagerProps {
   maxPhotos?: number;
   maxSizeMB?: number; // Default: 5MB
   onError?: (errorMessage: string) => void;
+  permissionGranted?: boolean;
+  onRequestPermission?: () => void;
 }
 
 export const PhotoUploadManager: React.FC<PhotoUploadManagerProps> = ({
@@ -52,6 +54,8 @@ export const PhotoUploadManager: React.FC<PhotoUploadManagerProps> = ({
   maxPhotos = 6,
   maxSizeMB = 5,
   onError,
+  permissionGranted = true,
+  onRequestPermission,
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -210,7 +214,13 @@ export const PhotoUploadManager: React.FC<PhotoUploadManagerProps> = ({
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => {
+            if (!permissionGranted && onRequestPermission) {
+              onRequestPermission();
+            } else {
+              fileInputRef.current?.click();
+            }
+          }}
           className={`relative border-2 border-dashed rounded-2xl p-4 sm:p-6 text-center cursor-pointer transition-all ${
             dragActive
               ? 'border-sky-500 bg-sky-50 scale-101'
