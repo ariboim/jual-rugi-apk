@@ -25,21 +25,45 @@ interface SupabaseConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfigSaved: () => void;
+  onOpenPanduanModal?: () => void;
 }
 
 export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
   isOpen,
   onClose,
   onConfigSaved,
+  onOpenPanduanModal,
 }) => {
   const [url, setUrl] = useState('');
   const [anonKey, setAnonKey] = useState('');
   const [testing, setTesting] = useState(false);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
   } | null>(null);
   const [copiedSQL, setCopiedSQL] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    setDownloadingPDF(true);
+    try {
+      const response = await fetch('/PANDUAN_SETUP_DATABASE_SUPABASE_JUALRUGI.pdf');
+      if (!response.ok) throw new Error('File tidak ditemukan');
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'PANDUAN_SETUP_DATABASE_SUPABASE_JUALRUGI.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+    } catch {
+      window.location.href = '/PANDUAN_SETUP_DATABASE_SUPABASE_JUALRUGI.pdf';
+    } finally {
+      setDownloadingPDF(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -154,27 +178,37 @@ USING (true);`;
           </div>
         </div>
 
-        {/* Banner Unduh Panduan PDF (Bisa Dibaca Offline) */}
-        <div className="mb-4 p-3 rounded-2xl bg-gradient-to-r from-sky-50 via-blue-50 to-indigo-50 border border-sky-200 flex items-center justify-between gap-3 shadow-2xs">
+        {/* Banner Unduh Panduan PDF (Bisa Dibaca Offline & In-App) */}
+        <div className="mb-4 p-3 rounded-2xl bg-gradient-to-r from-sky-50 via-blue-50 to-indigo-50 border border-sky-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-sky-500 text-white flex items-center justify-center shrink-0 shadow-xs">
               <FileDown className="w-5 h-5" />
             </div>
             <div>
               <h4 className="text-xs font-black text-sky-950">Panduan Lengkap Setup (PDF)</h4>
-              <p className="text-[10.5px] text-slate-500">Simpan ke HP/Laptop agar tidak hilang</p>
+              <p className="text-[10.5px] text-slate-500">Baca langsung di aplikasi atau simpan ke HP</p>
             </div>
           </div>
-          <a
-            href="/PANDUAN_SETUP_DATABASE_SUPABASE_JUALRUGI.pdf"
-            download="PANDUAN_SETUP_DATABASE_SUPABASE_JUALRUGI.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-xs transition active:scale-95 shrink-0"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Unduh PDF</span>
-          </a>
+          <div className="flex items-center gap-2">
+            {onOpenPanduanModal && (
+              <button
+                type="button"
+                onClick={onOpenPanduanModal}
+                className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold transition active:scale-95 cursor-pointer shadow-2xs"
+              >
+                Baca Panduan
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleDownloadPDF}
+              disabled={downloadingPDF}
+              className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-xs transition active:scale-95 cursor-pointer"
+            >
+              <Download className={`w-3.5 h-3.5 ${downloadingPDF ? 'animate-bounce' : ''}`} />
+              <span>{downloadingPDF ? 'Mengunduh...' : 'Unduh PDF'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Alert Hasil Uji Koneksi */}

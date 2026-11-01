@@ -37,6 +37,8 @@ import { AuthModal } from './components/AuthModal';
 import { InFeedBanner } from './components/InFeedBanner';
 import { LocationPermissionModal } from './components/LocationPermissionModal';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
+import { PanduanPDFModal } from './components/PanduanPDFModal';
+import { LiveActivityTicker } from './components/LiveActivityTicker';
 import {
   fetchListingsFromSupabase,
   saveListingToSupabase,
@@ -330,6 +332,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [isPanduanModalOpen, setIsPanduanModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
@@ -1097,6 +1100,7 @@ export default function App() {
             onLogin={handleOpenLogin}
             onLogout={handlePromptLogout}
             onOpenSupabaseSettings={() => setIsSupabaseModalOpen(true)}
+            onOpenPanduanModal={() => setIsPanduanModalOpen(true)}
           />
         )}
       </main>
@@ -1249,6 +1253,10 @@ export default function App() {
       <SupabaseConfigModal
         isOpen={isSupabaseModalOpen}
         onClose={() => setIsSupabaseModalOpen(false)}
+        onOpenPanduanModal={() => {
+          setIsSupabaseModalOpen(false);
+          setIsPanduanModalOpen(true);
+        }}
         onConfigSaved={async () => {
           const remoteData = await fetchListingsFromSupabase();
           if (remoteData && remoteData.length > 0) {
@@ -1257,6 +1265,19 @@ export default function App() {
           showToast('⚡ Database Supabase terhubung & data disinkronkan!');
         }}
       />
+
+      {/* Modal Panduan Interaktif Lengkap (Bisa Dibaca Langsung + Unduh PDF Tanpa Blokir) */}
+      <PanduanPDFModal
+        isOpen={isPanduanModalOpen}
+        onClose={() => setIsPanduanModalOpen(false)}
+        onOpenSupabaseConfig={() => {
+          setIsPanduanModalOpen(false);
+          setIsSupabaseModalOpen(true);
+        }}
+      />
+
+      {/* Live Activity Social Proof Ticker (FOMO & Promo Booster) */}
+      <LiveActivityTicker />
     </div>
   );
 }

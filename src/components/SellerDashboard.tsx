@@ -15,6 +15,7 @@ import {
   LogOut,
   LogIn,
   Database,
+  FileText,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { MonetizationType } from './QRISModal';
@@ -33,6 +34,7 @@ interface SellerDashboardProps {
   onLogin?: () => void;
   onLogout?: () => void;
   onOpenSupabaseSettings?: () => void;
+  onOpenPanduanModal?: () => void;
 }
 
 export const SellerDashboard: React.FC<SellerDashboardProps> = ({
@@ -47,6 +49,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   onLogin,
   onLogout,
   onOpenSupabaseSettings,
+  onOpenPanduanModal,
 }) => {
   const hasActiveAccount = isLoggedIn && currentUser.id !== 'guest';
 
@@ -167,17 +170,15 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-          <a
-            href="/PANDUAN_SETUP_DATABASE_SUPABASE_JUALRUGI.pdf"
-            download="PANDUAN_SETUP_DATABASE_SUPABASE_JUALRUGI.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Download Dokumen Panduan PDF"
-            className="flex-1 sm:flex-initial py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 shadow-2xs"
+          <button
+            type="button"
+            onClick={onOpenPanduanModal}
+            title="Buka & Unduh Panduan Lengkap PDF"
+            className="flex-1 sm:flex-initial py-2 px-3.5 rounded-xl border border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800 font-extrabold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 shadow-2xs cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Panduan PDF</span>
-          </a>
+            <FileText className="w-3.5 h-3.5 text-sky-600" />
+            <span>Lihat / Unduh Panduan PDF</span>
+          </button>
 
           {onOpenSupabaseSettings && (
             <button
