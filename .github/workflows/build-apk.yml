@@ -299,7 +299,7 @@ jobs:
           }
           EOF
 
-          # 9. Pasang Logo Resmi
+          # 9. Copy icons
           if [ -f "public/pwa-512x512.png" ]; then
               cp public/pwa-512x512.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
               cp public/pwa-512x512.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png

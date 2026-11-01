@@ -10,9 +10,12 @@ import {
   PlusCircle,
   Clock,
   UserCheck,
+  Smartphone,
+  Download,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { MonetizationType } from './QRISModal';
+import { APK_DOWNLOAD_URL } from './PWAInstallButton';
 
 interface SellerDashboardProps {
   currentUser: UserProfile;
@@ -91,6 +94,36 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           <PlusCircle className="w-4 h-4 text-white" />
           <span>Pasang Iklan Baru</span>
         </button>
+      </div>
+
+      {/* Banner Unduh Aplikasi Android APK Langsung */}
+      <div className="bg-gradient-to-r from-sky-600 to-blue-700 text-white p-4 sm:p-5 rounded-3xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5 text-center sm:text-left">
+          <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-xs flex items-center justify-center shrink-0 border border-white/20">
+            <Smartphone className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 justify-center sm:justify-start">
+              <h3 className="font-black text-sm text-white">Aplikasi Android JualRugi.id</h3>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black">
+                APK Resmi
+              </span>
+            </div>
+            <p className="text-xs text-sky-100 mt-0.5">
+              Pasang langsung di HP Android Anda. Buka instan tanpa browser, lancar kirim pesan & pasang iklan!
+            </p>
+          </div>
+        </div>
+        <a
+          href={APK_DOWNLOAD_URL}
+          download="app-debug.apk"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full sm:w-auto shrink-0 px-4 py-2.5 rounded-xl bg-white hover:bg-sky-50 text-sky-900 font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
+        >
+          <Download className="w-4 h-4 text-sky-600 animate-bounce" />
+          <span>Download & Install APK</span>
+        </a>
       </div>
 
       {/* Quota & Monetization Tracker Card */}

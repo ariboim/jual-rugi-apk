@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.JualRugi" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="android:statusBarColor">#ffffff</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">#ffffff</item>
+    </style>
+</resources>
