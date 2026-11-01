@@ -140,59 +140,6 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         </div>
       </div>
 
-      {/* Kartu Status Database Supabase Online & Zapier */}
-      <div className="bg-white p-4 sm:p-4.5 rounded-3xl border border-emerald-100 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-3 text-center sm:text-left">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0">
-            <Database className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 justify-center sm:justify-start">
-              <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">
-                Database Online (Supabase & Zapier)
-              </h4>
-              <span
-                className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full ${
-                  isSupabaseConfigured()
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-amber-100 text-amber-800'
-                }`}
-              >
-                {isSupabaseConfigured() ? '🟢 Terhubung' : '🟡 Mode Demo (Lokal)'}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              {isSupabaseConfigured()
-                ? 'Data iklan tersimpan permanen di cloud Supabase dan siap dihubungkan ke Zapier / Mayar.'
-                : 'Klik untuk memasukkan URL & Anon Key Supabase gratis agar data tersimpan di cloud.'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-          <button
-            type="button"
-            onClick={onOpenPanduanModal}
-            title="Buka & Unduh Panduan Lengkap PDF"
-            className="flex-1 sm:flex-initial py-2 px-3.5 rounded-xl border border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800 font-extrabold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 shadow-2xs cursor-pointer"
-          >
-            <FileText className="w-3.5 h-3.5 text-sky-600" />
-            <span>Lihat / Unduh Panduan PDF</span>
-          </button>
-
-          {onOpenSupabaseSettings && (
-            <button
-              type="button"
-              onClick={onOpenSupabaseSettings}
-              className="flex-1 sm:flex-initial py-2 px-3.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-extrabold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 shadow-2xs cursor-pointer"
-            >
-              <Database className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Koneksi Supabase</span>
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Banner Unduh Aplikasi Android APK Langsung */}
       <div className="bg-gradient-to-r from-sky-600 to-blue-700 text-white p-4 sm:p-5 rounded-3xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3.5 text-center sm:text-left">
