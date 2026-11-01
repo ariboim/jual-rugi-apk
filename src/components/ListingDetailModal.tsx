@@ -296,13 +296,13 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             </p>
           </div>
 
-          {/* AI Audit Gatekeeper Certificate */}
+          {/* Verifikasi & Moderasi Produk Certificate */}
           <div className="bg-sky-50 p-3.5 rounded-2xl border border-sky-200 flex items-start gap-3">
             <div className="p-2 rounded-xl bg-sky-100 text-sky-700 shrink-0">
-              <Sparkles className="w-5 h-5" />
+              <ShieldCheck className="w-5 h-5" />
             </div>
             <div className="text-xs">
-              <h4 className="font-bold text-sky-950">Hasil Audit Gatekeeper AI Gemini</h4>
+              <h4 className="font-bold text-sky-950">Hasil Verifikasi & Moderasi Produk</h4>
               <p className="text-sky-800 mt-0.5 leading-relaxed font-medium">
                 {listing.aiVerificationReason}
               </p>

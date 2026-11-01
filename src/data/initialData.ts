@@ -158,7 +158,7 @@ export const INITIAL_LISTINGS: Listing[] = [
   },
   {
     id: 'bu-004',
-    title: 'Smart TV LG 55 Inch 4K UHD ThinQ AI Model 2023 Lengkap Remote Magic',
+    title: 'Smart TV LG 55 Inch 4K UHD ThinQ Model 2023 Lengkap Remote Magic',
     category: 'Elektronik Rumah Tangga',
     normalPrice: 7800000,
     sellingPrice: 4200000,
@@ -417,7 +417,7 @@ export const INITIAL_LISTINGS: Listing[] = [
 
 export const DEMO_PRESET_IMAGES = [
   {
-    label: '📱 iPhone 14 Pro Fisik Asli (Lolos AI)',
+    label: '📱 iPhone 14 Pro Fisik Asli (Lolos Moderasi)',
     url: 'https://images.unsplash.com/photo-1678685888221-cda773a3dcdb?auto=format&fit=crop&w=1000&q=80',
     type: 'valid',
     category: 'Smartphone & Gadget' as Category,
@@ -428,7 +428,7 @@ export const DEMO_PRESET_IMAGES = [
     urgentReason: 'BU cepat buat bayar uang sewa toko bulanan.',
   },
   {
-    label: '💻 Laptop ASUS Bekas Asli (Lolos AI)',
+    label: '💻 Laptop ASUS Bekas Asli (Lolos Moderasi)',
     url: 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=1000&q=80',
     type: 'valid',
     category: 'Laptop & Komputer' as Category,
@@ -439,7 +439,7 @@ export const DEMO_PRESET_IMAGES = [
     urgentReason: 'Lagi butuh uang tunai untuk bayar tagihan mendesak.',
   },
   {
-    label: '🛵 Motor Matic Fisik Asli (Lolos AI)',
+    label: '🛵 Motor Matic Fisik Asli (Lolos Moderasi)',
     url: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1000&q=80',
     type: 'valid',
     category: 'Sepeda Motor' as Category,
@@ -450,7 +450,7 @@ export const DEMO_PRESET_IMAGES = [
     urgentReason: 'Butuh dana cepat untuk tambahan modal dagang.',
   },
   {
-    label: '🚫 Brosur Flyer Canva / Promo Toko Baru (Uji Tolak AI)',
+    label: '🚫 Brosur Flyer Canva / Promo Toko Baru (Uji Tolak Moderasi)',
     url: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1000&q=80',
     type: 'flyer',
     category: 'Smartphone & Gadget' as Category,

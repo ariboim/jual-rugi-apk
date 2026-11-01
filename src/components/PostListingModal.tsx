@@ -6,6 +6,7 @@ import {
   Flame,
   CheckCircle2,
   RefreshCw,
+  ShieldCheck,
 } from 'lucide-react';
 import { Category, CATEGORIES, Listing, UserProfile, ProductPhoto } from '../types';
 import { DEMO_PRESET_IMAGES } from '../data/initialData';
@@ -92,15 +93,15 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
     }
 
     setIsVerifying(true);
-    setVerificationStep('🔍 Menghubungkan ke Gemini AI Gatekeeper...');
+    setVerificationStep('🔍 Iklan Anda sedang dimoderasi...');
 
     try {
       setTimeout(() => {
-        setVerificationStep('📸 Menginspeksi otentisitas foto fisik (bukan brosur/flyer)...');
+        setVerificationStep('📸 Memeriksa otentisitas foto fisik barang...');
       }, 700);
 
       setTimeout(() => {
-        setVerificationStep('📊 Menghitung kewajaran harga jual rugi & deskripsi minus...');
+        setVerificationStep('📊 Memverifikasi kewajaran harga jual rugi & deskripsi minus...');
       }, 1500);
 
       const primaryPhoto = photos[0];
@@ -166,13 +167,13 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
       } else {
         setRejectionNotice(
           result.reason ||
-            'Iklan tidak lolos verifikasi AI. Foto terdeteksi brosur marketing komersial atau harga tidak mencerminkan jual rugi darurat.'
+            'Iklan belum lolos moderasi. Foto terdeteksi materi promosi komersial atau harga belum mencerminkan jual rugi darurat.'
         );
       }
     } catch (err) {
       console.error(err);
       setIsVerifying(false);
-      setRejectionNotice('Gagal menghubungi engine verifikasi AI. Silakan coba kembali.');
+      setRejectionNotice('Gagal memproses moderasi iklan. Silakan coba kembali.');
     }
   };
 
@@ -187,7 +188,7 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-extrabold text-sky-950">Pasang Iklan Jual Rugi</h2>
-              <p className="text-[11px] text-slate-500">Verifikasi Gatekeeper AI Multimodal</p>
+              <p className="text-[11px] text-slate-500">Moderasi Kualitas & Otentisitas Produk</p>
             </div>
           </div>
           <button
@@ -387,11 +388,11 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
             />
           </div>
 
-          {/* AI Gatekeeper Note */}
+          {/* Moderation Note */}
           <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 flex items-center gap-2.5">
-            <Sparkles className="w-5 h-5 text-sky-600 shrink-0" />
+            <ShieldCheck className="w-5 h-5 text-sky-600 shrink-0" />
             <p className="text-[11px] text-sky-950 leading-relaxed font-medium">
-              Iklan akan diaudit secara otomatis oleh <strong>Gemini AI Gatekeeper</strong> untuk memastikan foto fisik asli barang dan harga benar-benar murah.
+              Iklan akan dimoderasi secara teliti untuk memastikan foto fisik asli barang dan harga benar-benar murah.
             </p>
           </div>
 
@@ -402,7 +403,7 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
                 <RefreshCw className="w-8 h-8 animate-spin text-sky-600" />
               </div>
               <h3 className="font-extrabold text-base text-sky-950">
-                Audit Gatekeeper AI Berjalan
+                Iklan Anda Sedang Dimoderasi
               </h3>
               <p className="text-xs text-sky-700 font-semibold mt-1">
                 {verificationStep}

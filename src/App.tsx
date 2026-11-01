@@ -30,6 +30,7 @@ import { QRISModal, MonetizationType } from './components/QRISModal';
 import { SellerDashboard } from './components/SellerDashboard';
 import { CODSafetyGuideModal } from './components/CODSafetyGuideModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { CategoryFilter } from './components/CategoryFilter';
 
 // User simulation profiles
 const BUYER_USER: UserProfile = {
@@ -56,7 +57,13 @@ export default function App() {
   const [listings, setListings] = useState<Listing[]>(() => {
     try {
       const saved = localStorage.getItem('jualrugi_listings');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: Listing[] = JSON.parse(saved);
+        return parsed.map((item) => ({
+          ...item,
+          title: item.title.replace(/\bThinQ AI\b/g, 'ThinQ'),
+        }));
+      }
     } catch (e) {
       console.error(e);
     }
@@ -222,7 +229,7 @@ export default function App() {
   // User Profile simulation state
   const [currentUser, setCurrentUser] = useState<UserProfile>(BUYER_USER);
 
-  // AI Approval Push Notification Banner
+  // Approval Push Notification Banner
   const [aiApprovalNotification, setAiApprovalNotification] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -241,7 +248,7 @@ export default function App() {
   const handleListingApproved = (newListing: Listing) => {
     setListings((prev) => [newListing, ...prev]);
     setAiApprovalNotification(
-      `🎉 Selamat! Iklan ${newListing.title} Anda lolos verifikasi AI dan telah tayang!`
+      `🎉 Selamat! Iklan ${newListing.title} Anda telah disetujui dalam moderasi dan telah tayang!`
     );
     setActiveTab('home');
 
@@ -311,6 +318,23 @@ export default function App() {
     return Array.from(cities);
   }, [listings]);
 
+  // Hitung jumlah listing aktif per kategori untuk filter bar
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: listings.length,
+      'Smartphone & Gadget': 0,
+      'Laptop & Komputer': 0,
+      'Elektronik Rumah Tangga': 0,
+      'Sepeda Motor': 0,
+    };
+    listings.forEach((item) => {
+      if (counts[item.category] !== undefined) {
+        counts[item.category] += 1;
+      }
+    });
+    return counts;
+  }, [listings]);
+
   const filteredListings = useMemo(() => {
     return listings
       .filter((item) => {
@@ -372,6 +396,19 @@ export default function App() {
     }
   };
 
+  const getCategoryShortName = (cat: Category) => {
+    switch (cat) {
+      case 'Smartphone & Gadget':
+        return 'Smartphone';
+      case 'Laptop & Komputer':
+        return 'Laptop';
+      case 'Elektronik Rumah Tangga':
+        return 'Electronic';
+      case 'Sepeda Motor':
+        return 'Motorcycle';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f0f9ff] text-slate-800 flex flex-col font-sans">
       <OfflineIndicator />
@@ -384,7 +421,7 @@ export default function App() {
         onOpenNewListing={() => setIsPostModalOpen(true)}
       />
 
-      {/* In-App Push Notification Banner for AI Approval - Lowered position for clear visibility */}
+      {/* In-App Push Notification Banner for Approval - Lowered position for clear visibility */}
       {aiApprovalNotification && (
         <div className="fixed top-24 sm:top-28 left-4 right-4 max-w-xl mx-auto z-50 animate-slide-down">
           <div className="bg-sky-500 text-white px-4 py-3.5 rounded-2xl shadow-xl shadow-sky-900/25 border-2 border-white/40 flex items-center justify-between gap-3 backdrop-blur-sm">
@@ -419,7 +456,14 @@ export default function App() {
       <main className="grow">
         {/* TAB: BERANDA (FEED) */}
         {activeTab === 'home' && (
-          <div className="max-w-7xl mx-auto px-4 py-5 space-y-5 pb-24">
+          <div className="max-w-7xl mx-auto px-4 py-5 space-y-4 sm:space-y-5 pb-24">
+            {/* Top Category Filter for Rapid Feed Navigation */}
+            <CategoryFilter
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+              categoryCounts={categoryCounts}
+            />
+
             {/* Sky Blue Themed Hero Banner */}
             <div className="relative rounded-3xl overflow-hidden bg-white p-5 sm:p-7 border border-sky-100 shadow-sm">
               <div className="relative z-10 max-w-2xl space-y-2">
@@ -514,10 +558,10 @@ export default function App() {
               </div>
             </div>
 
-            {/* Strictly 4 Categories Pill Selectors */}
+            {/* Categories Quick Pill Selectors */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-slate-600">
-                <span>KATEGORI BARANG (4 KATEGORI UTAMA):</span>
+                <span>FILTER KATEGORI FEED:</span>
                 <span className="text-[11px] text-slate-500">
                   {filteredListings.length} Iklan Aktif
                 </span>
@@ -527,32 +571,45 @@ export default function App() {
                 {/* "Semua" pill */}
                 <button
                   onClick={() => setSelectedCategory('all')}
-                  className={`py-2.5 px-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 ${
+                  className={`py-2 px-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 ${
                     selectedCategory === 'all'
                       ? 'bg-sky-500 text-white border-sky-500 shadow-xs shadow-sky-500/25'
                       : 'bg-white text-slate-700 border-sky-100 hover:border-sky-300'
                   }`}
                 >
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>Semua BU</span>
+                  <Sparkles className={`w-4 h-4 ${selectedCategory === 'all' ? 'text-amber-300' : 'text-sky-500'}`} />
+                  <span>Semua</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    selectedCategory === 'all' ? 'bg-sky-400 text-white' : 'bg-sky-50 text-sky-700'
+                  }`}>
+                    {categoryCounts['all'] || 0}
+                  </span>
                 </button>
 
-                {/* 4 Strictly Required Categories */}
+                {/* 4 Categories: Smartphone, Laptop, Electronic, Motorcycle */}
                 {CATEGORIES.map((cat) => {
                   const Icon = getCategoryIcon(cat);
                   const isSelected = selectedCategory === cat;
+                  const shortName = getCategoryShortName(cat);
+                  const count = categoryCounts[cat] || 0;
                   return (
                     <button
                       key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`py-2.5 px-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 ${
+                      onClick={() => setSelectedCategory(isSelected ? 'all' : cat)}
+                      className={`py-2 px-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 ${
                         isSelected
                           ? 'bg-sky-500 text-white border-sky-500 shadow-xs shadow-sky-500/25'
                           : 'bg-white text-slate-700 border-sky-100 hover:border-sky-300'
                       }`}
+                      title={`Filter ${shortName} (${cat})`}
                     >
-                      <Icon className="w-4 h-4 text-sky-500" />
-                      <span className="truncate">{cat}</span>
+                      <Icon className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-sky-500'}`} />
+                      <span className="truncate">{shortName}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                        isSelected ? 'bg-sky-400 text-white' : 'bg-sky-50 text-sky-700'
+                      }`}>
+                        {count}
+                      </span>
                     </button>
                   );
                 })}
@@ -725,7 +782,7 @@ export default function App() {
             </div>
             <h2 className="text-xl font-black text-sky-950">Pasang Iklan Butuh Uang (BU)</h2>
             <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
-              Semua iklan wajib lolos inspeksi <strong>Gatekeeper AI Gemini Multimodal</strong> untuk memverifikasi foto fisik asli dan diskon wajar.
+              Semua iklan wajib lolos <strong>Inspeksi Moderasi Produk</strong> untuk memverifikasi foto fisik asli dan diskon wajar.
             </p>
             <button
               onClick={() => setIsPostModalOpen(true)}
