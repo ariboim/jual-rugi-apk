@@ -11,6 +11,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        manifestFilename: 'manifest.json',
         includeAssets: [
           'favicon.ico',
           'favicon.png',
@@ -24,10 +25,11 @@ export default defineConfig(() => {
           id: '/',
           name: 'JualRugi.id - Pasar Butuh Uang (BU) COD',
           short_name: 'JualRugi',
-          description: 'Pasar Jual Cepat & Butuh Uang (BU) Diskon Ekstrim - Transaksi Aman COD Tatap Muka dengan Verifikasi Multimodal',
+          description: 'Pasar Jual Cepat & Butuh Uang (BU) Diskon Ekstrim - Transaksi Aman COD Tatap Muka dengan Verifikasi Terverifikasi',
           theme_color: '#ffffff',
           background_color: '#ffffff',
           display: 'standalone',
+          orientation: 'portrait-primary',
           start_url: '/',
           scope: '/',
           icons: [
@@ -35,13 +37,13 @@ export default defineConfig(() => {
               src: '/pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
-              purpose: 'any',
+              purpose: 'any maskable',
             },
             {
               src: '/pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
-              purpose: 'any',
+              purpose: 'any maskable',
             },
             {
               src: '/pwa-maskable-512x512.png',

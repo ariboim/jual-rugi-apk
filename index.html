@@ -19,7 +19,20 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" href="/manifest.json" />
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js')
+            .then(function(reg) {
+              console.log('JualRugi Service Worker registered with scope:', reg.scope);
+            })
+            .catch(function(err) {
+              console.warn('SW registration fallback:', err);
+            });
+        });
+      }
+    </script>
     <script>
       // Intercept and satisfy Vite HMR WebSocket in Cloud Run/iFrame proxy environments where WebSockets cannot connect
       (function() {
