@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, Phone, User, CheckCircle2, ArrowRight } from 'lucide-react';
+import { X, Lock, Mail, User, ArrowRight, ShieldAlert, AlertCircle } from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface AuthModalProps {
@@ -43,12 +43,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [name, setName] = useState('');
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [agreedToDisclaimer, setAgreedToDisclaimer] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   if (!isOpen) return null;
 
+  const handleSwitchMode = (targetMode: 'login' | 'register') => {
+    setMode(targetMode);
+    setErrorMessage(null);
+  };
+
   const handleGoogleSignIn = () => {
+    // Validasi Disclaimer saat registrasi via Google
+    if (mode === 'register' && !agreedToDisclaimer) {
+      setErrorMessage('Silakan centang persetujuan Syarat & Ketentuan serta Disclaimer Transaksi terlebih dahulu.');
+      return;
+    }
+
     setIsLoading(true);
+    setErrorMessage(null);
+
     setTimeout(() => {
       setIsLoading(false);
       const googleUser: UserProfile = {
@@ -74,10 +89,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!emailOrPhone) {
-      alert('Mohon masukkan Email atau Nomor HP Anda.');
+    setErrorMessage(null);
+
+    if (!emailOrPhone.trim()) {
+      setErrorMessage('Mohon masukkan Email atau Nomor WhatsApp Anda.');
       return;
     }
+
+    // Validasi Disclaimer saat registrasi form standar
+    if (mode === 'register' && !agreedToDisclaimer) {
+      setErrorMessage('Anda wajib mencentang persetujuan Syarat & Ketentuan serta Disclaimer Transaksi sebelum mendaftar.');
+      return;
+    }
+
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
@@ -104,7 +128,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto animate-fade-in">
-      <div className="relative w-full max-w-md rounded-3xl bg-white border border-sky-100 shadow-2xl overflow-hidden my-auto p-5 sm:p-6 text-slate-800">
+      <div className="relative w-full max-w-md rounded-3xl bg-white border border-sky-100 shadow-2xl overflow-hidden my-auto p-5 sm:p-6 text-slate-800 max-h-[92vh] overflow-y-auto">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -138,7 +162,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="grid grid-cols-2 p-1 bg-sky-50/80 rounded-2xl mb-4 border border-sky-100">
           <button
             type="button"
-            onClick={() => setMode('register')}
+            onClick={() => handleSwitchMode('register')}
             className={`py-2 text-xs font-extrabold rounded-xl transition cursor-pointer ${
               mode === 'register'
                 ? 'bg-sky-500 text-white shadow-xs'
@@ -149,7 +173,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setMode('login')}
+            onClick={() => handleSwitchMode('login')}
             className={`py-2 text-xs font-extrabold rounded-xl transition cursor-pointer ${
               mode === 'login'
                 ? 'bg-sky-500 text-white shadow-xs'
@@ -183,7 +207,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Standard Form */}
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           {mode === 'register' && (
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -237,10 +261,93 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           </div>
 
+          {/* ======================================================== */}
+          {/* SYARAT & KETENTUAN / DISCLAIMER TRANSAKSI (WAJIB DAFTAR) */}
+          {/* ======================================================== */}
+          {mode === 'register' && (
+            <div className="space-y-2 pt-1">
+              <div className="rounded-2xl bg-amber-50/90 border border-amber-200 p-3.5 text-slate-800 text-xs shadow-2xs">
+                {/* Header Disclaimer */}
+                <div className="flex items-center gap-1.5 pb-2 border-b border-amber-200/80 text-amber-950 font-extrabold">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span className="text-[11px] sm:text-xs uppercase tracking-wide">
+                    Syarat & Ketentuan / Disclaimer Transaksi
+                  </span>
+                </div>
+
+                {/* 4 Poin Inti Disclaimer */}
+                <div className="mt-2.5 space-y-2 text-[11px] leading-relaxed text-slate-700">
+                  <div className="flex items-start gap-1.5">
+                    <span className="font-bold text-amber-950 shrink-0">•</span>
+                    <p>
+                      <strong className="text-amber-950">Transaksi Langsung:</strong> Seluruh transaksi jual-beli dilakukan secara mandiri dan langsung antara pihak penjual dan pembeli (COD tatap muka / transfer langsung).
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-1.5">
+                    <span className="font-bold text-amber-950 shrink-0">•</span>
+                    <p>
+                      <strong className="text-amber-950">Posisi Platform:</strong> <span className="font-semibold text-slate-900">jualrugi.id</span> bertindak semata-mata sebagai platform/aplikasi pihak ketiga penyedia ruang listing, bukan pihak penengah transaksi.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-1.5">
+                    <span className="font-bold text-amber-950 shrink-0">•</span>
+                    <p>
+                      <strong className="text-amber-950">Batasan Tanggung Jawab:</strong> <span className="font-semibold text-slate-900">jualrugi.id</span> tidak bertanggung jawab dalam bentuk apa pun atas segala tindak penipuan, kerugian finansial, sengketa, atau cacat barang.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-1.5">
+                    <span className="font-bold text-amber-950 shrink-0">•</span>
+                    <p>
+                      <strong className="text-amber-950">Kehati-hatian Pembeli:</strong> Keamanan transaksi, verifikasi identitas penjual, dan pengecekan keaslian/kondisi barang merupakan tanggung jawab penuh masing-masing pembeli.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Kotak Checkbox Persetujuan Wajib */}
+                <label className="flex items-start gap-2.5 mt-3 pt-2.5 border-t border-amber-200 cursor-pointer select-none group">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={agreedToDisclaimer}
+                    onChange={(e) => {
+                      setAgreedToDisclaimer(e.target.checked);
+                      if (e.target.checked) setErrorMessage(null);
+                    }}
+                    className="mt-0.5 w-4 h-4 rounded border-amber-400 text-sky-600 focus:ring-sky-500 shrink-0 cursor-pointer accent-sky-600"
+                  />
+                  <span className="text-[11px] font-bold text-slate-900 leading-snug group-hover:text-amber-950">
+                    Saya telah membaca, memahami, dan menyetujui seluruh Syarat & Ketentuan serta Disclaimer Transaksi di atas. <span className="text-red-500">*</span>
+                  </span>
+                </label>
+              </div>
+
+              {/* Alert Error / Peringatan Ramah jika dicoba submit tanpa centang */}
+              {errorMessage && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-bold animate-in fade-in duration-200">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tombol Submit Registrasi / Login */}
           <button
             type="submit"
-            disabled={isLoading}
-            className="w-full py-3 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition mt-4"
+            disabled={isLoading || (mode === 'register' && !agreedToDisclaimer)}
+            className={`w-full py-3 rounded-2xl font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition mt-4 ${
+              mode === 'register' && !agreedToDisclaimer
+                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed shadow-none'
+                : 'bg-sky-500 hover:bg-sky-600 text-white shadow-md shadow-sky-500/25 cursor-pointer active:scale-98'
+            }`}
+            title={
+              mode === 'register' && !agreedToDisclaimer
+                ? 'Centang kotak persetujuan disclaimer untuk mengaktifkan tombol'
+                : undefined
+            }
           >
             <span>{mode === 'register' ? 'Daftar Sekarang' : 'Masuk ke Akun'}</span>
             <ArrowRight className="w-4 h-4" />

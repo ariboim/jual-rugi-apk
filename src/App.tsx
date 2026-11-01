@@ -273,6 +273,7 @@ export default function App() {
     }
   });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
@@ -294,9 +295,32 @@ export default function App() {
   const handlePromoBannerAction = () => {
     handleClosePromoBanner();
     if (!isLoggedIn) {
+      setAuthModalMode('register');
       setIsAuthModalOpen(true);
     } else {
       showToast('🔥 Selamat datang kembali! Nikmati diskon sadis & clearance cuci gudang hari ini.');
+    }
+  };
+
+  const handleOpenLogin = () => {
+    setAuthModalMode('login');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleOpenRegister = () => {
+    setAuthModalMode('register');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleLogout = () => {
+    if (window.confirm('Apakah Anda yakin ingin keluar dari akun JualRugi.id?')) {
+      setIsLoggedIn(false);
+      try {
+        localStorage.removeItem('jualrugi_is_logged_in');
+      } catch (e) {
+        console.error(e);
+      }
+      showToast('👋 Anda telah berhasil keluar dari akun.');
     }
   };
 
@@ -535,6 +559,9 @@ export default function App() {
         onOpenSafetyGuide={() => setIsSafetyGuideOpen(true)}
         onOpenNewListing={() => setIsPostModalOpen(true)}
         onOpenPromoBanner={() => setIsPromoBannerOpen(true)}
+        isLoggedIn={isLoggedIn}
+        onLogin={handleOpenLogin}
+        onLogout={handleLogout}
       />
 
       {/* In-App Push Notification Banner for Approval - Lowered position for clear visibility */}
@@ -991,6 +1018,9 @@ export default function App() {
             onDeleteListing={handleDeleteListing}
             onOpenListingDetail={(listing) => setSelectedListing(listing)}
             onOpenSafetyGuide={() => setIsSafetyGuideOpen(true)}
+            isLoggedIn={isLoggedIn}
+            onLogin={handleOpenLogin}
+            onLogout={handleLogout}
           />
         )}
       </main>
@@ -1105,7 +1135,7 @@ export default function App() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
-        initialMode="register"
+        initialMode={authModalMode}
       />
     </div>
   );

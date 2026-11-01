@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Flame, ShieldCheck, RefreshCw, LogOut, LogIn } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { UserProfile } from '../types';
 
@@ -9,6 +9,9 @@ interface NavbarProps {
   onOpenSafetyGuide: () => void;
   onOpenNewListing: () => void;
   onOpenPromoBanner?: () => void;
+  isLoggedIn?: boolean;
+  onLogin?: () => void;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,6 +19,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSwitchUser,
   onOpenSafetyGuide,
   onOpenPromoBanner,
+  isLoggedIn = false,
+  onLogin,
+  onLogout,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-sky-100 shadow-xs">
@@ -64,30 +70,30 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Right Action Icons: PWA Install + User Switcher */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Right Action Icons: PWA Install + User Switcher + Logout/Login */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           <PWAInstallButton />
 
           {/* Quick Simulation User Switcher (Buyer vs Seller) */}
           <button
             onClick={onSwitchUser}
             title="Klik untuk beralih profil Pembeli / Penjual"
-            className="flex items-center gap-2 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-2.5 py-1.5 rounded-xl text-left transition cursor-pointer active:scale-95 shadow-xs"
+            className="flex items-center gap-1.5 sm:gap-2 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-2 sm:px-2.5 py-1.5 rounded-xl text-left transition cursor-pointer active:scale-95 shadow-xs"
           >
             <img
               src={currentUser.avatar}
               alt={currentUser.name}
-              className="w-7 h-7 rounded-full object-cover border border-sky-300"
+              className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover border border-sky-300"
             />
             <div className="hidden xs:block text-left">
               <div className="flex items-center gap-1">
-                <span className="text-[11px] font-bold text-sky-950 max-w-[85px] truncate">
+                <span className="text-[11px] font-bold text-sky-950 max-w-[75px] sm:max-w-[95px] truncate">
                   {currentUser.name}
                 </span>
                 <RefreshCw className="w-2.5 h-2.5 text-sky-600" />
               </div>
               <span
-                className={`text-[9px] font-bold px-1 py-0.2 rounded-xs uppercase ${
+                className={`text-[8.5px] sm:text-[9px] font-bold px-1 py-0.2 rounded-xs uppercase ${
                   currentUser.role === 'seller'
                     ? 'text-amber-800 bg-amber-100'
                     : 'text-sky-700 bg-sky-100'
@@ -97,6 +103,33 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </div>
           </button>
+
+          {/* Tombol Logout (Jika Login) / Tombol Masuk (Jika Logout) */}
+          {isLoggedIn ? (
+            onLogout && (
+              <button
+                onClick={onLogout}
+                title="Keluar dari akun (Logout)"
+                aria-label="Tombol Keluar Akun"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition cursor-pointer active:scale-95 shadow-2xs"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                <span className="hidden sm:inline">Keluar</span>
+              </button>
+            )
+          ) : (
+            onLogin && (
+              <button
+                onClick={onLogin}
+                title="Masuk ke Akun JualRugi.id"
+                aria-label="Tombol Masuk Akun"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold transition cursor-pointer active:scale-95 shadow-xs shadow-sky-500/25"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Masuk</span>
+              </button>
+            )
+          )}
         </div>
       </div>
     </header>

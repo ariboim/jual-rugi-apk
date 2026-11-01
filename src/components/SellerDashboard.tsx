@@ -12,6 +12,8 @@ import {
   UserCheck,
   Smartphone,
   Download,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { MonetizationType } from './QRISModal';
@@ -25,6 +27,9 @@ interface SellerDashboardProps {
   onDeleteListing: (listingId: string) => void;
   onOpenListingDetail: (listing: Listing) => void;
   onOpenSafetyGuide: () => void;
+  isLoggedIn?: boolean;
+  onLogin?: () => void;
+  onLogout?: () => void;
 }
 
 export const SellerDashboard: React.FC<SellerDashboardProps> = ({
@@ -35,6 +40,9 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   onDeleteListing,
   onOpenListingDetail,
   onOpenSafetyGuide,
+  isLoggedIn = false,
+  onLogin,
+  onLogout,
 }) => {
   const myListings = React.useMemo(() => {
     return listings
@@ -86,14 +94,39 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           </div>
         </div>
 
-        {/* Sky Blue Button - No Black */}
-        <button
-          onClick={onOpenNewListing}
-          className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm shadow-sky-500/20 cursor-pointer active:scale-95 transition"
-        >
-          <PlusCircle className="w-4 h-4 text-white" />
-          <span>Pasang Iklan Baru</span>
-        </button>
+        {/* Action Buttons: Pasang Iklan + Logout / Login */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <button
+            onClick={onOpenNewListing}
+            className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm shadow-sky-500/20 cursor-pointer active:scale-95 transition"
+          >
+            <PlusCircle className="w-4 h-4 text-white" />
+            <span>Pasang Iklan Baru</span>
+          </button>
+
+          {isLoggedIn ? (
+            onLogout && (
+              <button
+                onClick={onLogout}
+                title="Keluar dari akun Anda"
+                className="w-full sm:w-auto py-2.5 px-3 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-2xs"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                <span>Keluar</span>
+              </button>
+            )
+          ) : (
+            onLogin && (
+              <button
+                onClick={onLogin}
+                className="w-full sm:w-auto py-2.5 px-4 rounded-xl border border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-2xs"
+              >
+                <LogIn className="w-3.5 h-3.5 text-sky-600" />
+                <span>Masuk Akun</span>
+              </button>
+            )
+          )}
+        </div>
       </div>
 
       {/* Banner Unduh Aplikasi Android APK Langsung */}
@@ -372,6 +405,49 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             </div>
           ))
         )}
+      </div>
+
+      {/* Bagian Pengaturan Akun & Tombol Logout */}
+      <div className="bg-white p-5 rounded-3xl border border-sky-100 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+        <div className="flex items-center gap-3.5 text-center sm:text-left">
+          <div className="w-11 h-11 rounded-2xl bg-sky-50 border border-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+            <UserCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-extrabold text-sm text-sky-950">
+              {isLoggedIn ? 'Status Akun: Masuk (Aktif)' : 'Status Akun: Belum Masuk'}
+            </h4>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {isLoggedIn
+                ? `Terhubung sebagai ${currentUser.name} (${currentUser.email || currentUser.phone})`
+                : 'Masuk atau daftar akun untuk menyimpan favorit dan pasang iklan BU.'}
+            </p>
+          </div>
+        </div>
+
+        <div>
+          {isLoggedIn ? (
+            onLogout && (
+              <button
+                onClick={onLogout}
+                className="w-full sm:w-auto py-2.5 px-4 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 shadow-xs"
+              >
+                <LogOut className="w-4 h-4 text-rose-600" />
+                <span>Keluar dari Akun (Logout)</span>
+              </button>
+            )
+          ) : (
+            onLogin && (
+              <button
+                onClick={onLogin}
+                className="w-full sm:w-auto py-2.5 px-5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 shadow-sm shadow-sky-500/25"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Masuk Sekarang</span>
+              </button>
+            )
+          )}
+        </div>
       </div>
     </div>
   );
