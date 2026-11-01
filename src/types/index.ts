@@ -69,6 +69,8 @@ export interface Listing {
   aiVerificationReason: string;
   views: number;
   savedCount: number;
+  views_count?: number;
+  favorites_count?: number;
 }
 
 export interface ChatMessage {

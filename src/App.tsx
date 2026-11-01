@@ -88,6 +88,132 @@ export default function App() {
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [isSafetyGuideOpen, setIsSafetyGuideOpen] = useState(false);
 
+  // Auto-detect and open listing if accessed via WhatsApp deep link (?deal=listing-id or #deal-listing-id)
+  useEffect(() => {
+    const handleCheckDeepLink = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const dealId = params.get('deal') || window.location.hash.replace(/^#deal-/, '');
+        if (dealId) {
+          const match = listings.find((item) => item.id === dealId);
+          if (match) {
+            setSelectedListing(match);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to parse deal deep link', err);
+      }
+    };
+
+    handleCheckDeepLink();
+    window.addEventListener('popstate', handleCheckDeepLink);
+    return () => window.removeEventListener('popstate', handleCheckDeepLink);
+  }, [listings]);
+
+  const handleOpenListing = (listing: Listing) => {
+    setSelectedListing(listing);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('deal', listing.id);
+      window.history.pushState({ dealId: listing.id }, '', url.toString());
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleCloseListing = () => {
+    setSelectedListing(null);
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('deal')) {
+        url.searchParams.delete('deal');
+        window.history.pushState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // State favorit pengguna disimpan lokal di browser
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('jualrugi_favorites');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Handler penambahan view counter otomatis saat iklan dibuka
+  const handleIncrementView = (listingId: string) => {
+    setListings((prev) =>
+      prev.map((item) =>
+        item.id === listingId
+          ? {
+              ...item,
+              views: (item.views || 0) + 1,
+              views_count: (item.views_count ?? item.views ?? 0) + 1,
+            }
+          : item
+      )
+    );
+    setSelectedListing((prev) =>
+      prev && prev.id === listingId
+        ? {
+            ...prev,
+            views: (prev.views || 0) + 1,
+            views_count: (prev.views_count ?? prev.views ?? 0) + 1,
+          }
+        : prev
+    );
+  };
+
+  // Handler toggle favorit (tambah / kurangi counter favorit)
+  const handleToggleFavorite = (listingId: string) => {
+    const isFav = favoriteIds.includes(listingId);
+    const nextFavs = isFav
+      ? favoriteIds.filter((id) => id !== listingId)
+      : [...favoriteIds, listingId];
+
+    setFavoriteIds(nextFavs);
+    try {
+      localStorage.setItem('jualrugi_favorites', JSON.stringify(nextFavs));
+    } catch (e) {
+      console.error(e);
+    }
+
+    const delta = isFav ? -1 : 1;
+    setListings((prev) =>
+      prev.map((item) => {
+        if (item.id === listingId) {
+          const currentCount = item.favorites_count ?? item.savedCount ?? 0;
+          const newCount = Math.max(0, currentCount + delta);
+          return {
+            ...item,
+            savedCount: newCount,
+            favorites_count: newCount,
+          };
+        }
+        return item;
+      })
+    );
+
+    setSelectedListing((prev) => {
+      if (prev && prev.id === listingId) {
+        const currentCount = prev.favorites_count ?? prev.savedCount ?? 0;
+        const newCount = Math.max(0, currentCount + delta);
+        return {
+          ...prev,
+          savedCount: newCount,
+          favorites_count: newCount,
+        };
+      }
+      return prev;
+    });
+
+    showToast(isFav ? 'Dihapus dari favorit' : '❤️ Disimpan ke favorit');
+  };
+
   // Monetization QRIS modal state
   const [isQRISModalOpen, setIsQRISModalOpen] = useState(false);
   const [qrisListing, setQrisListing] = useState<Listing | null>(null);
@@ -495,7 +621,7 @@ export default function App() {
                   <ListingCard
                     key={item.id}
                     listing={item}
-                    onClick={() => setSelectedListing(item)}
+                    onClick={() => handleOpenListing(item)}
                     onQuickChat={(e) => {
                       e.stopPropagation();
                       handleOpenChat(item);
@@ -693,9 +819,13 @@ export default function App() {
       {selectedListing && (
         <ListingDetailModal
           listing={selectedListing}
-          onClose={() => setSelectedListing(null)}
+          onClose={handleCloseListing}
           onOpenChat={(listing) => handleOpenChat(listing)}
           onQuickMakeOffer={handleQuickMakeOffer}
+          isFavorited={favoriteIds.includes(selectedListing.id)}
+          onToggleFavorite={() => handleToggleFavorite(selectedListing.id)}
+          onIncrementView={handleIncrementView}
+          isSellerView={currentUser.role === 'seller'}
         />
       )}
 

@@ -3,6 +3,7 @@ import {
   Flame,
   ArrowUp,
   Eye,
+  Heart,
   CheckCircle2,
   Trash2,
   ShieldCheck,
@@ -228,7 +229,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                    <div className="flex items-center gap-2.5 text-[11px] text-slate-500 flex-wrap">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3 text-sky-500" />
                         Update:{' '}
@@ -237,9 +238,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                           minute: '2-digit',
                         })}
                       </span>
-                      <span className="flex items-center gap-1">
-                        <Eye className="w-3 h-3 text-sky-500" />
-                        {item.views} Dilihat
+                      <span className="flex items-center gap-1 font-semibold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">
+                        <Eye className="w-3 h-3 text-sky-600" />
+                        {item.views_count ?? item.views} Dilihat
+                      </span>
+                      <span className="flex items-center gap-1 font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+                        <Heart className="w-3 h-3 text-rose-500 fill-rose-500" />
+                        {item.favorites_count ?? item.savedCount} Favorit
                       </span>
                     </div>
                   </div>

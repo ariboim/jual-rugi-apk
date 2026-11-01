@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   X,
   MapPin,
@@ -10,16 +10,35 @@ import {
   CheckCircle2,
   Sparkles,
   ShieldCheck,
+  Check,
 } from 'lucide-react';
 import { Listing } from '../types';
 import { getListingPhotos } from '../data/initialData';
 import { ProductGallery } from './gallery/ProductGallery';
+import { ListingStatsBar } from './ListingStatsBar';
+
+export const WhatsAppIcon: React.FC<{ className?: string }> = ({
+  className = 'w-4 h-4',
+}) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 6.46 17.5 2 12.04 2M12.05 3.67C16.58 3.67 20.28 7.37 20.28 11.92C20.28 16.46 16.58 20.17 12.05 20.17C10.57 20.17 9.15 19.77 7.91 19.03L7.61 18.85L4.5 19.67L5.33 16.64L5.13 16.33C4.32 15.03 3.8 13.5 3.8 11.92C3.8 7.37 7.51 3.67 12.05 3.67M9.25 7.15C9.07 7.15 8.78 7.22 8.53 7.49C8.28 7.76 7.58 8.42 7.58 9.77C7.58 11.12 8.56 12.42 8.7 12.6C8.84 12.78 10.74 15.71 13.65 16.97C14.34 17.27 14.88 17.45 15.3 17.58C16 17.8 16.63 17.77 17.11 17.7C17.65 17.62 18.77 17.02 19.01 16.35C19.25 15.68 19.25 15.11 19.18 14.99C19.11 14.87 18.93 14.8 18.66 14.66C18.39 14.53 17.07 13.88 16.82 13.79C16.57 13.7 16.39 13.65 16.21 13.92C16.03 14.19 15.52 14.8 15.36 14.99C15.2 15.17 15.05 15.19 14.78 15.06C14.51 14.92 13.64 14.64 12.6 13.72C11.8 13.01 11.26 12.13 11.1 11.86C10.95 11.59 11.08 11.44 11.22 11.31C11.34 11.19 11.49 10.99 11.63 10.83C11.77 10.66 11.81 10.54 11.9 10.36C11.99 10.18 11.95 10.02 11.88 9.89C11.81 9.76 11.26 8.42 11.03 7.88C10.81 7.35 10.59 7.42 10.42 7.42C10.26 7.42 10.07 7.42 9.89 7.42C9.71 7.42 9.42 7.49 9.25 7.68V7.15Z" />
+  </svg>
+);
 
 interface ListingDetailModalProps {
   listing: Listing;
   onClose: () => void;
   onOpenChat: (listing: Listing) => void;
   onQuickMakeOffer: (listing: Listing, offerPrice: number) => void;
+  isFavorited?: boolean;
+  onToggleFavorite?: () => void;
+  onIncrementView?: (listingId: string) => void;
+  isSellerView?: boolean;
 }
 
 export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
@@ -27,7 +46,24 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   onClose,
   onOpenChat,
   onQuickMakeOffer,
+  isFavorited = false,
+  onToggleFavorite,
+  onIncrementView,
+  isSellerView = false,
 }) => {
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  // Auto increment counter view saat halaman detail listing dibuka pengunjung
+  useEffect(() => {
+    const sessionKey = `viewed_listing_${listing.id}`;
+    if (!sessionStorage.getItem(sessionKey)) {
+      sessionStorage.setItem(sessionKey, '1');
+      if (onIncrementView) {
+        onIncrementView(listing.id);
+      }
+    }
+  }, [listing.id, onIncrementView]);
+
   const formatRupiah = (val: number) => {
     return 'Rp ' + val.toLocaleString('id-ID');
   };
@@ -41,6 +77,62 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
 
   // Mengambil array foto produk (hingga 6 foto) dengan format terintegrasi [{ id, url, caption }]
   const productPhotos = useMemo(() => getListingPhotos(listing), [listing]);
+
+  // Construct URL deep link for this listing
+  const getListingShareUrl = () => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('deal', listing.id);
+      return url.toString();
+    } catch {
+      return `${window.location.origin}/?deal=${encodeURIComponent(listing.id)}`;
+    }
+  };
+
+  // WhatsApp Deep Link Handler: Prepopulates message with deal link, price, and urgent details
+  const handleShareWhatsApp = () => {
+    const shareUrl = getListingShareUrl();
+    const discountText = listing.discountPercentage
+      ? `(Diskon ${listing.discountPercentage}% dari pasaran normal ${formatRupiah(listing.normalPrice)})`
+      : '';
+    const urgentReasonText = listing.urgentReason
+      ? `\n⚠️ *Alasan Butuh Uang (BU):* "${listing.urgentReason}"`
+      : '';
+
+    const lines = [
+      `🔥 *INFO BARANG JUAL RUGI (BU) CEPAT!* 🔥`,
+      ``,
+      `*${listing.title}*`,
+      `💰 *Harga BU:* ${formatRupiah(listing.sellingPrice)} ${discountText}`,
+      `💸 *Hemat Bersih:* ${formatRupiah(savings)}`,
+      urgentReasonText,
+      `📍 *Lokasi COD:* ${listing.location}`,
+      ``,
+      `👉 *Cek foto fisik & nego langsung dengan penjual:*`,
+      shareUrl,
+      ``,
+      `_Aman COD: Cek barang sepuasnya tanpa DP di jualrugi.id_`,
+    ];
+
+    const message = lines.filter(Boolean).join('\n');
+    const waDeepLink = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    window.open(waDeepLink, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleGeneralShare = () => {
+    const shareUrl = getListingShareUrl();
+    if (navigator.share) {
+      navigator.share({
+        title: listing.title,
+        text: `Jual Rugi BU: ${listing.title} cuma ${formatRupiah(listing.sellingPrice)}!`,
+        url: shareUrl,
+      });
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2500);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-sky-950/40 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
@@ -58,26 +150,34 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* WhatsApp Deep Link Share Button (Header) */}
             <button
               type="button"
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({
-                    title: listing.title,
-                    text: `Jual Rugi BU: ${listing.title} cuma ${formatRupiah(listing.sellingPrice)}!`,
-                    url: window.location.href,
-                  });
-                } else {
-                  navigator.clipboard.writeText(window.location.href);
-                  alert('Tautan iklan berhasil disalin!');
-                }
-              }}
-              className="p-2 rounded-full bg-sky-50 text-sky-800 hover:bg-sky-100 cursor-pointer transition-colors"
-              title="Bagikan Iklan"
+              onClick={handleShareWhatsApp}
+              className="px-2.5 py-1.5 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 cursor-pointer transition-all flex items-center gap-1.5 text-xs font-bold shadow-xs active:scale-95"
+              title="Bagikan deal ini ke WhatsApp (Deep Link)"
+              aria-label="Share ke WhatsApp"
             >
-              <Share2 className="w-4 h-4" />
+              <WhatsAppIcon className="w-4 h-4 fill-[#25D366]" />
+              <span className="hidden xs:inline text-[11px]">Share WA</span>
             </button>
+
+            {/* General Share Button */}
+            <button
+              type="button"
+              onClick={handleGeneralShare}
+              className="p-2 rounded-full bg-sky-50 text-sky-800 hover:bg-sky-100 cursor-pointer transition-colors relative"
+              title="Salin Tautan / Bagikan"
+            >
+              {copySuccess ? (
+                <Check className="w-4 h-4 text-emerald-600 animate-in zoom-in-75 duration-200" />
+              ) : (
+                <Share2 className="w-4 h-4" />
+              )}
+            </button>
+
+            {/* Close Button */}
             <button
               type="button"
               onClick={onClose}
@@ -115,6 +215,17 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                 )}
               </div>
             }
+          />
+
+          {/* Bar Statistik Iklan: Views & Favorites (2 Kolom Horizontal Rapi) */}
+          <ListingStatsBar
+            stats={{
+              views_count: listing.views_count ?? listing.views ?? 0,
+              favorites_count: listing.favorites_count ?? listing.savedCount ?? 0,
+            }}
+            isFavorited={isFavorited}
+            onToggleFavorite={onToggleFavorite}
+            isSellerView={isSellerView}
           />
 
           {/* Pricing Box */}
@@ -250,6 +361,35 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             </div>
           </div>
 
+          {/* Dedicated WhatsApp Share BU Deal Banner */}
+          <div className="bg-gradient-to-r from-emerald-50 via-teal-50/50 to-emerald-50 border border-emerald-200 p-4 rounded-2xl shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-emerald-950">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-[#25D366] text-white shadow-xs shrink-0 flex items-center justify-center">
+                <WhatsAppIcon className="w-5 h-5 fill-white" />
+              </div>
+              <div className="text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-950">
+                  <span>Bagikan Penawaran BU Ini ke WhatsApp</span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
+                    Deep Link
+                  </span>
+                </div>
+                <p className="text-emerald-800 mt-1 leading-relaxed text-[11px]">
+                  Bantu teman dapat barang murah <strong className="text-emerald-950">{formatRupiah(listing.sellingPrice)}</strong> (hemat {formatRupiah(savings)}) atau share ke grup agar cepat laku!
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleShareWhatsApp}
+              className="px-4 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white text-xs font-black shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all shrink-0"
+              title="Kirim info iklan ini via WhatsApp"
+            >
+              <WhatsAppIcon className="w-4 h-4 fill-white" />
+              <span>Share ke WhatsApp</span>
+            </button>
+          </div>
+
           {/* COD Safe Meeting Advisory */}
           <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
             <div className="flex items-center gap-1.5 font-bold text-amber-900">
@@ -264,14 +404,25 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Sticky Action Footer - Sky Blue CTA */}
-        <div className="p-4 border-t border-sky-100 bg-white sticky bottom-0 z-20 flex items-center gap-3">
+        {/* Sticky Action Footer - WhatsApp Share Deep Link & Chat Penjual */}
+        <div className="p-3 sm:p-4 border-t border-sky-100 bg-white sticky bottom-0 z-20 flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={handleShareWhatsApp}
+            className="py-3 px-3.5 sm:px-5 rounded-2xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-xs sm:text-sm shadow-md shadow-emerald-500/25 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer active:scale-95 transition-all shrink-0"
+            title="Bagikan deal BU ini ke WhatsApp dengan link dan harga otomatis"
+          >
+            <WhatsAppIcon className="w-4 h-4 sm:w-5 sm:h-5 fill-white" />
+            <span className="hidden xs:inline">Share ke WhatsApp</span>
+            <span className="xs:hidden">Share WA</span>
+          </button>
+
           <button
             type="button"
             onClick={() => onOpenChat(listing)}
-            className="grow py-3 px-4 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-sm shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
+            className="grow py-3 px-4 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all truncate"
           >
-            <span>💬 Chat Langsung dengan Penjual (COD)</span>
+            <span>💬 Chat Penjual (COD)</span>
           </button>
         </div>
       </div>
