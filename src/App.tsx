@@ -36,6 +36,14 @@ import { PromoBannerModal } from './components/PromoBannerModal';
 import { AuthModal } from './components/AuthModal';
 import { InFeedBanner } from './components/InFeedBanner';
 import { LocationPermissionModal } from './components/LocationPermissionModal';
+import { SupabaseConfigModal } from './components/SupabaseConfigModal';
+import {
+  fetchListingsFromSupabase,
+  saveListingToSupabase,
+  updateListingInSupabase,
+  deleteListingFromSupabase,
+  isSupabaseConfigured,
+} from './services/supabase';
 
 // User simulation profiles with Quota & Permissions
 const GUEST_USER: UserProfile = {
@@ -113,6 +121,28 @@ export default function App() {
       console.error(e);
     }
   }, [listings]);
+
+  // Sinkronisasi data iklan dari Supabase Online saat aplikasi dimuat
+  useEffect(() => {
+    let isMounted = true;
+    async function loadOnlineListings() {
+      if (isSupabaseConfigured()) {
+        try {
+          const onlineData = await fetchListingsFromSupabase();
+          if (isMounted && onlineData && onlineData.length > 0) {
+            setListings(onlineData);
+            console.log('⚡ Sinkronisasi Supabase berhasil:', onlineData.length, 'iklan aktif');
+          }
+        } catch (e) {
+          console.warn('Gagal sinkronisasi data dari Supabase:', e);
+        }
+      }
+    }
+    loadOnlineListings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<TabType>('home');
@@ -299,6 +329,7 @@ export default function App() {
   });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
@@ -405,6 +436,9 @@ export default function App() {
   const handleListingApproved = (newListing: Listing) => {
     setListings((prev) => [newListing, ...prev]);
 
+    // Simpan otomatis ke Supabase database online
+    saveListingToSupabase(newListing, currentUser.email, currentUser.phone);
+
     // Potong 1 Kuota Listing User (Aturan Kuota Listing Aktif)
     setCurrentUser((prev) => ({
       ...prev,
@@ -432,6 +466,13 @@ export default function App() {
       ...prev,
       listingQuota: prev.listingQuota + 1,
     }));
+
+    // Update status prioritas/sundul di Supabase
+    updateListingInSupabase(listingId, {
+      createdAt: now,
+      sundulAt: now,
+      isSuperBU: type === 'superbu' || type === 'prioritas_bu',
+    });
 
     setListings((prev) => {
       const idx = prev.findIndex((item) => item.id === listingId);
@@ -464,6 +505,7 @@ export default function App() {
 
   const handleDeleteListing = (id: string) => {
     setListings((prev) => prev.filter((l) => l.id !== id));
+    deleteListingFromSupabase(id);
     showToast('Iklan berhasil dihapus.');
   };
 
@@ -1054,6 +1096,7 @@ export default function App() {
             isLoggedIn={isLoggedIn}
             onLogin={handleOpenLogin}
             onLogout={handlePromptLogout}
+            onOpenSupabaseSettings={() => setIsSupabaseModalOpen(true)}
           />
         )}
       </main>
@@ -1201,6 +1244,19 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Modal Pengaturan & Panduan Supabase Online */}
+      <SupabaseConfigModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
+        onConfigSaved={async () => {
+          const remoteData = await fetchListingsFromSupabase();
+          if (remoteData && remoteData.length > 0) {
+            setListings(remoteData);
+          }
+          showToast('⚡ Database Supabase terhubung & data disinkronkan!');
+        }}
+      />
     </div>
   );
 }
