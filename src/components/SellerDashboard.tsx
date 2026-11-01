@@ -208,7 +208,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                         </span>
                       )}
                       <span className="text-[10px] text-sky-700 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-sky-500" /> Tayang & Terverifikasi AI
+                        <CheckCircle2 className="w-3 h-3 text-sky-500" /> Tayang & Produk Terverifikasi
                       </span>
                     </div>
 

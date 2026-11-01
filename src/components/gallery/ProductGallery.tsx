@@ -106,7 +106,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
         {/* Soft Vignette Overlay for Badges & Caption Readability */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
 
-        {/* Custom Badges (e.g. PALING BU, Diskon BU, AI Verified) */}
+        {/* Custom Badges (e.g. PALING BU, Diskon BU, Produk Terverifikasi) */}
         {badgeOverlay && (
           <div className="absolute top-3 left-3 z-10 pointer-events-none">
             {badgeOverlay}

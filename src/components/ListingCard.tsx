@@ -93,15 +93,15 @@ export const ListingCard: React.FC<ListingCardProps> = ({
           </span>
         </div>
 
-        {/* AI Verified Badge */}
+        {/* Produk Terverifikasi Badge */}
         {listing.aiVerified && (
           <div
             className="absolute top-2.5 right-2.5 z-10"
-            title="Lolos Verifikasi AI Multimodal: Foto Fisik Asli & Kriteria Jual Rugi Wajar"
+            title="Produk Terverifikasi: Foto Fisik Asli & Kondisi Teruji"
           >
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-600 text-white backdrop-blur-xs shadow-xs">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-600 text-white backdrop-blur-xs shadow-xs">
               <ShieldCheck className="w-3 h-3 text-sky-200" />
-              AI Verified
+              Produk Terverifikasi
             </span>
           </div>
         )}

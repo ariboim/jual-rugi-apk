@@ -210,7 +210,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                 {listing.aiVerified && (
                   <span className="px-2.5 py-1 rounded-xl bg-sky-600 text-white font-bold text-xs shadow-md flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-sky-200" />
-                    Foto Fisik AI Verified
+                    Produk Terverifikasi
                   </span>
                 )}
               </div>
