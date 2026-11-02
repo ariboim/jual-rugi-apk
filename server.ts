@@ -348,6 +348,29 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     }
   });
 
+  let globalZapierWebhookUrl = process.env.ZAPIER_WELCOME_EMAIL_WEBHOOK_URL || '';
+
+  // Get current webhook config
+  app.get('/api/welcome-email-config', (req, res) => {
+    res.json({
+      webhookUrl: globalZapierWebhookUrl,
+      isConfigured: Boolean(globalZapierWebhookUrl && globalZapierWebhookUrl.startsWith('http')),
+    });
+  });
+
+  // Save webhook URL globally on server
+  app.post('/api/save-welcome-webhook', (req, res) => {
+    const { webhookUrl } = req.body;
+    if (webhookUrl && typeof webhookUrl === 'string') {
+      globalZapierWebhookUrl = webhookUrl.trim();
+    }
+    res.json({
+      success: true,
+      webhookUrl: globalZapierWebhookUrl,
+      message: 'Zapier Webhook URL berhasil disimpan di server.',
+    });
+  });
+
   // Otomatisasi Welcome Email Endpoint (Terhubung ke Zapier Catch Hook & Gmail)
   app.post('/api/send-welcome-email', async (req, res) => {
     try {
@@ -360,10 +383,14 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         });
       }
 
+      if (zapierWebhookUrl && typeof zapierWebhookUrl === 'string' && zapierWebhookUrl.startsWith('http')) {
+        globalZapierWebhookUrl = zapierWebhookUrl.trim();
+      }
+
       const userName = name?.trim() || 'Pengguna Baru';
       const userPhone = phone || '-';
       const targetWebhook =
-        zapierWebhookUrl || process.env.ZAPIER_WELCOME_EMAIL_WEBHOOK_URL;
+        zapierWebhookUrl || globalZapierWebhookUrl || process.env.ZAPIER_WELCOME_EMAIL_WEBHOOK_URL;
 
       const welcomeSubject = `🎉 Selamat Datang di JualRugi.id, ${userName}! Panduan Transaksi COD Aman`;
       const welcomeHtml = `
@@ -438,11 +465,40 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
             }),
           });
 
+          const zapierText = await zapierRes.text();
           webhookStatus = zapierRes.ok ? 'success' : `failed_${zapierRes.status}`;
-          console.log(`[Zapier Webhook] Dispatched to ${targetWebhook}: Status ${zapierRes.status}`);
+          console.log(`[Zapier Webhook] Dispatched to ${targetWebhook}: Status ${zapierRes.status} | Body: ${zapierText}`);
+
+          return res.status(200).json({
+            success: true,
+            message: zapierRes.ok
+              ? `Webhook Zapier berhasil dihubungi (HTTP ${zapierRes.status} OK)! Zapier telah menerima payload email.`
+              : `Zapier merespons dengan status HTTP ${zapierRes.status}: ${zapierText}`,
+            emailSentTo: email,
+            webhookDispatched: zapierRes.ok,
+            webhookStatus,
+            zapierResponse: zapierText,
+            targetWebhookUsed: targetWebhook,
+            preview: {
+              subject: welcomeSubject,
+              html: welcomeHtml,
+            },
+          });
         } catch (webhookErr: any) {
           console.error('[Zapier Webhook Error]:', webhookErr);
           webhookStatus = 'network_error';
+          return res.status(200).json({
+            success: true,
+            message: `Gagal menghubungi URL Webhook: ${webhookErr.message}`,
+            emailSentTo: email,
+            webhookDispatched: false,
+            webhookStatus,
+            targetWebhookUsed: targetWebhook,
+            preview: {
+              subject: welcomeSubject,
+              html: welcomeHtml,
+            },
+          });
         }
       }
 
@@ -452,8 +508,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         success: true,
         message: `Welcome email berhasil dipicu untuk ${email}.`,
         emailSentTo: email,
-        webhookDispatched: webhookStatus === 'success',
-        webhookStatus,
+        webhookDispatched: false,
+        webhookStatus: 'no_webhook_url',
         preview: {
           subject: welcomeSubject,
           html: welcomeHtml,

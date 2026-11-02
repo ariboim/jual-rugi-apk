@@ -1103,6 +1103,7 @@ export default function App() {
             onLogout={handlePromptLogout}
             onOpenSupabaseSettings={() => setIsSupabaseModalOpen(true)}
             onOpenPanduanModal={() => setIsPanduanModalOpen(true)}
+            onOpenWelcomeEmailSetup={() => setIsWelcomeEmailModalOpen(true)}
           />
         )}
       </main>
