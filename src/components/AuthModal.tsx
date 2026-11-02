@@ -13,12 +13,14 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { UserProfile } from '../types';
+import { sendWelcomeEmailAutomation } from '../services/welcomeEmail';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLoginSuccess: (user: UserProfile) => void;
   initialMode?: 'login' | 'register';
+  onOpenWelcomeEmailSetup?: () => void;
 }
 
 /**
@@ -50,6 +52,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onLoginSuccess,
   initialMode = 'register',
+  onOpenWelcomeEmailSetup,
 }) => {
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [name, setName] = useState('');
@@ -81,6 +84,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSelectGoogleAccount = (selectedName: string, selectedEmail: string, avatarUrl: string) => {
     setIsLoading(true);
     setAgreedToDisclaimer(true); // Memilih akun Google secara otomatis menyetujui disclaimer
+
+    // ⚡ Trigger otomatisasi welcome email seketika berdasarkan alamat Gmail user
+    sendWelcomeEmailAutomation({
+      name: selectedName,
+      email: selectedEmail,
+      phone: '0812-8888-9999',
+    });
 
     setTimeout(() => {
       setIsLoading(false);
@@ -123,16 +133,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    const regName = name.trim() || 'Member JualRugi';
+    const regEmail = emailOrPhone.includes('@')
+      ? emailOrPhone.trim()
+      : `${regName.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`;
+    const regPhone = !emailOrPhone.includes('@') ? emailOrPhone.trim() : '0812-3344-5566';
+
+    // ⚡ Trigger otomatisasi welcome email seketika berdasarkan email pendaftar
+    if (mode === 'register') {
+      sendWelcomeEmailAutomation({
+        name: regName,
+        email: regEmail,
+        phone: regPhone,
+      });
+    }
+
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
       const authenticatedUser: UserProfile = {
         id: `user-${Date.now()}`,
-        name: name.trim() || 'Member JualRugi',
+        name: regName,
         role: 'buyer',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-        email: emailOrPhone.includes('@') ? emailOrPhone : 'member@jualrugi.id',
-        phone: !emailOrPhone.includes('@') ? emailOrPhone : '0812-3344-5566',
+        email: regEmail,
+        phone: regPhone,
         city: 'Jakarta Selatan',
         freeListingUsed: false,
         listingQuota: 1, // 1 free listing for new signup
@@ -204,6 +229,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             Masuk / Login
           </button>
         </div>
+
+        {/* Banner Otomatisasi Welcome Email Langsung */}
+        {mode === 'register' && (
+          <div className="flex items-center justify-between p-2.5 rounded-2xl bg-gradient-to-r from-emerald-50 to-sky-50 border border-emerald-200/80 text-emerald-950 mb-3 shadow-2xs">
+            <div className="flex items-center gap-2 truncate">
+              <span className="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center shrink-0 text-xs">
+                ✉️
+              </span>
+              <div className="truncate">
+                <p className="text-[11px] font-black leading-tight truncate">
+                  Welcome Email Otomatis Aktif
+                </p>
+                <p className="text-[9.5px] text-emerald-700 font-medium truncate">
+                  Email panduan transaksi aman langsung dikirim ke inbox pendaftar
+                </p>
+              </div>
+            </div>
+            {onOpenWelcomeEmailSetup && (
+              <button
+                type="button"
+                onClick={onOpenWelcomeEmailSetup}
+                className="shrink-0 text-[10px] font-black text-sky-700 hover:text-sky-900 bg-white px-2 py-1 rounded-lg border border-sky-200 transition cursor-pointer ml-1"
+              >
+                Setup Zapier
+              </button>
+            )}
+          </div>
+        )}
 
         {/* ========================================================= */}
         {/* Tombol Utama: Google Sign-In (Membuka Pilihan Akun Google) */}

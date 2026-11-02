@@ -39,6 +39,7 @@ import { LocationPermissionModal } from './components/LocationPermissionModal';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { PanduanPDFModal } from './components/PanduanPDFModal';
 import { LiveActivityTicker } from './components/LiveActivityTicker';
+import { WelcomeEmailSetupModal } from './components/WelcomeEmailSetupModal';
 import {
   fetchListingsFromSupabase,
   saveListingToSupabase,
@@ -333,6 +334,7 @@ export default function App() {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isPanduanModalOpen, setIsPanduanModalOpen] = useState(false);
+  const [isWelcomeEmailModalOpen, setIsWelcomeEmailModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
@@ -1216,6 +1218,7 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
         initialMode={authModalMode}
+        onOpenWelcomeEmailSetup={() => setIsWelcomeEmailModalOpen(true)}
       />
 
       {/* Modal Konfirmasi Keluar Akun (In-App React Dialog, Bebas Blokir Browser) */}
@@ -1274,6 +1277,14 @@ export default function App() {
           setIsPanduanModalOpen(false);
           setIsSupabaseModalOpen(true);
         }}
+      />
+
+      {/* Modal Setup & Uji Coba Otomatisasi Welcome Email */}
+      <WelcomeEmailSetupModal
+        isOpen={isWelcomeEmailModalOpen}
+        onClose={() => setIsWelcomeEmailModalOpen(false)}
+        defaultEmail={currentUser.email || 'bca.ccpl@gmail.com'}
+        onSuccessToast={(msg) => showToast(msg)}
       />
 
       {/* Live Activity Social Proof Ticker (FOMO & Promo Booster) */}

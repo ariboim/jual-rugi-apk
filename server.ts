@@ -348,6 +348,126 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     }
   });
 
+  // Otomatisasi Welcome Email Endpoint (Terhubung ke Zapier Catch Hook & Gmail)
+  app.post('/api/send-welcome-email', async (req, res) => {
+    try {
+      const { name, email, phone, zapierWebhookUrl } = req.body;
+
+      if (!email || !email.includes('@')) {
+        return res.status(400).json({
+          success: false,
+          error: 'Alamat email tidak valid.',
+        });
+      }
+
+      const userName = name?.trim() || 'Pengguna Baru';
+      const userPhone = phone || '-';
+      const targetWebhook =
+        zapierWebhookUrl || process.env.ZAPIER_WELCOME_EMAIL_WEBHOOK_URL;
+
+      const welcomeSubject = `🎉 Selamat Datang di JualRugi.id, ${userName}! Panduan Transaksi COD Aman`;
+      const welcomeHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; background-color: #f8fafc; padding: 20px; }
+    .card { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 32px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .header { text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px; }
+    .badge { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: bold; }
+    .button { display: inline-block; background: #0284c7; color: #ffffff !important; padding: 12px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; margin-top: 20px; }
+    .tip-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 8px; margin: 20px 0; font-size: 13px; color: #78350f; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <span class="badge">Akun Berhasil Diaktifkan</span>
+      <h2 style="color: #0f172a; margin: 12px 0 4px;">Selamat Datang di JualRugi.id! 👋</h2>
+      <p style="color: #64748b; font-size: 14px; margin: 0;">Pasar Butuh Uang (BU) Diskon Ekstrim & Transaksi COD Terpercaya</p>
+    </div>
+
+    <p>Halo <strong>${userName}</strong>,</p>
+    <p>Terima kasih telah mendaftar di <strong>JualRugi.id</strong> menggunakan email <code>${email}</code>. Akun Anda telah aktif dan siap digunakan untuk mencari barang diskon sadis atau menjual barang BU Anda!</p>
+
+    <div class="tip-box">
+      <strong>🛡️ 3 Tips Aman Transaksi di JualRugi.id:</strong>
+      <ul style="margin: 6px 0 0; padding-left: 18px;">
+        <li>Selalu bertransaksi dengan <strong>COD (Cash On Delivery) tatap muka</strong> di tempat ramai (Mall, Minimarket, Stasiun).</li>
+        <li><strong>Jangan pernah mentransfer DP / uang muka</strong> sebelum memegang dan menguji langsung fisik barang.</li>
+        <li>Cek kelengkapan, fungsi tombol, baterai, dan IMEI sebelum melakukan pembayaran.</li>
+      </ul>
+    </div>
+
+    <p>🎁 <strong>Bonus Pendaftaran:</strong> Anda mendapatkan <strong>1 Slot Kuota Pasang Iklan Gratis</strong> untuk mulai memasang iklan barang butuh uang hari ini!</p>
+
+    <div style="text-align: center;">
+      <a href="https://jualrugi.id" class="button">Buka Aplikasi & Mulai Jelajah</a>
+    </div>
+
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0 20px;" />
+    <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
+      Email otomatis ini dikirimkan khusus untuk ${email} atas pendaftaran di JualRugi.id.<br/>
+      Jika Anda tidak merasa mendaftar, Anda dapat mengabaikan email ini.
+    </p>
+  </div>
+</body>
+</html>
+      `.trim();
+
+      let webhookStatus = 'skipped';
+
+      // Jika ada Zapier Webhook URL, kirim payload seketika (Instant Catch Hook)
+      if (targetWebhook && targetWebhook.startsWith('http')) {
+        try {
+          const zapierRes = await fetch(targetWebhook, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              event: 'user_signed_up',
+              name: userName,
+              email: email,
+              phone: userPhone,
+              subject: welcomeSubject,
+              htmlContent: welcomeHtml,
+              appUrl: 'https://jualrugi.id',
+              timestamp: new Date().toISOString(),
+            }),
+          });
+
+          webhookStatus = zapierRes.ok ? 'success' : `failed_${zapierRes.status}`;
+          console.log(`[Zapier Webhook] Dispatched to ${targetWebhook}: Status ${zapierRes.status}`);
+        } catch (webhookErr: any) {
+          console.error('[Zapier Webhook Error]:', webhookErr);
+          webhookStatus = 'network_error';
+        }
+      }
+
+      console.log(`[Welcome Email Triggered] User: ${userName} (${email}) | Zapier: ${webhookStatus}`);
+
+      return res.status(200).json({
+        success: true,
+        message: `Welcome email berhasil dipicu untuk ${email}.`,
+        emailSentTo: email,
+        webhookDispatched: webhookStatus === 'success',
+        webhookStatus,
+        preview: {
+          subject: welcomeSubject,
+          html: welcomeHtml,
+        },
+      });
+    } catch (err: any) {
+      console.error('Send welcome email error:', err);
+      return res.status(500).json({
+        success: false,
+        error: 'Gagal memicu welcome email.',
+      });
+    }
+  });
+
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({
