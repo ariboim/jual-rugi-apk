@@ -15,12 +15,17 @@ import {
   HelpCircle,
   ShieldCheck,
   Inbox,
-  ArrowRight,
+  KeyRound,
+  Layers,
+  HeartHandshake,
 } from 'lucide-react';
 import {
-  getZapierWebhookUrl,
-  saveZapierWebhookUrl,
+  getEmailJsConfig,
+  saveEmailJsConfig,
+  getFreeWebhookUrl,
+  saveFreeWebhookUrl,
   sendWelcomeEmailAutomation,
+  EmailJsConfig,
 } from '../services/welcomeEmail';
 
 interface WelcomeEmailSetupModalProps {
@@ -36,34 +41,52 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
   defaultEmail = 'bca.ccpl@gmail.com',
   onSuccessToast,
 }) => {
+  // Pilihan Tab Metode Gratis
+  const [activeTab, setActiveTab] = useState<'emailjs' | 'make' | 'surat'>('emailjs');
+
+  // State EmailJS
+  const [emailJsConfig, setEmailJsConfig] = useState<EmailJsConfig>({
+    serviceId: '',
+    templateId: '',
+    publicKey: '',
+  });
+
+  // State Make.com / Webhook Gratis
   const [webhookUrl, setWebhookUrl] = useState('');
+
+  // State Testing
   const [testEmail, setTestEmail] = useState(defaultEmail);
   const [testName, setTestName] = useState('Pengguna Baru JualRugi');
   const [isSending, setIsSending] = useState(false);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
-    webhookDispatched?: boolean;
-    zapierResponse?: string;
-    preview?: { subject: string; html: string };
+    provider?: string;
   } | null>(null);
-  const [showInAppLetter, setShowInAppLetter] = useState(false);
-  const [activeTab, setActiveTab] = useState<'diagnosa' | 'surat' | 'zapier'>('diagnosa');
 
   useEffect(() => {
     if (isOpen) {
-      setWebhookUrl(getZapierWebhookUrl());
+      setEmailJsConfig(getEmailJsConfig());
+      setWebhookUrl(getFreeWebhookUrl());
       setTestResult(null);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const handleSaveEmailJs = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveEmailJsConfig(emailJsConfig);
+    if (onSuccessToast) {
+      onSuccessToast('✅ Konfigurasi EmailJS berhasil disimpan!');
+    }
+  };
+
   const handleSaveWebhook = (e: React.FormEvent) => {
     e.preventDefault();
-    saveZapierWebhookUrl(webhookUrl);
+    saveFreeWebhookUrl(webhookUrl);
     if (onSuccessToast) {
-      onSuccessToast('✅ Webhook URL Zapier berhasil disimpan di sistem!');
+      onSuccessToast('✅ Webhook Make.com berhasil disimpan!');
     }
   };
 
@@ -76,9 +99,11 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
     setIsSending(true);
     setTestResult(null);
 
-    // Simpan webhook jika diisi
-    if (webhookUrl) {
-      saveZapierWebhookUrl(webhookUrl);
+    // Simpan konfigurasi aktif terlebih dahulu
+    if (activeTab === 'emailjs') {
+      saveEmailJsConfig(emailJsConfig);
+    } else if (activeTab === 'make') {
+      saveFreeWebhookUrl(webhookUrl);
     }
 
     try {
@@ -90,7 +115,7 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
 
       setTestResult(result);
       if (onSuccessToast) {
-        onSuccessToast(`🎉 Sinyal webhook berhasil ditembakkan ke Zapier!`);
+        onSuccessToast(`🎉 ${result.message}`);
       }
     } catch (err: any) {
       setTestResult({
@@ -117,271 +142,344 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
 
         {/* Header */}
         <div className="flex items-start gap-3.5 pb-4 border-b border-slate-100 shrink-0">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shrink-0 shadow-md">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-md">
             <Mail className="w-6 h-6" />
           </div>
           <div className="pr-8">
             <div className="flex items-center gap-2">
               <h2 className="text-base sm:text-lg font-black text-slate-900">
-                Pusat Solusi Welcome Email
+                Welcome Email 100% Gratis
               </h2>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
-                Langsung Aktif
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold border border-emerald-200">
+                Tanpa Kartu Kredit
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Diagnosa pengiriman Zapier ke Gmail ({defaultEmail}) & surat selamat datang resmi.
+              Alternatif gratis pengganti Zapier berbayar untuk mengirim email ke {defaultEmail}.
             </p>
           </div>
         </div>
 
-        {/* Tab Navigasi */}
+        {/* Tab Pilihan Solusi Gratis */}
         <div className="grid grid-cols-3 p-1 bg-slate-100 rounded-2xl mt-4 mb-2 shrink-0 text-xs font-bold">
           <button
             type="button"
-            onClick={() => setActiveTab('diagnosa')}
-            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center ${
-              activeTab === 'diagnosa'
-                ? 'bg-white text-slate-950 shadow-xs'
+            onClick={() => setActiveTab('emailjs')}
+            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1 ${
+              activeTab === 'emailjs'
+                ? 'bg-white text-emerald-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            🔍 Diagnosa & Tes
+            <span>⭐ EmailJS (Mudah)</span>
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('zapier')}
-            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center ${
-              activeTab === 'zapier'
-                ? 'bg-white text-slate-950 shadow-xs'
+            onClick={() => setActiveTab('make')}
+            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1 ${
+              activeTab === 'make'
+                ? 'bg-white text-sky-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            ⚙️ 2 Langkah Zapier
+            <span>🔄 Make.com (Gratis)</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('surat')}
-            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center ${
+            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1 ${
               activeTab === 'surat'
-                ? 'bg-white text-slate-950 shadow-xs'
+                ? 'bg-white text-amber-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            ✉️ Surat Selamat Datang
+            <span>✉️ Surat In-App</span>
           </button>
         </div>
 
-        {/* Scrollable Body */}
+        {/* Scrollable Content */}
         <div className="overflow-y-auto space-y-4 py-3 pr-1 text-xs text-slate-700 leading-relaxed">
-          {/* TAB 1: DIAGNOSA & TES PENGIRIMAN */}
-          {activeTab === 'diagnosa' && (
-            <div className="space-y-4">
-              {/* Alert Penjelasan Kenapa Email Belum Masuk */}
-              <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 space-y-2">
-                <h4 className="font-extrabold text-amber-950 flex items-center gap-1.5 text-xs">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Mengapa URL Webhook Sudah Dimasukkan Tapi Email Belum Masuk?</span>
-                </h4>
-                <p className="text-[11.5px] text-amber-900 leading-relaxed">
-                  URL Webhook Zapier berfungsi sebagai <strong>penampung data masuk</strong>. Agar email benar-benar terkirim ke Gmail Anda, <strong>2 syarat wajib di bawah ini harus terpenuhi di akun Zapier Anda:</strong>
+          {/* ======================================================== */}
+          {/* TAB 1: EMAILJS (REKOMENDASI UTAMA: 100% GRATIS, TANPA CC) */}
+          {/* ======================================================== */}
+          {activeTab === 'emailjs' && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-1.5">
+                <div className="flex items-center gap-2 text-emerald-950 font-black text-xs">
+                  <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Rekomendasi Terbaik: EmailJS (Gratis 200 Email/Bulan)</span>
+                </div>
+                <p className="text-[11px] text-emerald-900 leading-relaxed">
+                  <strong>EmailJS</strong> adalah layanan paling ramah pemula untuk mengirim email otomatis. 
+                  <strong> 100% GRATIS dan TIDAK PERLU Kartu Kredit sama sekali</strong>. Email dikirim langsung dari akun Gmail Anda sendiri ke Gmail pendaftar!
                 </p>
-                <div className="space-y-2 pt-1">
-                  <div className="p-2.5 rounded-xl bg-white/80 border border-amber-200 text-[11px] text-amber-950">
-                    <strong className="text-amber-900">1. WAJIB Tambahkan Action Step 2 di Zapier:</strong><br />
-                    Webhook tidak bisa kirim email sendiri. Di Zapier, Anda harus klik tanda <strong>(+)</strong> di bawah Catch Hook, lalu pilih <strong>Gmail</strong> &gt; Event: <strong>"Send Email"</strong>.
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white/80 border border-amber-200 text-[11px] text-amber-950">
-                    <strong className="text-amber-900">2. WAJIB Klik Tombol "Publish Zap" (Status ON):</strong><br />
-                    Jika Zap Anda masih berstatus <strong>DRAFT / OFF</strong> di Zapier, Zapier akan menolak mengirimkan email apapun! Pastikan tombol toggle di pojok kanan atas Zapier sudah berwarna <strong>ON (Hijau)</strong>.
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white/80 border border-amber-200 text-[11px] text-amber-950">
-                    <strong className="text-amber-900">3. Cek Folder "Spam" &amp; Tab "Promosi" di Gmail:</strong><br />
-                    Email otomatis pertama kali sering diarahkan oleh sistem proteksi Google ke folder Spam atau tab Promosi.
-                  </div>
-                </div>
               </div>
 
-              {/* Form Input Webhook & Tombol Tes */}
-              <div className="p-4 rounded-2xl bg-sky-50/80 border border-sky-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="font-extrabold text-sky-950 text-xs flex items-center gap-1.5">
-                    <Zap className="w-3.5 h-3.5 text-amber-500" />
-                    <span>URL Webhook Zapier (Catch Hook) Anda:</span>
-                  </label>
-                  <span className="text-[10px] text-slate-500">Tersimpan di browser &amp; server</span>
-                </div>
-
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    placeholder="https://hooks.zapier.com/hooks/catch/..."
-                    value={webhookUrl}
-                    onChange={(e) => setWebhookUrl(e.target.value)}
-                    className="grow px-3 py-2 rounded-xl bg-white border border-sky-300 text-xs font-mono text-slate-900 outline-none focus:ring-1 focus:ring-sky-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSaveWebhook}
-                    className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shrink-0 cursor-pointer"
+              {/* Form Input Kunci EmailJS */}
+              <form onSubmit={handleSaveEmailJs} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                  <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Masukkan 3 Kunci EmailJS Anda:</span>
+                  </span>
+                  <a
+                    href="https://www.emailjs.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 underline"
                   >
-                    Simpan
-                  </button>
+                    <span>Daftar di emailjs.com</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
 
-                {/* Form Tes Kirim */}
-                <div className="pt-2 border-t border-sky-200/60 space-y-2">
-                  <p className="text-[11px] text-slate-600 font-bold">
-                    Tes Pengiriman Langsung ke Email Anda:
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-2">
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      1. Service ID (contoh: <code>service_abc123</code>):
+                    </label>
                     <input
-                      type="email"
-                      value={testEmail}
-                      onChange={(e) => setTestEmail(e.target.value)}
-                      placeholder="Email tujuan (cth: bca.ccpl@gmail.com)"
-                      className="grow px-3 py-2 rounded-xl bg-white border border-sky-200 text-xs font-mono text-slate-800 outline-none"
+                      type="text"
+                      placeholder="service_xxxxxxx"
+                      value={emailJsConfig.serviceId}
+                      onChange={(e) =>
+                        setEmailJsConfig({ ...emailJsConfig, serviceId: e.target.value.trim() })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500"
                     />
-                    <button
-                      type="button"
-                      onClick={handleTestSend}
-                      disabled={isSending}
-                      className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-xs transition active:scale-95 cursor-pointer disabled:opacity-50 shrink-0"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isSending ? 'animate-spin' : ''}`} />
-                      <span>{isSending ? 'Memicu Webhook...' : 'Kirim Tes ke Zapier Sekarang'}</span>
-                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      2. Template ID (contoh: <code>template_xyz890</code>):
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="template_xxxxxxx"
+                      value={emailJsConfig.templateId}
+                      onChange={(e) =>
+                        setEmailJsConfig({ ...emailJsConfig, templateId: e.target.value.trim() })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      3. Public Key (Account &gt; API Keys):
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Public Key Anda (cth: aBcDeFgHiJkLmNoP)"
+                      value={emailJsConfig.publicKey}
+                      onChange={(e) =>
+                        setEmailJsConfig({ ...emailJsConfig, publicKey: e.target.value.trim() })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500"
+                    />
                   </div>
                 </div>
 
-                {/* Hasil Uji Coba Real-Time */}
-                {testResult && (
-                  <div
-                    className={`p-3.5 rounded-xl border text-[11px] space-y-1 animate-in fade-in ${
-                      testResult.success
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
-                        : 'bg-rose-50 border-rose-300 text-rose-950'
-                    }`}
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition cursor-pointer shadow-xs active:scale-98"
+                >
+                  Simpan Konfigurasi EmailJS
+                </button>
+              </form>
+
+              {/* Panduan 3 Menit EmailJS */}
+              <div className="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2">
+                <h4 className="font-extrabold text-slate-900 text-xs">
+                  Panduan Singkat Setup EmailJS (3 Menit, Tanpa Koding):
+                </h4>
+                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 pl-1">
+                  <li>
+                    Buka <a href="https://www.emailjs.com" target="_blank" rel="noreferrer" className="text-emerald-700 font-bold underline">emailjs.com</a>, daftar akun gratis menggunakan email Google Anda.
+                  </li>
+                  <li>
+                    Di menu <strong>Email Services</strong> &gt; klik <strong>Add Service</strong> &gt; pilih <strong>Gmail</strong>. Klik <em>Connect Account</em> untuk menghubungkan akun Gmail Anda ({defaultEmail}). Salin <strong>Service ID</strong>.
+                  </li>
+                  <li>
+                    Di menu <strong>Email Templates</strong> &gt; klik <strong>Create New Template</strong>. Pada kolom <em>To Email</em>, ketik: <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-800">{"{{to_email}}"}</code>. Salin <strong>Template ID</strong>.
+                  </li>
+                  <li>
+                    Di menu <strong>Account</strong> (ikon profil pojok kanan atas), salin <strong>Public Key</strong> Anda.
+                  </li>
+                </ol>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* TAB 2: MAKE.COM (WEBHOOK GRATIS SELAMANYA TANPA CC)     */}
+          {/* ======================================================== */}
+          {activeTab === 'make' && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="p-3.5 rounded-2xl bg-sky-50/90 border border-sky-200 space-y-1.5">
+                <div className="flex items-center gap-2 text-sky-950 font-black text-xs">
+                  <Zap className="w-4 h-4 text-sky-600 shrink-0" />
+                  <span>Make.com (Integromat): Webhook Gratis 1.000 Transaksi/Bulan</span>
+                </div>
+                <p className="text-[11px] text-sky-900 leading-relaxed">
+                  Berbeda dengan Zapier yang mengunci fitur Webhook di paket berbayar, di <strong>Make.com</strong> fitur <strong>Custom Webhook adalah GRATIS SELAMANYA tanpa perlu kartu kredit</strong>!
+                </p>
+              </div>
+
+              {/* Form Input Webhook Make.com */}
+              <form onSubmit={handleSaveWebhook} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                  <span className="font-extrabold text-xs text-slate-900">
+                    Masukkan Webhook URL Make.com Anda:
+                  </span>
+                  <a
+                    href="https://www.make.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-sky-700 hover:text-sky-900 font-bold flex items-center gap-1 underline"
                   >
-                    <div className="flex items-center gap-1.5 font-black text-xs">
-                      {testResult.success ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      ) : (
-                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                      )}
-                      <span>Hasil Tembakan Webhook:</span>
-                    </div>
-                    <p className="leading-relaxed">{testResult.message}</p>
-                    {testResult.zapierResponse && (
-                      <div className="mt-1 p-2 rounded-lg bg-white/90 border border-emerald-200 font-mono text-[10px] text-slate-800">
-                        <strong>Respons Server Zapier:</strong> {testResult.zapierResponse}
-                      </div>
-                    )}
-                  </div>
-                )}
+                    <span>Daftar di make.com</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+
+                <input
+                  type="url"
+                  placeholder="https://hook.eu1.make.com/xxxxxxxxxxxxxxxxxxxxxxxx"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value.trim())}
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono text-slate-900 outline-none focus:border-sky-500"
+                />
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs transition cursor-pointer shadow-xs active:scale-98"
+                >
+                  Simpan Webhook Make.com
+                </button>
+              </form>
+
+              {/* Cara Pakai Make.com */}
+              <div className="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2">
+                <h4 className="font-extrabold text-slate-900 text-xs">
+                  Cara Buat Skenario di Make.com (Gratis):
+                </h4>
+                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 pl-1">
+                  <li>Buka <a href="https://www.make.com" target="_blank" rel="noreferrer" className="text-sky-700 font-bold underline">make.com</a> dan buat akun gratis.</li>
+                  <li>Klik <strong>Create a new scenario</strong> &gt; Tambah modul: <strong>Webhooks</strong> &gt; pilih <strong>Custom Webhook</strong>. Salin link URL-nya ke form di atas.</li>
+                  <li>Tambah modul kedua di sebelahnya: pilih <strong>Gmail</strong> &gt; <strong>Send an Email</strong>. Hubungkan Gmail Anda, isi kolom To dengan variabel email.</li>
+                  <li>Aktifkan saklar <strong>Scheduling: ON</strong> di pojok kiri bawah. Selesai!</li>
+                </ol>
               </div>
             </div>
           )}
 
-          {/* TAB 2: PANDUAN STEP-BY-STEP ZAPIER GMAIL */}
-          {activeTab === 'zapier' && (
-            <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-3">
-              <h4 className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Cara Mengatur Gmail di Zapier (Pasti Mengirim Email):</span>
-              </h4>
-
-              <div className="space-y-3 text-[11.5px] text-slate-700">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                  <div className="font-bold text-sky-900">Step 1: Pastikan Trigger Catch Hook Siap</div>
-                  <p>Buka Zap Anda di Zapier &gt; Trigger: <strong>Webhooks by Zapier</strong> &gt; Event: <strong>Catch Hook</strong>. Klik tombol <strong>"Test trigger"</strong>. Data nama dan email dari pendaftaran akan langsung terbaca.</p>
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
-                  <div className="font-bold text-sky-900">Step 2: Tambahkan Action Gmail (Kirim Email)</div>
-                  <p>Di bawah trigger Webhook, klik tombol tanda plus <strong>(+)</strong>:</p>
-                  <ul className="list-disc list-inside space-y-1 pl-1 text-slate-600">
-                    <li>Pilih App: <strong>Gmail</strong> &gt; Event: <strong>Send Email</strong>.</li>
-                    <li>Hubungkan akun Google Gmail Anda.</li>
-                    <li>Pada kolom <strong>To</strong>: Klik dan pilih field <code className="bg-white px-1 py-0.5 rounded border border-slate-300 text-sky-700">1. Email</code>.</li>
-                    <li>Pada kolom <strong>Subject</strong>: Pilih <code className="bg-white px-1 py-0.5 rounded border border-slate-300 text-sky-700">1. Subject</code>.</li>
-                    <li>Pada kolom <strong>Body Type</strong>: Pilih <strong>html</strong>.</li>
-                    <li>Pada kolom <strong>Body</strong>: Pilih <code className="bg-white px-1 py-0.5 rounded border border-slate-300 text-sky-700">1. Html Content</code>.</li>
-                  </ul>
-                </div>
-
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 space-y-1 text-emerald-950">
-                  <div className="font-black text-emerald-900">Step 3: WAJIB Klik "Publish" (Status ON)</div>
-                  <p>Klik tombol biru besar <strong>"Publish"</strong> di pojok kanan atas editor Zapier. Pastikan tombol saklar toggle Zap Anda sudah berwarna <strong>ON (Hijau)</strong>. Jika masih bertuliskan "Draft", email tidak akan pernah keluar.</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: SURAT SELAMAT DATANG LANGSUNG DI APLIKASI (100% TIDAK PERNAH HILANG) */}
+          {/* ======================================================== */}
+          {/* TAB 3: SURAT IN-APP (PANDUAN & KUOTA LANGSUNG DI LAYAR)  */}
+          {/* ======================================================== */}
           {activeTab === 'surat' && (
-            <div className="space-y-3">
-              <div className="p-3 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-sky-600" />
-                  <span className="font-bold text-sky-950">Surat Sambutan &amp; Panduan Resmi</span>
-                </div>
-                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
-                  Bonus Kuota Aktif
+            <div className="space-y-3 animate-in fade-in">
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 flex items-center justify-between text-xs">
+                <span className="font-bold">✉️ Surat Resmi Selamat Datang JualRugi.id</span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full">
+                  Bonus 1 Kuota Aktif
                 </span>
               </div>
 
-              {/* Tampilan Surat di Layar */}
               <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3">
                 <div className="text-center pb-3 border-b border-slate-100">
-                  <span className="inline-block px-3 py-1 rounded-full bg-sky-100 text-sky-800 font-black text-[10px] uppercase tracking-wider">
-                    Member Baru Terverifikasi
+                  <span className="inline-block px-3 py-0.5 rounded-full bg-sky-100 text-sky-800 font-black text-[10px] uppercase">
+                    Pemberitahuan Akun Baru
                   </span>
-                  <h3 className="text-base font-black text-slate-950 mt-2">
-                    Selamat Datang di JualRugi.id! 👋
+                  <h3 className="text-base font-black text-slate-950 mt-1.5">
+                    Selamat Bergabung di JualRugi.id! 👋
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Pasar Butuh Uang (BU) Diskon Ekstrim &amp; Transaksi COD Terpercaya
+                    Akun: <strong>{testEmail}</strong>
                   </p>
                 </div>
 
-                <p className="text-xs text-slate-700">
-                  Halo <strong>{testName}</strong> ({testEmail}),
-                </p>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Selamat bergabung di komunitas jual beli Butuh Uang (BU) terbesar di Indonesia! Akun Anda telah resmi aktif dan siap digunakan untuk mencari gadget, laptop, atau kendaraan impian dengan harga sadis.
+                <p className="text-xs text-slate-700 leading-relaxed">
+                  Halo <strong>{testName}</strong>, akun Anda telah aktif dan siap digunakan untuk mencari produk diskon ekstrim BU atau menjual barang Anda.
                 </p>
 
-                <div className="p-3.5 rounded-2xl bg-amber-50 border-l-4 border-amber-400 text-amber-950 space-y-1.5">
-                  <div className="font-black text-xs flex items-center gap-1.5">
-                    <span>🛡️ 3 Aturan Emas Transaksi COD Aman:</span>
-                  </div>
-                  <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-900 pl-1">
-                    <li>Wajib <strong>COD tatap muka</strong> di tempat umum yang ramai (Mall, Minimarket, Stasiun).</li>
-                    <li><strong>Jangan pernah mentransfer DP / uang muka</strong> dalam bentuk apapun sebelum memegang dan menguji langsung barang.</li>
-                    <li>Periksa segel, fungsi tombol, layar, baterai, dan IMEI bersama penjual.</li>
+                <div className="p-3.5 rounded-2xl bg-amber-50/90 border-l-4 border-amber-400 text-amber-950 space-y-1.5 text-[11px]">
+                  <strong>🛡️ 3 Tips Aman Transaksi COD:</strong>
+                  <ul className="list-disc list-inside space-y-0.5 text-amber-900 pl-1">
+                    <li>Wajib COD tatap muka di tempat umum yang ramai.</li>
+                    <li>Jangan pernah mentransfer DP / uang muka sebelum cek fisik.</li>
+                    <li>Uji fungsi tombol, baterai, dan IMEI bersama penjual.</li>
                   </ul>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🎁</span>
-                    <div>
-                      <p className="font-black text-xs">Bonus Pendaftaran: 1 Slot Iklan Gratis</p>
-                      <p className="text-[10px] text-emerald-700">Sudah otomatis ditambahkan ke kuota akun Anda</p>
-                    </div>
+                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-center justify-between text-xs">
+                  <div>
+                    <p className="font-black">🎁 Bonus Registrasi: 1 Slot Iklan Gratis</p>
+                    <p className="text-[10px] text-emerald-700">Sudah otomatis aktif di akun Anda</p>
                   </div>
+                  <span className="text-xl">🎉</span>
                 </div>
               </div>
             </div>
           )}
+
+          {/* ======================================================== */}
+          {/* UJI COBA PENGIRIMAN REAL-TIME                            */}
+          {/* ======================================================== */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 text-white space-y-3 shadow-md">
+            <div className="flex items-center justify-between">
+              <h4 className="font-extrabold text-xs text-white flex items-center gap-1.5">
+                <Send className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Uji Coba Kirim Email Sekarang ({testEmail}):</span>
+              </h4>
+              <span className="text-[10px] text-slate-400">Metode: {activeTab.toUpperCase()}</span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="email"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="Email tujuan (cth: bca.ccpl@gmail.com)"
+                className="grow px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-xs font-mono text-white placeholder:text-white/40 outline-none focus:border-emerald-400"
+              />
+              <button
+                type="button"
+                onClick={handleTestSend}
+                disabled={isSending}
+                className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-xs transition active:scale-95 cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSending ? 'animate-spin' : ''}`} />
+                <span>{isSending ? 'Mengirim...' : 'Tes Kirim Sekarang'}</span>
+              </button>
+            </div>
+
+            {testResult && (
+              <div
+                className={`p-3 rounded-xl border text-[11px] animate-in fade-in ${
+                  testResult.success
+                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
+                    : 'bg-rose-500/20 border-rose-400 text-rose-200'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold">
+                  {testResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  )}
+                  <span>{testResult.message}</span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Modal Footer */}
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-            <Inbox className="w-3.5 h-3.5 text-sky-600" />
-            <span>Target Email: <strong>{testEmail}</strong></span>
+            <HeartHandshake className="w-4 h-4 text-emerald-600" />
+            <span>Solusi Gratis Selamanya • Bebas Kartu Kredit</span>
           </div>
           <button
             type="button"
