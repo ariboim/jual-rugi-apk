@@ -70,11 +70,23 @@ export const ChatModal: React.FC<ChatModalProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const isListingInactive =
+    listing.status === 'expired' ||
+    listing.status === 'deleted' ||
+    listing.status === 'sold' ||
+    Date.now() - new Date(listing.createdAt).getTime() >= 30 * 24 * 60 * 60 * 1000;
+
+  const inactiveReason =
+    listing.status === 'sold'
+      ? 'Barang Terjual / Chat Ditutup'
+      : 'Iklan tidak aktif / dihapus';
+
   const checkSensitiveKeywords = (text: string) => {
     return SENSITIVE_REGEX.test(text);
   };
 
   const handleSendMessage = (textToSend?: string, isCod?: boolean, codSpot?: string) => {
+    if (isListingInactive) return;
     const text = textToSend || inputText;
     if (!text.trim()) return;
 
@@ -285,47 +297,66 @@ export const ChatModal: React.FC<ChatModalProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick Demo Triggers */}
-        <div className="px-3 py-1.5 bg-white border-t border-sky-100 flex items-center gap-1.5 overflow-x-auto text-[10px] shrink-0 no-scrollbar">
-          <span className="text-slate-500 font-bold shrink-0">Tes:</span>
-          <button
-            onClick={() =>
-              handleSendMessage(
-                'Boleh minta nomor rekening BCA buat transfer DP 100rb biar barang di-booking?'
-              )
-            }
-            className="px-2 py-1 rounded-md bg-red-50 hover:bg-red-100 border border-red-300 text-red-700 font-medium shrink-0 cursor-pointer"
-          >
-            ⚠️ Uji Trigger Rekening / Transfer DP
-          </button>
-          <button
-            onClick={() =>
-              handleSendMessage('Saya siap bayar tunai waktu ketemu COD langsung. Lokasi aman ya.')
-            }
-            className="px-2 py-1 rounded-md bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 font-medium shrink-0 cursor-pointer"
-          >
-            ✅ Respon Aman COD
-          </button>
-        </div>
+        {/* Quick Demo Triggers (Hanya aktif jika iklan masih aktif) */}
+        {!isListingInactive && (
+          <div className="px-3 py-1.5 bg-white border-t border-sky-100 flex items-center gap-1.5 overflow-x-auto text-[10px] shrink-0 no-scrollbar">
+            <span className="text-slate-500 font-bold shrink-0">Tes:</span>
+            <button
+              onClick={() =>
+                handleSendMessage(
+                  'Boleh minta nomor rekening BCA buat transfer DP 100rb biar barang di-booking?'
+                )
+              }
+              className="px-2 py-1 rounded-md bg-red-50 hover:bg-red-100 border border-red-300 text-red-700 font-medium shrink-0 cursor-pointer"
+            >
+              ⚠️ Uji Trigger Rekening / Transfer DP
+            </button>
+            <button
+              onClick={() =>
+                handleSendMessage('Saya siap bayar tunai waktu ketemu COD langsung. Lokasi aman ya.')
+              }
+              className="px-2 py-1 rounded-md bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 font-medium shrink-0 cursor-pointer"
+            >
+              ✅ Respon Aman COD
+            </button>
+          </div>
+        )}
+
+        {/* Banner Peringatan Status Iklan Nonaktif / Expired / Sold */}
+        {isListingInactive && (
+          <div className="p-3 bg-rose-50 border-t border-rose-200 text-rose-950 flex items-center gap-2.5 text-xs shrink-0 animate-in fade-in">
+            <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />
+            <div>
+              <p className="font-black leading-tight text-rose-900">
+                {inactiveReason}
+              </p>
+              <p className="text-[10px] text-rose-700 mt-0.5">
+                Riwayat percakapan telah ditutup oleh sistem. Pembeli dan penjual tidak dapat lagi mengirim pesan baru.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Bottom Input & Quick Action Bar */}
         <div className="p-3 bg-white border-t border-sky-100 shrink-0 space-y-2">
-          {/* "Ajukan Titik COD" Button - Sky Blue */}
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setShowCodSpotsModal(true)}
-              className="py-1.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95 cursor-pointer"
-            >
-              <MapPin className="w-3.5 h-3.5 text-sky-200" />
-              <span>📍 Ajukan Titik COD Aman</span>
-            </button>
-            <span className="text-[10px] text-slate-500">
-              Kirim saran lokasi umum & ramai
-            </span>
-          </div>
+          {/* "Ajukan Titik COD" Button - Hanya aktif jika iklan aktif */}
+          {!isListingInactive && (
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setShowCodSpotsModal(true)}
+                className="py-1.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95 cursor-pointer"
+              >
+                <MapPin className="w-3.5 h-3.5 text-sky-200" />
+                <span>📍 Ajukan Titik COD Aman</span>
+              </button>
+              <span className="text-[10px] text-slate-500">
+                Kirim saran lokasi umum & ramai
+              </span>
+            </div>
+          )}
 
-          {/* Text Input Row */}
+          {/* Text Input Row (Terkunci jika iklan nonaktif) */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -335,15 +366,24 @@ export const ChatModal: React.FC<ChatModalProps> = ({
           >
             <input
               type="text"
-              placeholder={`Tulis pesan sbg ${activeSpeaker === 'buyer' ? 'Pembeli' : 'Penjual'}...`}
+              disabled={isListingInactive}
+              placeholder={
+                isListingInactive
+                  ? 'Iklan tidak aktif / dihapus'
+                  : `Tulis pesan sbg ${activeSpeaker === 'buyer' ? 'Pembeli' : 'Penjual'}...`
+              }
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              className="grow px-3.5 py-2.5 rounded-xl bg-sky-50/50 border border-sky-200 focus:border-sky-500 text-slate-900 placeholder-slate-400 text-xs outline-none shadow-xs"
+              className={`grow px-3.5 py-2.5 rounded-xl border text-xs outline-none shadow-xs transition ${
+                isListingInactive
+                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed placeholder-slate-400 font-semibold'
+                  : 'bg-sky-50/50 border-sky-200 focus:border-sky-500 text-slate-900 placeholder-slate-400'
+              }`}
             />
             <button
               type="submit"
-              disabled={!inputText.trim()}
-              className="p-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 disabled:bg-slate-200 disabled:text-slate-400 text-white transition active:scale-95 cursor-pointer shadow-xs shadow-sky-500/20"
+              disabled={isListingInactive || !inputText.trim()}
+              className="p-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 disabled:bg-slate-200 disabled:text-slate-400 text-white transition active:scale-95 cursor-pointer shadow-xs shadow-sky-500/20 disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />
             </button>

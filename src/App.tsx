@@ -47,6 +47,10 @@ import {
   deleteListingFromSupabase,
   isSupabaseConfigured,
 } from './services/supabase';
+import {
+  checkAndExpireListings,
+  DAILY_SOLD_SEEDED_LISTINGS,
+} from './services/listingLifecycle';
 
 // User simulation profiles with Quota & Permissions
 const GUEST_USER: UserProfile = {
@@ -104,17 +108,29 @@ export default function App() {
   const [listings, setListings] = useState<Listing[]>(() => {
     try {
       const saved = localStorage.getItem('jualrugi_listings');
+      let base: Listing[] = [];
       if (saved) {
         const parsed: Listing[] = JSON.parse(saved);
-        return parsed.map((item) => ({
+        base = parsed.map((item) => ({
           ...item,
           title: item.title.replace(/\bThinQ AI\b/g, 'ThinQ'),
         }));
+      } else {
+        base = [...INITIAL_LISTINGS];
       }
+
+      // Aturan Bisnis 4: Auto-seeding minimal 3 produk second sold/terjual organik
+      const existingIds = new Set(base.map((item) => item.id));
+      const seededToAdd = DAILY_SOLD_SEEDED_LISTINGS.filter((item) => !existingIds.has(item.id));
+      const combined = [...base, ...seededToAdd];
+
+      // Aturan Bisnis 1: Cek durasi tayang 30 hari
+      const { updatedListings } = checkAndExpireListings(combined);
+      return updatedListings;
     } catch (e) {
       console.error(e);
+      return [...INITIAL_LISTINGS, ...DAILY_SOLD_SEEDED_LISTINGS];
     }
-    return INITIAL_LISTINGS;
   });
 
   useEffect(() => {
@@ -133,8 +149,11 @@ export default function App() {
         try {
           const onlineData = await fetchListingsFromSupabase();
           if (isMounted && onlineData && onlineData.length > 0) {
-            setListings(onlineData);
-            console.log('⚡ Sinkronisasi Supabase berhasil:', onlineData.length, 'iklan aktif');
+            const { updatedListings } = checkAndExpireListings(onlineData);
+            const existingIds = new Set(updatedListings.map((item) => item.id));
+            const seededToAdd = DAILY_SOLD_SEEDED_LISTINGS.filter((item) => !existingIds.has(item.id));
+            setListings([...updatedListings, ...seededToAdd]);
+            console.log('⚡ Sinkronisasi Supabase berhasil:', updatedListings.length, 'iklan aktif');
           }
         } catch (e) {
           console.warn('Gagal sinkronisasi data dari Supabase:', e);
@@ -422,6 +441,28 @@ export default function App() {
       setToastMessage((current) => (current === msg ? null : current));
     }, 3500);
   };
+
+  // Aturan Bisnis 1 & 3: Cek masa kedaluwarsa 30 hari & pengembalian kuota iklan otomatis (+1 slot)
+  useEffect(() => {
+    const { updatedListings, expiredListings, refundCount } = checkAndExpireListings(
+      listings,
+      currentUser.id
+    );
+
+    if (expiredListings.length > 0) {
+      setListings(updatedListings);
+    }
+
+    if (refundCount > 0) {
+      setCurrentUser((prev) => ({
+        ...prev,
+        listingQuota: prev.listingQuota + refundCount,
+      }));
+      showToast(
+        `🎁 Kuota pasang iklan Anda dikembalikan (+${refundCount} slot) karena masa tayang iklan telah mencapai 30 hari.`
+      );
+    }
+  }, [currentUser.id]);
 
   // Navigasi cepat saat banner in-feed diklik
   const handleNavigateSmartphoneCategory = () => {

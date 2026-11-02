@@ -94,7 +94,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({
     }
   };
 
-  const sampleSQL = `-- 1. Buat Tabel listings di Supabase
+  const sampleSQL = `-- 1. Buat / Update Tabel listings di Supabase
 CREATE TABLE IF NOT EXISTS public.listings (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -110,6 +110,9 @@ CREATE TABLE IF NOT EXISTS public.listings (
   seller_phone TEXT,
   seller_email TEXT,
   is_priority BOOLEAN DEFAULT false,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'sold', 'expired', 'deleted')),
+  expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '30 days'),
+  sold_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -129,7 +132,38 @@ WITH CHECK (true);
 CREATE POLICY "Izinkan publik update iklan" 
 ON public.listings FOR UPDATE 
 TO anon, authenticated 
-USING (true);`;
+USING (true);
+
+-- 3. Trigger Atomis Pengembalian Kuota (+1 Slot) Saat Iklan Expired / Deleted
+CREATE OR REPLACE FUNCTION public.fn_refund_listing_quota()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (NEW.status IN ('expired', 'deleted') AND OLD.status = 'active') THEN
+    UPDATE public.profiles
+    SET listing_quota = COALESCE(listing_quota, 0) + 1
+    WHERE email = OLD.seller_email;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_refund_listing_quota ON public.listings;
+CREATE TRIGGER trg_refund_listing_quota
+AFTER UPDATE OF status ON public.listings
+FOR EACH ROW
+EXECUTE FUNCTION public.fn_refund_listing_quota();
+
+-- 4. Cron Task Otomatisasi Auto-Expire 30 Hari (via Supabase pg_cron)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+SELECT cron.schedule(
+  'auto-expire-jualrugi-listings',
+  '0 * * * *', -- Berjalan setiap 1 jam
+  $$UPDATE public.listings 
+    SET status = 'expired' 
+    WHERE status = 'active' 
+      AND created_at + INTERVAL '30 days' <= NOW();$$
+);`;
 
   const handleCopySQL = () => {
     navigator.clipboard.writeText(sampleSQL);

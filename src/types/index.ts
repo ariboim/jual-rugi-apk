@@ -46,6 +46,8 @@ export interface ProductPhoto {
   description?: string;
 }
 
+export type ListingStatus = 'active' | 'sold' | 'expired' | 'deleted';
+
 export interface Listing {
   id: string;
   title: string;
@@ -64,6 +66,9 @@ export interface Listing {
   superBUExpiresAt?: string;
   sundulAt?: string;
   createdAt: string; // ISO string for sorting & "Sundul"
+  expiresAt?: string; // Masa tayang 30 hari (createdAt + 30 days)
+  soldAt?: string; // Tanggal terjual jika status === 'sold'
+  status?: ListingStatus; // 'active' | 'sold' | 'expired' | 'deleted'
   seller: Seller;
   aiVerified: boolean;
   aiVerificationReason: string;

@@ -1,5 +1,4 @@
-import React from 'react';
-import { MapPin, Flame, ShieldCheck, Clock } from 'lucide-react';
+import { MapPin, Flame, ShieldCheck, Clock, CheckCircle2, Lock } from 'lucide-react';
 import { Listing } from '../types';
 
 interface ListingCardProps {
@@ -13,6 +12,11 @@ export const ListingCard: React.FC<ListingCardProps> = ({
   onClick,
   onQuickChat,
 }) => {
+  const isSold = listing.status === 'sold';
+  const isExpired =
+    listing.status === 'expired' ||
+    (!isSold && Date.now() - new Date(listing.createdAt).getTime() >= 30 * 24 * 60 * 60 * 1000);
+
   const formatRupiah = (val: number) => {
     return 'Rp ' + val.toLocaleString('id-ID');
   };
@@ -59,11 +63,41 @@ export const ListingCard: React.FC<ListingCardProps> = ({
           src={listing.imageUrl}
           alt={listing.title}
           loading="lazy"
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+            isSold ? 'grayscale-[40%] opacity-90' : isExpired ? 'grayscale opacity-75' : ''
+          }`}
         />
 
         {/* Soft vignette for readable badges */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-transparent to-transparent pointer-events-none" />
+
+        {/* ======================================================== */}
+        {/* WATERMARK LABEL KHUSUS PRODUK SOLD (3 IKLAN SEEDING/HARI) */}
+        {/* ======================================================== */}
+        {isSold && (
+          <div className="absolute inset-0 z-20 bg-slate-950/60 backdrop-blur-[1.5px] flex flex-col items-center justify-center p-3 text-center">
+            <div className="px-3.5 py-1.5 rounded-xl bg-red-600 text-white font-black text-xs sm:text-sm tracking-wider uppercase shadow-xl border-2 border-white flex items-center gap-1.5 rotate-[-3deg] animate-in zoom-in-95">
+              <CheckCircle2 className="w-4 h-4 text-white" />
+              <span>PRODUK SOLD</span>
+            </div>
+            <span className="text-[10px] text-white font-bold mt-1.5 drop-shadow-md bg-black/40 px-2 py-0.5 rounded-full">
+              Deal COD Sukses
+            </span>
+          </div>
+        )}
+
+        {/* WATERMARK IKLAN KEDALUWARSA (30 HARI) */}
+        {isExpired && !isSold && (
+          <div className="absolute inset-0 z-20 bg-slate-950/70 backdrop-blur-[1.5px] flex flex-col items-center justify-center p-3 text-center">
+            <div className="px-3 py-1.5 rounded-xl bg-slate-800 text-amber-300 font-black text-xs tracking-wider uppercase shadow-xl border border-amber-400/50 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <span>KEDALUWARSA (30 HARI)</span>
+            </div>
+            <span className="text-[10px] text-slate-200 font-bold mt-1.5 drop-shadow-md">
+              Kuota +1 Dikembalikan
+            </span>
+          </div>
+        )}
 
         {/* Badges on Top Left: PALING BU & Diskon BU */}
         <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1.5 items-start">
@@ -168,17 +202,40 @@ export const ListingCard: React.FC<ListingCardProps> = ({
             </span>
           </div>
 
-          {/* Quick COD Chat Trigger Button */}
-          <button
-            onClick={onQuickChat}
-            className={`mt-3 w-full py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-xs ${
-              listing.isSuperBU
-                ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border border-amber-500 shadow-amber-500/25 font-black'
-                : 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/20'
-            }`}
-          >
-            <span>💬 Chat Ajukan COD</span>
-          </button>
+          {/* Quick COD Chat Trigger Button (Dinonaktifkan jika Sold atau Expired) */}
+          {isSold ? (
+            <button
+              type="button"
+              disabled
+              onClick={(e) => e.stopPropagation()}
+              className="mt-3 w-full py-2.5 px-2 rounded-xl text-xs font-black bg-slate-200 text-slate-500 border border-slate-300 flex items-center justify-center gap-1.5 cursor-not-allowed select-none shadow-none"
+            >
+              <Lock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Barang Terjual / Chat Ditutup</span>
+            </button>
+          ) : isExpired ? (
+            <button
+              type="button"
+              disabled
+              onClick={(e) => e.stopPropagation()}
+              className="mt-3 w-full py-2.5 px-2 rounded-xl text-xs font-black bg-slate-200 text-slate-500 border border-slate-300 flex items-center justify-center gap-1.5 cursor-not-allowed select-none shadow-none"
+            >
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Iklan Tidak Aktif (30 Hari)</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onQuickChat}
+              className={`mt-3 w-full py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-xs ${
+                listing.isSuperBU
+                  ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border border-amber-500 shadow-amber-500/25 font-black'
+                  : 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/20'
+              }`}
+            >
+              <span>💬 Chat Ajukan COD</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

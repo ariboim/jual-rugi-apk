@@ -75,6 +75,11 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
     Math.round((listing.sellingPrice * 0.9) / 50000) * 50000,
   ];
 
+  // Compute status
+  const isSold = listing.status === 'sold';
+  const isExpired = listing.status === 'expired' || (!isSold && listing.createdAt && (Date.now() - new Date(listing.createdAt).getTime() >= 30 * 24 * 60 * 60 * 1000));
+  const isInactive = isSold || isExpired;
+
   // Mengambil array foto produk (hingga 6 foto) dengan format terintegrasi [{ id, url, caption }]
   const productPhotos = useMemo(() => getListingPhotos(listing), [listing]);
 
@@ -197,13 +202,23 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             productTitle={listing.title}
             badgeOverlay={
               <div className="flex flex-wrap gap-2">
-                {listing.isSuperBU && (
+                {isSold && (
+                  <span className="px-3.5 py-1.5 rounded-xl bg-red-600 text-white font-black text-xs sm:text-sm tracking-wide shadow-lg flex items-center gap-1.5 border-2 border-white animate-pulse">
+                    🔴 PRODUK SOLD
+                  </span>
+                )}
+                {isExpired && (
+                  <span className="px-3.5 py-1.5 rounded-xl bg-slate-700 text-white font-black text-xs sm:text-sm tracking-wide shadow-lg flex items-center gap-1.5 border border-slate-500">
+                    ⏳ KEDALUWARSA (30 HARI)
+                  </span>
+                )}
+                {listing.isSuperBU && !isInactive && (
                   <span className="px-3 py-1 rounded-xl bg-amber-400 text-amber-950 font-black text-xs sm:text-sm tracking-tight shadow-md flex items-center gap-1.5 border border-amber-500 animate-pulse">
                     <Flame className="w-3.5 h-3.5 fill-red-600 text-red-600" />
                     PALING BU
                   </span>
                 )}
-                <span className="px-3 py-1 rounded-xl bg-red-600 text-white font-black text-xs sm:text-sm tracking-tight shadow-md flex items-center gap-1.5">
+                <span className={`px-3 py-1 rounded-xl text-white font-black text-xs sm:text-sm tracking-tight shadow-md flex items-center gap-1.5 ${isSold ? 'bg-slate-700' : 'bg-red-600'}`}>
                   <Flame className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
                   DISKON {listing.discountPercentage}% BU
                 </span>
@@ -216,6 +231,35 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
               </div>
             }
           />
+
+          {/* Banner Status Khusus: Terjual / Kedaluwarsa */}
+          {isSold && (
+            <div className="p-4 rounded-2xl bg-red-50 border-2 border-red-300 flex items-start gap-3 shadow-xs">
+              <div className="p-2 rounded-xl bg-red-600 text-white font-black text-xs uppercase tracking-wider shrink-0">
+                SOLD
+              </div>
+              <div className="text-xs">
+                <h4 className="font-black text-red-900 text-sm">PRODUK INI TELAH TERJUAL</h4>
+                <p className="text-red-800 mt-0.5 leading-relaxed">
+                  Transaksi COD telah berhasil dituntaskan. Sesi tawar-menawar dan obrolan room chat resmi dikunci untuk mencegah penipuan.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {isExpired && (
+            <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 flex items-start gap-3 shadow-xs">
+              <div className="p-2 rounded-xl bg-amber-600 text-white font-black text-xs uppercase tracking-wider shrink-0">
+                EXPIRED
+              </div>
+              <div className="text-xs">
+                <h4 className="font-black text-amber-950 text-sm">MASA TAYANG IKLAN BERAKHIR (30 HARI)</h4>
+                <p className="text-amber-800 mt-0.5 leading-relaxed">
+                  Iklan ini telah melewati batas 30 hari tayang. Sistem telah menonaktifkan iklan & mengembalikan 1 kuota iklan aktif ke saldo pemilik. Room chat telah dikunci.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Bar Statistik Iklan: Views & Favorites (2 Kolom Horizontal Rapi) */}
           <ListingStatsBar
@@ -342,24 +386,31 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
           </div>
 
           {/* Quick Sadis Offer Simulation Buttons */}
-          <div className="space-y-1.5">
-            <p className="text-xs text-slate-600 font-semibold flex items-center gap-1">
-              <span>⚡ Ajukan Nego Cepat (Langsung Chat):</span>
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {quickOffers.map((offer, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => onQuickMakeOffer(listing, offer)}
-                  className="py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-xs font-semibold text-sky-950 transition text-center cursor-pointer active:scale-95 shadow-xs"
-                >
-                  Tawar <strong className="text-sky-700">{formatRupiah(offer)}</strong>
-                  <span className="block text-[10px] text-slate-500">Siap COD Hari Ini</span>
-                </button>
-              ))}
+          {!isInactive ? (
+            <div className="space-y-1.5">
+              <p className="text-xs text-slate-600 font-semibold flex items-center gap-1">
+                <span>⚡ Ajukan Nego Cepat (Langsung Chat):</span>
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {quickOffers.map((offer, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => onQuickMakeOffer(listing, offer)}
+                    className="py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-xs font-semibold text-sky-950 transition text-center cursor-pointer active:scale-95 shadow-xs"
+                  >
+                    Tawar <strong className="text-sky-700">{formatRupiah(offer)}</strong>
+                    <span className="block text-[10px] text-slate-500">Siap COD Hari Ini</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="p-3 rounded-2xl bg-slate-100 border border-slate-200 text-slate-600 text-xs text-center font-medium">
+              🔒 Fitur penawaran harga cepat telah dinonaktifkan karena iklan ini berstatus{' '}
+              <strong className="text-slate-900">{isSold ? 'SOLD (Terjual)' : 'Kedaluwarsa (30 Hari)'}</strong>.
+            </div>
+          )}
 
           {/* Dedicated WhatsApp Share BU Deal Banner */}
           <div className="bg-gradient-to-r from-emerald-50 via-teal-50/50 to-emerald-50 border border-emerald-200 p-4 rounded-2xl shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-emerald-950">
@@ -417,13 +468,33 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             <span className="xs:hidden">Share WA</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => onOpenChat(listing)}
-            className="grow py-3 px-4 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all truncate"
-          >
-            <span>💬 Chat Penjual (COD)</span>
-          </button>
+          {isSold ? (
+            <button
+              type="button"
+              disabled
+              className="grow py-3 px-4 rounded-2xl bg-slate-200 text-slate-500 font-extrabold text-xs sm:text-sm cursor-not-allowed flex items-center justify-center gap-2 shadow-none select-none border border-slate-300"
+              title="Barang telah laku terjual, chat room telah ditutup"
+            >
+              <span>🔒 Barang Terjual / Chat Ditutup</span>
+            </button>
+          ) : isExpired ? (
+            <button
+              type="button"
+              disabled
+              className="grow py-3 px-4 rounded-2xl bg-slate-200 text-slate-500 font-extrabold text-xs sm:text-sm cursor-not-allowed flex items-center justify-center gap-2 shadow-none select-none border border-slate-300"
+              title="Iklan sudah kedaluwarsa 30 hari dan tidak aktif"
+            >
+              <span>🔒 Iklan Tidak Aktif / Dihapus</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onOpenChat(listing)}
+              className="grow py-3 px-4 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all truncate"
+            >
+              <span>💬 Chat Penjual (COD)</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

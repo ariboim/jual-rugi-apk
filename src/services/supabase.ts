@@ -138,6 +138,9 @@ function mapRowToListing(row: any): Listing {
       'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80',
     isSuperBU: Boolean(row.is_priority || row.is_super_bu),
     createdAt: row.created_at || new Date().toISOString(),
+    status: (row.status as any) || 'active',
+    expiresAt: row.expires_at || new Date(new Date(row.created_at || Date.now()).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    soldAt: row.sold_at || undefined,
     seller: {
       id: row.seller_email || 'seller-sb',
       name: row.seller_name || 'Penjual Terverifikasi',
@@ -161,6 +164,11 @@ function mapRowToListing(row: any): Listing {
  * Konversi objek Listing aplikasi ke baris tabel Supabase
  */
 function mapListingToRow(listing: Listing, userEmail?: string, userPhone?: string) {
+  const createdAt = listing.createdAt || new Date().toISOString();
+  const expiresAt =
+    listing.expiresAt ||
+    new Date(new Date(createdAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
   return {
     id: listing.id,
     title: listing.title,
@@ -176,7 +184,10 @@ function mapListingToRow(listing: Listing, userEmail?: string, userPhone?: strin
     seller_phone: userPhone || listing.seller?.phoneMasked || '0812-9988-7766',
     seller_email: userEmail || 'member@jualrugi.id',
     is_priority: Boolean(listing.isSuperBU),
-    created_at: listing.createdAt || new Date().toISOString(),
+    status: listing.status || 'active',
+    expires_at: expiresAt,
+    sold_at: listing.soldAt || null,
+    created_at: createdAt,
   };
 }
 
