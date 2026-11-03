@@ -348,13 +348,18 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     }
   });
 
-  let globalZapierWebhookUrl = process.env.ZAPIER_WELCOME_EMAIL_WEBHOOK_URL || '';
+  const DEFAULT_WEBHOOK_URL = 'https://hook.eu1.make.com/5kr1yhffihn48ovlbf8pq8gq646gb1gd';
+  let globalZapierWebhookUrl =
+    process.env.MAKE_WELCOME_EMAIL_WEBHOOK_URL ||
+    process.env.ZAPIER_WELCOME_EMAIL_WEBHOOK_URL ||
+    DEFAULT_WEBHOOK_URL;
 
   // Get current webhook config
   app.get('/api/welcome-email-config', (req, res) => {
     res.json({
       webhookUrl: globalZapierWebhookUrl,
       isConfigured: Boolean(globalZapierWebhookUrl && globalZapierWebhookUrl.startsWith('http')),
+      provider: 'make.com',
     });
   });
 
@@ -367,14 +372,14 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     res.json({
       success: true,
       webhookUrl: globalZapierWebhookUrl,
-      message: 'Zapier Webhook URL berhasil disimpan di server.',
+      message: 'Webhook Make.com URL berhasil disimpan di server.',
     });
   });
 
-  // Otomatisasi Welcome Email Endpoint (Terhubung ke Zapier Catch Hook & Gmail)
+  // Otomatisasi Welcome Email Endpoint (Terhubung ke Make.com Webhook & Gmail)
   app.post('/api/send-welcome-email', async (req, res) => {
     try {
-      const { name, email, phone, zapierWebhookUrl } = req.body;
+      const { name, email, phone, zapierWebhookUrl, webhookUrl } = req.body;
 
       if (!email || !email.includes('@')) {
         return res.status(400).json({
@@ -383,14 +388,15 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         });
       }
 
-      if (zapierWebhookUrl && typeof zapierWebhookUrl === 'string' && zapierWebhookUrl.startsWith('http')) {
-        globalZapierWebhookUrl = zapierWebhookUrl.trim();
+      const activeWebhook = webhookUrl || zapierWebhookUrl;
+      if (activeWebhook && typeof activeWebhook === 'string' && activeWebhook.startsWith('http')) {
+        globalZapierWebhookUrl = activeWebhook.trim();
       }
 
       const userName = name?.trim() || 'Pengguna Baru';
       const userPhone = phone || '-';
       const targetWebhook =
-        zapierWebhookUrl || globalZapierWebhookUrl || process.env.ZAPIER_WELCOME_EMAIL_WEBHOOK_URL;
+        activeWebhook || globalZapierWebhookUrl || process.env.MAKE_WELCOME_EMAIL_WEBHOOK_URL || DEFAULT_WEBHOOK_URL;
 
       const welcomeSubject = `🎉 Selamat Datang di JualRugi.id, ${userName}! Panduan Transaksi COD Aman`;
       const welcomeHtml = `
@@ -449,8 +455,79 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       `.trim();
 
       let webhookStatus = 'skipped';
+      const activeBrevoKey = req.body.brevoApiKey || process.env.BREVO_API_KEY;
 
-      // Jika ada Zapier Webhook URL, kirim payload seketika (Instant Catch Hook)
+      // ========================================================================
+      // OPSI 1: BREVO API DIRECT INTEGRATION (300 Email Gratis/Hari)
+      // ========================================================================
+      if (activeBrevoKey && typeof activeBrevoKey === 'string' && activeBrevoKey.startsWith('xkeysib-')) {
+        try {
+          // A. Otomatis tambahkan kontak pendaftar baru ke Brevo CRM Contacts
+          try {
+            await fetch('https://api.brevo.com/v3/contacts', {
+              method: 'POST',
+              headers: {
+                'api-key': activeBrevoKey,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                email,
+                attributes: {
+                  FIRSTNAME: userName,
+                  SMS: userPhone && userPhone !== '-' ? userPhone : undefined,
+                },
+                updateEnabled: true,
+              }),
+            });
+          } catch (contactErr) {
+            console.warn('[Brevo Contacts Warning]:', contactErr);
+          }
+
+          // B. Kirim Welcome Email Transactional via Brevo SMTP API
+          const senderEmail = req.body.senderEmail || process.env.BREVO_SENDER_EMAIL || 'support@jualrugi.id';
+          const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              'api-key': activeBrevoKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              sender: {
+                name: 'JualRugi.id',
+                email: senderEmail,
+              },
+              to: [{ email, name: userName }],
+              subject: welcomeSubject,
+              htmlContent: welcomeHtml,
+            }),
+          });
+
+          const brevoData = await brevoRes.json();
+          console.log('[Brevo API Dispatch]: Status', brevoRes.status, brevoData);
+
+          if (brevoRes.ok) {
+            return res.status(200).json({
+              success: true,
+              message: `Welcome email berhasil dikirim via Brevo API ke ${email} (Message ID: ${brevoData.messageId || 'ok'})!`,
+              provider: 'brevo',
+              emailSentTo: email,
+              brevoMessageId: brevoData.messageId,
+              preview: {
+                subject: welcomeSubject,
+                html: welcomeHtml,
+              },
+            });
+          } else {
+            console.warn('[Brevo API Error Response]:', brevoData);
+          }
+        } catch (brevoErr: any) {
+          console.error('[Brevo API Error]:', brevoErr);
+        }
+      }
+
+      // ========================================================================
+      // OPSI 2: MAKE.COM WEBHOOK (100% Gratis Selamanya)
+      // ========================================================================
       if (targetWebhook && targetWebhook.startsWith('http')) {
         try {
           const zapierRes = await fetch(targetWebhook, {
@@ -462,27 +539,30 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
               event: 'user_signed_up',
               name: userName,
               email: email,
+              to_email: email,
               phone: userPhone,
               subject: welcomeSubject,
               htmlContent: welcomeHtml,
               appUrl: 'https://jualrugi.id',
+              postAdUrl: 'https://jualrugi.id/?action=post',
+              bonusQuota: '1 Slot Iklan Gratis',
               timestamp: new Date().toISOString(),
             }),
           });
 
-          const zapierText = await zapierRes.text();
-          webhookStatus = zapierRes.ok ? 'success' : `failed_${zapierRes.status}`;
-          console.log(`[Zapier Webhook] Dispatched to ${targetWebhook}: Status ${zapierRes.status} | Body: ${zapierText}`);
+          const webhookResText = await zapierRes.text();
+          webhookStatus = zapierRes.ok ? 'success' : `status_${zapierRes.status}`;
+          console.log(`[Make.com Webhook] Dispatched to ${targetWebhook}: Status ${zapierRes.status} | Body: ${webhookResText}`);
 
           return res.status(200).json({
             success: true,
             message: zapierRes.ok
-              ? `Webhook Zapier berhasil dihubungi (HTTP ${zapierRes.status} OK)! Zapier telah menerima payload email.`
-              : `Zapier merespons dengan status HTTP ${zapierRes.status}: ${zapierText}`,
+              ? `Webhook Make.com berhasil dihubungi (HTTP ${zapierRes.status} OK)! Make.com telah menerima data pendaftar baru.`
+              : `Make.com merespons (HTTP ${zapierRes.status}): ${webhookResText}`,
             emailSentTo: email,
             webhookDispatched: zapierRes.ok,
             webhookStatus,
-            zapierResponse: zapierText,
+            makeResponse: webhookResText,
             targetWebhookUsed: targetWebhook,
             preview: {
               subject: welcomeSubject,

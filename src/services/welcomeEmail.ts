@@ -17,7 +17,7 @@ export interface WelcomeEmailPayload {
 export interface WelcomeEmailResponse {
   success: boolean;
   message: string;
-  provider?: 'emailjs' | 'make_webhook' | 'server' | 'in_app';
+  provider?: 'brevo' | 'emailjs' | 'make_webhook' | 'server' | 'in_app';
   emailSentTo?: string;
   preview?: {
     subject: string;
@@ -31,8 +31,41 @@ export interface EmailJsConfig {
   publicKey: string;
 }
 
+export interface BrevoConfig {
+  apiKey: string;
+  senderEmail?: string;
+}
+
 const STORAGE_KEY_WEBHOOK = 'jualrugi_free_welcome_webhook';
 const STORAGE_KEY_EMAILJS = 'jualrugi_emailjs_config';
+const STORAGE_KEY_BREVO = 'jualrugi_brevo_config';
+
+/**
+ * Konfigurasi Brevo API (Sendinblue) - 300 Email Gratis/Hari (9.000/Bulan)
+ */
+export function getBrevoConfig(): BrevoConfig {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_BREVO);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.apiKey) return parsed;
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return {
+    apiKey: (import.meta.env.VITE_BREVO_API_KEY as string) || '',
+    senderEmail: (import.meta.env.VITE_BREVO_SENDER_EMAIL as string) || 'bca.ccpl@gmail.com',
+  };
+}
+
+export function saveBrevoConfig(config: BrevoConfig): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_BREVO, JSON.stringify(config));
+  } catch (e) {
+    console.error(e);
+  }
+}
 
 /**
  * Konfigurasi EmailJS (100% Gratis, Tanpa Kartu Kredit)
@@ -65,17 +98,25 @@ export function saveEmailJsConfig(config: EmailJsConfig): void {
   }
 }
 
+export const DEFAULT_MAKE_WEBHOOK_URL =
+  'https://hook.eu1.make.com/5kr1yhffihn48ovlbf8pq8gq646gb1gd';
+
 /**
  * Konfigurasi Webhook Gratis (Make.com / Custom Webhook)
  */
 export function getFreeWebhookUrl(): string {
   try {
     const saved = localStorage.getItem(STORAGE_KEY_WEBHOOK);
-    if (saved && saved.trim()) return saved.trim();
+    if (saved && saved.trim() && !saved.includes('ddwshrngd8splsketihjrqui814aztu2')) {
+      return saved.trim();
+    }
   } catch (e) {
     console.error(e);
   }
-  return (import.meta.env.VITE_FREE_WELCOME_WEBHOOK as string) || '';
+  return (
+    (import.meta.env.VITE_FREE_WELCOME_WEBHOOK as string) ||
+    DEFAULT_MAKE_WEBHOOK_URL
+  );
 }
 
 export function saveFreeWebhookUrl(url: string): void {
@@ -96,8 +137,36 @@ export const saveZapierWebhookUrl = saveFreeWebhookUrl;
 export async function sendWelcomeEmailAutomation(
   payload: WelcomeEmailPayload
 ): Promise<WelcomeEmailResponse> {
+  const brevoConfig = getBrevoConfig();
   const emailJsConfig = getEmailJsConfig();
   const webhookUrl = getFreeWebhookUrl();
+
+  // 1. OPSI UTAMA JIKA AKTIF: Brevo API (Sendinblue) - 300 Email Gratis/Hari
+  if (brevoConfig.apiKey && brevoConfig.apiKey.startsWith('xkeysib-')) {
+    try {
+      const res = await fetch('/api/send-welcome-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...payload,
+          brevoApiKey: brevoConfig.apiKey,
+          senderEmail: brevoConfig.senderEmail,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          ...data,
+          provider: 'brevo',
+        };
+      }
+    } catch (brevoErr) {
+      console.warn('Brevo direct API error, fallback:', brevoErr);
+    }
+  }
 
   // 1. OPSI UTAMA: EmailJS (Kirim langsung dari akun Gmail Anda, 100% Gratis & Pasti Masuk Inbox)
   if (

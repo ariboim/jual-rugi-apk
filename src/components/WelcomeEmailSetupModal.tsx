@@ -25,8 +25,11 @@ import {
   saveEmailJsConfig,
   getFreeWebhookUrl,
   saveFreeWebhookUrl,
+  getBrevoConfig,
+  saveBrevoConfig,
   sendWelcomeEmailAutomation,
   EmailJsConfig,
+  BrevoConfig,
 } from '../services/welcomeEmail';
 
 interface WelcomeEmailSetupModalProps {
@@ -42,8 +45,11 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
   defaultEmail = 'bca.ccpl@gmail.com',
   onSuccessToast,
 }) => {
-  // Pilihan Tab Metode Gratis
-  const [activeTab, setActiveTab] = useState<'emailjs' | 'make' | 'surat'>('emailjs');
+  // Pilihan Tab Metode (Make.com / Brevo / EmailJS / Surat)
+  const [activeTab, setActiveTab] = useState<'make' | 'brevo' | 'emailjs' | 'surat'>('make');
+
+  // State Brevo API
+  const [brevoConfig, setBrevoConfig] = useState<BrevoConfig>(() => getBrevoConfig());
 
   // State EmailJS
   const [emailJsConfig, setEmailJsConfig] = useState<EmailJsConfig>({
@@ -53,7 +59,7 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
   });
 
   // State Make.com / Webhook Gratis
-  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState(() => getFreeWebhookUrl());
 
   // State Testing
   const [testEmail, setTestEmail] = useState(defaultEmail);
@@ -78,11 +84,20 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
     if (isOpen) {
       setEmailJsConfig(getEmailJsConfig());
       setWebhookUrl(getFreeWebhookUrl());
+      setBrevoConfig(getBrevoConfig());
       setTestResult(null);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleSaveBrevo = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveBrevoConfig(brevoConfig);
+    if (onSuccessToast) {
+      onSuccessToast('✅ Konfigurasi Brevo API berhasil disimpan!');
+    }
+  };
 
   const handleSaveEmailJs = (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,7 +125,9 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
     setTestResult(null);
 
     // Simpan konfigurasi aktif terlebih dahulu
-    if (activeTab === 'emailjs') {
+    if (activeTab === 'brevo') {
+      saveBrevoConfig(brevoConfig);
+    } else if (activeTab === 'emailjs') {
       saveEmailJsConfig(emailJsConfig);
     } else if (activeTab === 'make') {
       saveFreeWebhookUrl(webhookUrl);
@@ -197,18 +214,7 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
         </div>
 
         {/* Tab Pilihan Solusi Gratis */}
-        <div className="grid grid-cols-3 p-1 bg-slate-100 rounded-2xl mt-4 mb-2 shrink-0 text-xs font-bold">
-          <button
-            type="button"
-            onClick={() => setActiveTab('emailjs')}
-            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1 ${
-              activeTab === 'emailjs'
-                ? 'bg-white text-emerald-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <span>⭐ EmailJS (Mudah)</span>
-          </button>
+        <div className="grid grid-cols-4 p-1 bg-slate-100 rounded-2xl mt-4 mb-2 shrink-0 text-xs font-bold gap-1">
           <button
             type="button"
             onClick={() => setActiveTab('make')}
@@ -218,7 +224,29 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <span>🔄 Make.com (Gratis)</span>
+            <span>🔄 Make.com</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('brevo')}
+            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1 ${
+              activeTab === 'brevo'
+                ? 'bg-white text-blue-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span>🔵 Brevo</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('emailjs')}
+            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1 ${
+              activeTab === 'emailjs'
+                ? 'bg-white text-emerald-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span>⭐ EmailJS</span>
           </button>
           <button
             type="button"
@@ -229,12 +257,103 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <span>✉️ Surat In-App</span>
+            <span>✉️ Surat</span>
           </button>
         </div>
 
         {/* Scrollable Content */}
         <div className="overflow-y-auto space-y-4 py-3 pr-1 text-xs text-slate-700 leading-relaxed">
+          {/* ======================================================== */}
+          {/* TAB: BREVO (300 EMAIL GRATIS/HARI - CRM & TRANSACTIONAL) */}
+          {/* ======================================================== */}
+          {activeTab === 'brevo' && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200 space-y-1.5">
+                <div className="flex items-center gap-2 text-blue-950 font-black text-xs">
+                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Brevo (Sendinblue): 300 Email Gratis Setiap Hari (9.000/Bulan)</span>
+                </div>
+                <p className="text-[11px] text-blue-900 leading-relaxed">
+                  <strong>Brevo</strong> adalah platform transactional email dan CRM kelas dunia. 
+                  Sangat mendukung <strong>otomatisasi welcome email</strong> dan <strong>sinkronisasi kontak pendaftar baru</strong> ke daftar CRM Anda!
+                </p>
+              </div>
+
+              {/* Cara 1: Sambung ke Webhook Make.com yang sudah aktif */}
+              <div className="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-extrabold text-slate-900 text-xs">
+                    💡 Cara 1 (Paling Mudah): Hubungkan Brevo di Make.com Anda
+                  </h4>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                    Tanpa Koding
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Karena URL Webhook Make.com sudah terpasang di web Anda, di skenario Make.com Anda cukup klik tombol <strong>+ (Add module)</strong> &gt; cari <strong>Brevo</strong> &gt; pilih <strong>Send a Transactional Email</strong> atau <strong>Create or Update a Contact</strong>. Selesai!
+                </p>
+              </div>
+
+              {/* Cara 2: Direct API Key Brevo */}
+              <form onSubmit={handleSaveBrevo} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                  <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Cara 2: Direct Brevo API Key (Kirim Langsung via Server)</span>
+                  </span>
+                  <a
+                    href="https://app.brevo.com/settings/keys/api"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-blue-700 hover:text-blue-900 font-bold flex items-center gap-1 underline"
+                  >
+                    <span>Dapatkan API Key di Brevo</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Brevo API Key (v3 - diawali <code>xkeysib-...</code>):
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      value={brevoConfig.apiKey}
+                      onChange={(e) =>
+                        setBrevoConfig({ ...brevoConfig, apiKey: e.target.value.trim() })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono text-slate-900 outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Sender Email Terverifikasi di Brevo:
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="support@jualrugi.id atau email Anda"
+                      value={brevoConfig.senderEmail || ''}
+                      onChange={(e) =>
+                        setBrevoConfig({ ...brevoConfig, senderEmail: e.target.value.trim() })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-900 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs transition cursor-pointer shadow-xs active:scale-98"
+                >
+                  Simpan Konfigurasi Brevo
+                </button>
+              </form>
+            </div>
+          )}
+
           {/* ======================================================== */}
           {/* TAB 1: EMAILJS (REKOMENDASI UTAMA: 100% GRATIS, TANPA CC) */}
           {/* ======================================================== */}
