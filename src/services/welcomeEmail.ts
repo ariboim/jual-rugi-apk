@@ -106,13 +106,18 @@ export async function sendWelcomeEmailAutomation(
     emailJsConfig.publicKey
   ) {
     try {
+      const origin = window.location.origin;
+      const postAdUrl = `${origin}/?action=post`;
+
       const emailParams = {
         to_name: payload.name,
         to_email: payload.email,
         user_email: payload.email,
         recipient: payload.email,
         phone: payload.phone || '-',
-        app_url: window.location.origin,
+        app_url: origin,
+        post_ad_url: postAdUrl,
+        direct_post_url: postAdUrl,
         bonus_quota: '1 Slot Iklan Gratis',
       };
 
@@ -139,6 +144,9 @@ export async function sendWelcomeEmailAutomation(
   // 2. OPSI KEDUA: Webhook Gratis (Make.com / Custom Webhook tanpa kartu kredit)
   if (webhookUrl && webhookUrl.startsWith('http')) {
     try {
+      const origin = window.location.origin;
+      const postAdUrl = `${origin}/?action=post`;
+
       await fetch(webhookUrl, {
         method: 'POST',
         mode: 'no-cors',
@@ -150,7 +158,9 @@ export async function sendWelcomeEmailAutomation(
           name: payload.name,
           email: payload.email,
           phone: payload.phone || '',
-          appUrl: window.location.origin,
+          appUrl: origin,
+          postAdUrl: postAdUrl,
+          directPostUrl: postAdUrl,
           subject: `Selamat Datang di JualRugi.id, ${payload.name}!`,
           timestamp: new Date().toISOString(),
         }),

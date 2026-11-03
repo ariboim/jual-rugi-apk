@@ -429,9 +429,14 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
 
     <p>🎁 <strong>Bonus Pendaftaran:</strong> Anda mendapatkan <strong>1 Slot Kuota Pasang Iklan Gratis</strong> untuk mulai memasang iklan barang butuh uang hari ini!</p>
 
-    <div style="text-align: center;">
-      <a href="https://jualrugi.id" class="button">Buka Aplikasi & Mulai Jelajah</a>
+    <div style="text-align: center; margin: 24px 0 12px;">
+      <a href="https://jualrugi.id/?action=post" class="button" style="display: inline-block; background: #0284c7; color: #ffffff !important; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(2, 132, 199, 0.3);">
+        🚀 Pasang Iklan Sekarang (Gunakan Kuota Gratis)
+      </a>
     </div>
+    <p style="text-align: center; font-size: 12px; color: #64748b; margin: 6px 0 20px;">
+      Direct Link Pasang Iklan: <a href="https://jualrugi.id/?action=post" style="color: #0284c7; font-weight: 600;">https://jualrugi.id/?action=post</a>
+    </p>
 
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0 20px;" />
     <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">

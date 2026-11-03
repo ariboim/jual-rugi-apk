@@ -17,11 +17,13 @@ import {
   Database,
   FileText,
   Mail,
+  Calendar,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { MonetizationType } from './QRISModal';
 import { APK_DOWNLOAD_URL } from './PWAInstallButton';
 import { isSupabaseConfigured } from '../services/supabase';
+import { getAdExpiryInfo } from '../services/listingLifecycle';
 
 interface SellerDashboardProps {
   currentUser: UserProfile;
@@ -384,6 +386,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2.5 text-[11px] text-slate-500 flex-wrap">
+                      <span className="flex items-center gap-1 font-mono font-bold text-[10px] px-2 py-0.5 rounded-md border bg-slate-50 text-slate-700 border-slate-200">
+                        <Calendar className="w-3 h-3 text-sky-600" />
+                        {getAdExpiryInfo(item).formattedText}
+                      </span>
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3 text-sky-500" />
                         Update:{' '}

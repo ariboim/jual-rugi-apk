@@ -141,6 +141,7 @@ function mapRowToListing(row: any): Listing {
     status: (row.status as any) || 'active',
     expiresAt: row.expires_at || new Date(new Date(row.created_at || Date.now()).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     soldAt: row.sold_at || undefined,
+    user_id: row.user_id || row.seller_email || undefined,
     seller: {
       id: row.seller_email || 'seller-sb',
       name: row.seller_name || 'Penjual Terverifikasi',
@@ -183,6 +184,7 @@ function mapListingToRow(listing: Listing, userEmail?: string, userPhone?: strin
     seller_name: listing.seller?.name || 'Member JualRugi',
     seller_phone: userPhone || listing.seller?.phoneMasked || '0812-9988-7766',
     seller_email: userEmail || 'member@jualrugi.id',
+    user_id: userEmail || listing.seller?.id || listing.user_id || null,
     is_priority: Boolean(listing.isSuperBU),
     status: listing.status || 'active',
     expires_at: expiresAt,
@@ -257,6 +259,9 @@ export async function updateListingInSupabase(
     isSuperBU: boolean;
     sundulAt: string;
     createdAt: string;
+    status: string;
+    expires_at: string;
+    sold_at: string;
   }>
 ): Promise<boolean> {
   const client = getSupabaseClient();
@@ -266,6 +271,9 @@ export async function updateListingInSupabase(
     const payload: any = {};
     if (updates.isSuperBU !== undefined) payload.is_priority = updates.isSuperBU;
     if (updates.createdAt) payload.created_at = updates.createdAt;
+    if (updates.status) payload.status = updates.status;
+    if (updates.expires_at) payload.expires_at = updates.expires_at;
+    if (updates.sold_at) payload.sold_at = updates.sold_at;
 
     const { error } = await client.from('listings').update(payload).eq('id', id);
 

@@ -11,11 +11,14 @@ import {
   Sparkles,
   ShieldCheck,
   Check,
+  Calendar,
+  AlertCircle,
 } from 'lucide-react';
-import { Listing } from '../types';
+import { Listing, UserProfile } from '../types';
 import { getListingPhotos } from '../data/initialData';
 import { ProductGallery } from './gallery/ProductGallery';
 import { ListingStatsBar } from './ListingStatsBar';
+import { getAdExpiryInfo, isListingOwner } from '../services/listingLifecycle';
 
 export const WhatsAppIcon: React.FC<{ className?: string }> = ({
   className = 'w-4 h-4',
@@ -39,6 +42,9 @@ interface ListingDetailModalProps {
   onToggleFavorite?: () => void;
   onIncrementView?: (listingId: string) => void;
   isSellerView?: boolean;
+  currentUser?: UserProfile;
+  onExtendListing?: (listing: Listing) => void;
+  onMarkAsSold?: (listingId: string) => void;
 }
 
 export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
@@ -50,6 +56,9 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   onToggleFavorite,
   onIncrementView,
   isSellerView = false,
+  currentUser,
+  onExtendListing,
+  onMarkAsSold,
 }) => {
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -79,6 +88,21 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   const isSold = listing.status === 'sold';
   const isExpired = listing.status === 'expired' || (!isSold && listing.createdAt && (Date.now() - new Date(listing.createdAt).getTime() >= 30 * 24 * 60 * 60 * 1000));
   const isInactive = isSold || isExpired;
+
+  // Validasi Kepemilikan (Auth Check): HANYA seller/pemilik listing yang boleh melihat info tanggal kadaluarsa
+  const isOwner = useMemo(() => {
+    return isListingOwner(
+      listing,
+      currentUser?.id,
+      currentUser?.email,
+      isSellerView || currentUser?.role === 'seller'
+    );
+  }, [listing, currentUser, isSellerView]);
+
+  // Kalkulasi detail tanggal kedaluwarsa iklan (Ad Expiry Date)
+  const expiryInfo = useMemo(() => {
+    return getAdExpiryInfo(listing);
+  }, [listing]);
 
   // Mengambil array foto produk (hingga 6 foto) dengan format terintegrasi [{ id, url, caption }]
   const productPhotos = useMemo(() => getListingPhotos(listing), [listing]);
@@ -318,6 +342,90 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             </div>
           </div>
 
+          {/* ============================================================== */}
+          {/* INFORMASI TANGGAL KADALUARSA (AD EXPIRY DATE) - KHUSUS SELLER  */}
+          {/* Sesuai Mockup Gambar: Teks "YOUR AD EXPIRES ON DD/MM/YY"      */}
+          {/* Validasi: HANYA muncul jika currentUser adalah pemilik iklan   */}
+          {/* ============================================================== */}
+          {isOwner && (
+            <div
+              className={`p-3.5 rounded-2xl border transition-all ${
+                expiryInfo.isExpired
+                  ? 'bg-rose-50/90 border-rose-300 text-rose-950'
+                  : expiryInfo.isUrgent
+                  ? 'bg-amber-50/90 border-amber-300 text-amber-950'
+                  : 'bg-slate-50 border-slate-200 text-slate-800'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`p-2 rounded-xl shrink-0 flex items-center justify-center ${
+                      expiryInfo.isExpired
+                        ? 'bg-rose-100 text-rose-700'
+                        : expiryInfo.isUrgent
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-sky-100 text-sky-700'
+                    }`}
+                  >
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                        Khusus Pemilik Iklan
+                      </span>
+                      {expiryInfo.isExpired ? (
+                        <span className="text-xs font-black text-rose-600 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          IKLAN TELAH BERAKHIR / EXPIRED
+                        </span>
+                      ) : expiryInfo.isUrgent ? (
+                        <span className="text-xs font-black text-amber-700 flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                          Segera Berakhir ({expiryInfo.daysRemaining} hari lagi)
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Masa Tayang Aktif ({expiryInfo.daysRemaining} hari lagi)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Durasi standar 30 hari sejak dibuat ({new Date(listing.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })})
+                    </p>
+                  </div>
+                </div>
+
+                {/* Badge Teks Sesuai Mockup Gambar: YOUR AD EXPIRES ON DD/MM/YY */}
+                <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/80">
+                  <div className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-300 shadow-2xs text-center sm:text-right">
+                    <span className="block text-xs font-mono font-black tracking-wider text-slate-900 uppercase">
+                      {expiryInfo.formattedText}
+                    </span>
+                    <span className="block text-[10px] text-slate-500 font-medium">
+                      Tanggal: {expiryInfo.formattedLong}
+                    </span>
+                  </div>
+
+                  {/* Tombol Perpanjang / Sundul jika expired atau ingin extend */}
+                  {onExtendListing && (
+                    <button
+                      type="button"
+                      onClick={() => onExtendListing(listing)}
+                      className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 active:scale-95 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                      title="Perpanjang masa aktif 30 hari lagi"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>{expiryInfo.isExpired ? 'Aktifkan Kembali' : 'Perpanjang'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Reason for Urgent Distress Sale ("Alasan BU") */}
           <div className="bg-red-50 border border-red-200 p-4 rounded-2xl">
             <div className="flex items-center gap-2 text-red-700 font-bold text-xs uppercase tracking-wider mb-1.5">
@@ -468,7 +576,32 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             <span className="xs:hidden">Share WA</span>
           </button>
 
-          {isSold ? (
+          {isOwner ? (
+            <div className="grow flex items-center gap-2">
+              {onExtendListing && (
+                <button
+                  type="button"
+                  onClick={() => onExtendListing(listing)}
+                  className="grow py-3 px-3 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-sky-600/25 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all truncate"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
+                  <span>{expiryInfo.isExpired ? 'Aktifkan Kembali Iklan' : 'Perpanjang Masa Tayang'}</span>
+                </button>
+              )}
+              {onMarkAsSold && listing.status !== 'sold' && (
+                <button
+                  type="button"
+                  onClick={() => onMarkAsSold(listing.id)}
+                  className="py-3 px-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-emerald-700/25 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all shrink-0"
+                  title="Tandai produk telah laku terjual"
+                >
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span className="hidden xs:inline">Tandai Terjual</span>
+                  <span className="xs:hidden">Sold</span>
+                </button>
+              )}
+            </div>
+          ) : isSold ? (
             <button
               type="button"
               disabled

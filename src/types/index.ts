@@ -69,6 +69,7 @@ export interface Listing {
   expiresAt?: string; // Masa tayang 30 hari (createdAt + 30 days)
   soldAt?: string; // Tanggal terjual jika status === 'sold'
   status?: ListingStatus; // 'active' | 'sold' | 'expired' | 'deleted'
+  user_id?: string; // ID pemilik listing untuk otorisasi seller
   seller: Seller;
   aiVerified: boolean;
   aiVerificationReason: string;

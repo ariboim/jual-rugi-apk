@@ -153,7 +153,24 @@ AFTER UPDATE OF status ON public.listings
 FOR EACH ROW
 EXECUTE FUNCTION public.fn_refund_listing_quota();
 
--- 4. Cron Task Otomatisasi Auto-Expire 30 Hari (via Supabase pg_cron)
+-- 4. Trigger Otomatis Isi expires_at (30 Hari) Saat Iklan Baru Dibuat
+CREATE OR REPLACE FUNCTION public.fn_set_default_expires_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.expires_at IS NULL THEN
+    NEW.expires_at := COALESCE(NEW.created_at, NOW()) + INTERVAL '30 days';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_set_default_expires_at ON public.listings;
+CREATE TRIGGER trg_set_default_expires_at
+BEFORE INSERT ON public.listings
+FOR EACH ROW
+EXECUTE FUNCTION public.fn_set_default_expires_at();
+
+-- 5. Cron Task Otomatisasi Auto-Expire 30 Hari (via Supabase pg_cron)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 SELECT cron.schedule(

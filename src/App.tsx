@@ -201,6 +201,20 @@ export default function App() {
           setSelectedCategory('Smartphone & Gadget');
         }
 
+        // Check direct link ke form pasang iklan (?action=post, ?tab=post, ?pasang-iklan=true, #pasang-iklan, /pasang-iklan)
+        const isPostAction =
+          params.get('action') === 'post' ||
+          params.get('tab') === 'post' ||
+          params.has('pasang-iklan') ||
+          window.location.hash === '#pasang-iklan' ||
+          window.location.hash === '#post' ||
+          path.includes('/pasang-iklan') ||
+          path.includes('/post');
+
+        if (isPostAction) {
+          setIsPostModalOpen(true);
+        }
+
         const dealId = params.get('deal') || window.location.hash.replace(/^#deal-/, '');
         if (dealId) {
           const match = listings.find((item) => item.id === dealId);
@@ -553,6 +567,78 @@ export default function App() {
     setListings((prev) => prev.filter((l) => l.id !== id));
     deleteListingFromSupabase(id);
     showToast('Iklan berhasil dihapus.');
+  };
+
+  // Handler perpanjang masa tayang iklan (Ad Expiry Extension: +30 Hari)
+  const handleExtendListing = (listing: Listing) => {
+    const now = new Date().toISOString();
+    const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    setListings((prev) =>
+      prev.map((item) =>
+        item.id === listing.id
+          ? {
+              ...item,
+              status: 'active',
+              createdAt: now,
+              expiresAt: newExpiresAt,
+            }
+          : item
+      )
+    );
+
+    setSelectedListing((prev) =>
+      prev && prev.id === listing.id
+        ? {
+            ...prev,
+            status: 'active',
+            createdAt: now,
+            expiresAt: newExpiresAt,
+          }
+        : prev
+    );
+
+    updateListingInSupabase(listing.id, {
+      status: 'active',
+      createdAt: now,
+      expires_at: newExpiresAt,
+    });
+
+    showToast('✨ Masa tayang iklan berhasil diperpanjang 30 hari ke depan!');
+  };
+
+  // Handler tandai produk terjual langsung oleh seller (Mark as sold)
+  const handleMarkAsSold = (listingId: string) => {
+    const now = new Date().toISOString();
+
+    setListings((prev) =>
+      prev.map((item) =>
+        item.id === listingId
+          ? {
+              ...item,
+              status: 'sold',
+              soldAt: now,
+            }
+          : item
+      )
+    );
+
+    setSelectedListing((prev) =>
+      prev && prev.id === listingId
+        ? {
+            ...prev,
+            status: 'sold',
+            soldAt: now,
+          }
+        : prev
+    );
+
+    updateListingInSupabase(listingId, {
+      status: 'sold',
+      sold_at: now,
+    });
+
+    showToast('🎉 Iklan berhasil ditandai sebagai TERJUAL (SOLD)!');
   };
 
   const handleOpenChat = (listing: Listing, initialText?: string) => {
@@ -1173,6 +1259,9 @@ export default function App() {
           onToggleFavorite={() => handleToggleFavorite(selectedListing.id)}
           onIncrementView={handleIncrementView}
           isSellerView={currentUser.role === 'seller'}
+          currentUser={currentUser}
+          onExtendListing={handleExtendListing}
+          onMarkAsSold={handleMarkAsSold}
         />
       )}
 

@@ -195,3 +195,86 @@ export function isListingActive(listing: Listing): boolean {
   const createdTime = new Date(listing.createdAt).getTime();
   return Date.now() - createdTime < LISTING_LIFESPAN_MS;
 }
+
+export interface AdExpiryDetails {
+  expiresAtDate: Date;
+  formattedShort: string; // contoh: "24/11/26"
+  formattedLong: string;  // contoh: "24 Nov 2026"
+  formattedText: string;  // contoh: "YOUR AD EXPIRES ON 24/11/26"
+  daysRemaining: number;
+  isExpired: boolean;
+  isUrgent: boolean; // Tersisa <= 3 hari
+}
+
+/**
+ * Mendapatkan detail tanggal kedaluwarsa iklan dan format teks sesuai mockup
+ * Format teks: "YOUR AD EXPIRES ON DD/MM/YY"
+ */
+export function getAdExpiryInfo(listing: Listing): AdExpiryDetails {
+  const createdTime = new Date(listing.createdAt || Date.now()).getTime();
+  const expiresAtMs = listing.expiresAt
+    ? new Date(listing.expiresAt).getTime()
+    : createdTime + LISTING_LIFESPAN_MS;
+  const expiresAtDate = new Date(expiresAtMs);
+
+  const day = String(expiresAtDate.getDate()).padStart(2, '0');
+  const month = String(expiresAtDate.getMonth() + 1).padStart(2, '0');
+  const yearShort = String(expiresAtDate.getFullYear()).slice(-2);
+
+  const formattedShort = `${day}/${month}/${yearShort}`;
+  const formattedLong = expiresAtDate.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  const diffMs = expiresAtMs - Date.now();
+  const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+  const isExpired = listing.status === 'expired' || diffMs <= 0;
+  const isUrgent = !isExpired && daysRemaining <= 3;
+
+  const formattedText = isExpired
+    ? `YOUR AD EXPIRED ON ${formattedShort}`
+    : `YOUR AD EXPIRES ON ${formattedShort}`;
+
+  return {
+    expiresAtDate,
+    formattedShort,
+    formattedLong,
+    formattedText,
+    daysRemaining,
+    isExpired,
+    isUrgent,
+  };
+}
+
+/**
+ * Validasi otorisasi kepemilikan listing (Auth Check)
+ * Hanya pemilik iklan (seller) yang berhak melihat tanggal kadaluarsa iklan
+ */
+export function isListingOwner(
+  listing: Listing,
+  currentUserId?: string,
+  currentUserEmail?: string,
+  isSellerMode?: boolean
+): boolean {
+  if (!currentUserId && !currentUserEmail) return false;
+
+  if (listing.user_id && currentUserId && listing.user_id === currentUserId) {
+    return true;
+  }
+  if (currentUserId && listing.seller?.id === currentUserId) {
+    return true;
+  }
+  if (
+    currentUserEmail &&
+    (listing.seller?.id === currentUserEmail || (listing as any).seller_email === currentUserEmail)
+  ) {
+    return true;
+  }
+  // Pada mode simulasi seller Agus Setiawan (seller-agus)
+  if (isSellerMode && (currentUserId === 'seller-agus' || listing.seller?.id === 'seller-agus')) {
+    return true;
+  }
+  return false;
+}
