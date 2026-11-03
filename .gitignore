@@ -8,3 +8,6 @@ coverage/
 !.env.example
 server-email-config.json
 *.local.json
+public/assets/aistudio/Screenshot_*
+.aistudio/
+.github/

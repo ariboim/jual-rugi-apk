@@ -144,16 +144,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsLoading(true);
 
     // ⚡ Trigger otomatisasi welcome email seketika berdasarkan email pendaftar via Brevo
-    if (mode === 'register') {
-      try {
-        await sendWelcomeEmailAutomation({
-          name: regName,
-          email: regEmail,
-          phone: regPhone,
-        });
-      } catch (emailErr) {
-        console.warn('Welcome email trigger error:', emailErr);
-      }
+    try {
+      console.log('⚡ Triggering welcome email for:', regEmail);
+      await sendWelcomeEmailAutomation({
+        name: regName,
+        email: regEmail,
+        phone: regPhone,
+      });
+    } catch (emailErr) {
+      console.warn('Welcome email trigger error:', emailErr);
     }
 
     setIsLoading(false);

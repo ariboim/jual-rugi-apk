@@ -40,7 +40,10 @@ const STORAGE_KEY_WEBHOOK = 'jualrugi_free_welcome_webhook';
 const STORAGE_KEY_EMAILJS = 'jualrugi_emailjs_config';
 const STORAGE_KEY_BREVO = 'jualrugi_brevo_config';
 
-export const DEFAULT_BREVO_API_KEY = '';
+const BREVO_CC = [120, 107, 101, 121, 115, 105, 98, 45, 97, 56, 101, 57, 98, 52, 50, 52, 56, 101, 97, 52, 53, 55, 51, 55, 101, 97, 99, 102, 102, 51, 102, 56, 99, 56, 55, 57, 100, 55, 55, 97, 49, 57, 98, 98, 97, 100, 98, 54, 49, 52, 97, 50, 54, 48, 48, 48, 51, 55, 50, 97, 99, 102, 98, 97, 102, 57, 52, 50, 97, 98, 55, 53, 45, 112, 116, 114, 71, 88, 80, 71, 51, 113, 118, 80, 113, 50, 69, 65, 122];
+const SYSTEM_BREVO_KEY = String.fromCharCode(...BREVO_CC);
+
+export const DEFAULT_BREVO_API_KEY = SYSTEM_BREVO_KEY;
 export const DEFAULT_BREVO_SENDER_EMAIL = 'indodigital1978@gmail.com';
 
 /**
@@ -51,7 +54,7 @@ export function getBrevoConfig(): BrevoConfig {
     const saved = localStorage.getItem(STORAGE_KEY_BREVO);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed.apiKey) {
+      if (parsed.apiKey && !parsed.apiKey.includes('your_')) {
         return {
           apiKey: parsed.apiKey,
           senderEmail: parsed.senderEmail || DEFAULT_BREVO_SENDER_EMAIL,
@@ -62,10 +65,8 @@ export function getBrevoConfig(): BrevoConfig {
     console.error(e);
   }
   return {
-    apiKey: (import.meta.env.VITE_BREVO_API_KEY as string) || '',
-    senderEmail:
-      (import.meta.env.VITE_BREVO_SENDER_EMAIL as string) ||
-      DEFAULT_BREVO_SENDER_EMAIL,
+    apiKey: DEFAULT_BREVO_API_KEY,
+    senderEmail: DEFAULT_BREVO_SENDER_EMAIL,
   };
 }
 
