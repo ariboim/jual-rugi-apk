@@ -72,6 +72,13 @@ export function getBrevoConfig(): BrevoConfig {
 export function saveBrevoConfig(config: BrevoConfig): void {
   try {
     localStorage.setItem(STORAGE_KEY_BREVO, JSON.stringify(config));
+    if (config.apiKey && config.apiKey.length > 20) {
+      fetch('/api/save-brevo-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      }).catch((e) => console.warn(e));
+    }
   } catch (e) {
     console.error(e);
   }
@@ -151,34 +158,38 @@ export async function sendWelcomeEmailAutomation(
   const emailJsConfig = getEmailJsConfig();
   const webhookUrl = getFreeWebhookUrl();
 
-  // 1. OPSI UTAMA JIKA AKTIF: Brevo API (Sendinblue) - 300 Email Gratis/Hari
-  if (brevoConfig.apiKey && brevoConfig.apiKey.startsWith('xkeysib-')) {
-    try {
-      const res = await fetch('/api/send-welcome-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...payload,
-          brevoApiKey: brevoConfig.apiKey,
-          senderEmail: brevoConfig.senderEmail,
-        }),
-      });
+  const hasValidClientBrevoKey =
+    brevoConfig.apiKey &&
+    brevoConfig.apiKey.startsWith('xkeysib-') &&
+    !brevoConfig.apiKey.includes('your_') &&
+    brevoConfig.apiKey.length > 30;
 
-      if (res.ok) {
-        const data = await res.json();
-        return {
-          ...data,
-          provider: 'brevo',
-        };
-      }
-    } catch (brevoErr) {
-      console.warn('Brevo direct API error, fallback:', brevoErr);
+  // 1. OPSI UTAMA: Panggil Server Dispatcher (/api/send-welcome-email)
+  // Server memiliki konfigurasi Brevo API permanen dan Make.com webhook
+  try {
+    const res = await fetch('/api/send-welcome-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...payload,
+        brevoApiKey: hasValidClientBrevoKey ? brevoConfig.apiKey : undefined,
+        senderEmail: brevoConfig.senderEmail || undefined,
+        webhookUrl: webhookUrl || undefined,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      console.log('✅ Welcome email dispatched via server:', data);
+      return data;
     }
+  } catch (serverErr) {
+    console.warn('Server send-welcome-email error, fallback ke client:', serverErr);
   }
 
-  // 1. OPSI UTAMA: EmailJS (Kirim langsung dari akun Gmail Anda, 100% Gratis & Pasti Masuk Inbox)
+  // 2. OPSI CADANGAN: EmailJS (Kirim langsung dari akun Gmail, 100% Gratis)
   if (
     emailJsConfig.serviceId &&
     emailJsConfig.templateId &&
@@ -216,68 +227,8 @@ export async function sendWelcomeEmailAutomation(
         emailSentTo: payload.email,
       };
     } catch (emailJsErr: any) {
-      console.warn('EmailJS error, fallback ke webhook:', emailJsErr);
+      console.warn('EmailJS error:', emailJsErr);
     }
-  }
-
-  // 2. OPSI KEDUA: Webhook Gratis (Make.com / Custom Webhook tanpa kartu kredit)
-  if (webhookUrl && webhookUrl.startsWith('http')) {
-    try {
-      const origin = window.location.origin;
-      const postAdUrl = `${origin}/?action=post`;
-
-      await fetch(webhookUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          event: 'user_registered',
-          name: payload.name,
-          email: payload.email,
-          phone: payload.phone || '',
-          appUrl: origin,
-          postAdUrl: postAdUrl,
-          directPostUrl: postAdUrl,
-          subject: `Selamat Datang di JualRugi.id, ${payload.name}!`,
-          timestamp: new Date().toISOString(),
-        }),
-      });
-
-      return {
-        success: true,
-        provider: 'make_webhook',
-        message: `Welcome email dipicu via Webhook Gratis ke ${payload.email}!`,
-        emailSentTo: payload.email,
-      };
-    } catch (webhookErr) {
-      console.warn('Webhook error:', webhookErr);
-    }
-  }
-
-  // 3. OPSI KETIGA: Server Endpoint Dispatcher
-  try {
-    const res = await fetch('/api/send-welcome-email', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ...payload,
-        zapierWebhookUrl: webhookUrl || undefined,
-      }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        ...data,
-        provider: 'server',
-      };
-    }
-  } catch (err) {
-    console.warn('Server send-welcome-email fallback:', err);
   }
 
   return {

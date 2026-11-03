@@ -81,45 +81,47 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   // Pengguna memilih akun Google tertentu
-  const handleSelectGoogleAccount = (selectedName: string, selectedEmail: string, avatarUrl: string) => {
+  const handleSelectGoogleAccount = async (selectedName: string, selectedEmail: string, avatarUrl: string) => {
     setIsLoading(true);
     setAgreedToDisclaimer(true); // Memilih akun Google secara otomatis menyetujui disclaimer
 
-    // ⚡ Trigger otomatisasi welcome email seketika berdasarkan alamat Gmail user
-    sendWelcomeEmailAutomation({
-      name: selectedName,
-      email: selectedEmail,
-      phone: '0812-8888-9999',
-    });
-
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsGooglePickerOpen(false);
-
-      const googleUser: UserProfile = {
-        id: `google-${Date.now()}`,
+    // ⚡ Trigger otomatisasi welcome email seketika berdasarkan alamat Gmail user via Brevo
+    try {
+      await sendWelcomeEmailAutomation({
         name: selectedName,
-        role: 'buyer',
-        avatar: avatarUrl,
         email: selectedEmail,
         phone: '0812-8888-9999',
-        city: 'Jakarta Selatan',
-        freeListingUsed: false,
-        listingQuota: 1, // 1 free listing for new signup
-        activeListingCount: 0,
-        permissions: {
-          locationGranted: false,
-          cameraGalleryGranted: false,
-        },
-      };
+      });
+    } catch (emailErr) {
+      console.warn('Welcome email trigger error:', emailErr);
+    }
 
-      onLoginSuccess(googleUser);
-      onClose();
-    }, 500);
+    setIsLoading(false);
+    setIsGooglePickerOpen(false);
+
+    const googleUser: UserProfile = {
+      id: `google-${Date.now()}`,
+      name: selectedName,
+      role: 'buyer',
+      avatar: avatarUrl,
+      email: selectedEmail,
+      phone: '0812-8888-9999',
+      city: 'Jakarta Selatan',
+      freeListingUsed: false,
+      listingQuota: 1, // 1 free listing for new signup
+      activeListingCount: 0,
+      permissions: {
+        locationGranted: false,
+        cameraGalleryGranted: false,
+      },
+    };
+
+    onLoginSuccess(googleUser);
+    onClose();
   };
 
   // Submit form pendaftaran manual (Email/WhatsApp)
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -139,25 +141,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       : `${regName.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`;
     const regPhone = !emailOrPhone.includes('@') ? emailOrPhone.trim() : '0812-3344-5566';
 
-    // ⚡ Trigger otomatisasi welcome email seketika berdasarkan email pendaftar
+    setIsLoading(true);
+
+    // ⚡ Trigger otomatisasi welcome email seketika berdasarkan email pendaftar via Brevo
     if (mode === 'register') {
-      sendWelcomeEmailAutomation({
-        name: regName,
-        email: regEmail,
-        phone: regPhone,
-      });
+      try {
+        await sendWelcomeEmailAutomation({
+          name: regName,
+          email: regEmail,
+          phone: regPhone,
+        });
+      } catch (emailErr) {
+        console.warn('Welcome email trigger error:', emailErr);
+      }
     }
 
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      const authenticatedUser: UserProfile = {
-        id: `user-${Date.now()}`,
-        name: regName,
-        role: 'buyer',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-        email: regEmail,
-        phone: regPhone,
+    setIsLoading(false);
+    const authenticatedUser: UserProfile = {
+      id: `user-${Date.now()}`,
+      name: regName,
+      role: 'buyer',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+      email: regEmail,
+      phone: regPhone,
         city: 'Jakarta Selatan',
         freeListingUsed: false,
         listingQuota: 1, // 1 free listing for new signup
@@ -166,10 +172,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           locationGranted: false,
           cameraGalleryGranted: false,
         },
-      };
-      onLoginSuccess(authenticatedUser);
-      onClose();
-    }, 600);
+    };
+    onLoginSuccess(authenticatedUser);
+    onClose();
   };
 
   return (

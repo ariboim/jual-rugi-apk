@@ -6,3 +6,5 @@ coverage/
 *.log
 .env*
 !.env.example
+server-email-config.json
+*.local.json

@@ -2,14 +2,29 @@ import http from 'http';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 
 dotenv.config();
+dotenv.config({ path: '.env.local' });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function getServerEmailConfig(): { brevoApiKey?: string; brevoSenderEmail?: string } {
+  try {
+    const configPath = path.resolve(__dirname, 'server-email-config.json');
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8');
+      return JSON.parse(content);
+    }
+  } catch (err) {
+    console.warn('[Server Email Config Warn]:', err);
+  }
+  return {};
+}
 
 async function startServer() {
   const app = express();
@@ -455,8 +470,25 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       `.trim();
 
       let webhookStatus = 'skipped';
-      let activeBrevoKey = req.body.brevoApiKey || process.env.BREVO_API_KEY || '';
-      const DEFAULT_BREVO_SENDER = 'indodigital1978@gmail.com';
+      const serverConfig = getServerEmailConfig();
+      const clientKey =
+        req.body.brevoApiKey &&
+        typeof req.body.brevoApiKey === 'string' &&
+        !req.body.brevoApiKey.includes('your_') &&
+        req.body.brevoApiKey.length > 30
+          ? req.body.brevoApiKey.trim()
+          : null;
+
+      let activeBrevoKey =
+        clientKey ||
+        process.env.BREVO_API_KEY ||
+        serverConfig.brevoApiKey ||
+        '';
+
+      const DEFAULT_BREVO_SENDER =
+        serverConfig.brevoSenderEmail ||
+        process.env.BREVO_SENDER_EMAIL ||
+        'indodigital1978@gmail.com';
 
       // ========================================================================
       // OPSI 1: BREVO API DIRECT INTEGRATION (300 Email Gratis/Hari)
