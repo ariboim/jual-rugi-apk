@@ -40,6 +40,9 @@ const STORAGE_KEY_WEBHOOK = 'jualrugi_free_welcome_webhook';
 const STORAGE_KEY_EMAILJS = 'jualrugi_emailjs_config';
 const STORAGE_KEY_BREVO = 'jualrugi_brevo_config';
 
+export const DEFAULT_BREVO_API_KEY = '';
+export const DEFAULT_BREVO_SENDER_EMAIL = 'indodigital1978@gmail.com';
+
 /**
  * Konfigurasi Brevo API (Sendinblue) - 300 Email Gratis/Hari (9.000/Bulan)
  */
@@ -48,14 +51,21 @@ export function getBrevoConfig(): BrevoConfig {
     const saved = localStorage.getItem(STORAGE_KEY_BREVO);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed.apiKey) return parsed;
+      if (parsed.apiKey) {
+        return {
+          apiKey: parsed.apiKey,
+          senderEmail: parsed.senderEmail || DEFAULT_BREVO_SENDER_EMAIL,
+        };
+      }
     }
   } catch (e) {
     console.error(e);
   }
   return {
     apiKey: (import.meta.env.VITE_BREVO_API_KEY as string) || '',
-    senderEmail: (import.meta.env.VITE_BREVO_SENDER_EMAIL as string) || 'bca.ccpl@gmail.com',
+    senderEmail:
+      (import.meta.env.VITE_BREVO_SENDER_EMAIL as string) ||
+      DEFAULT_BREVO_SENDER_EMAIL,
   };
 }
 

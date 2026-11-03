@@ -455,7 +455,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       `.trim();
 
       let webhookStatus = 'skipped';
-      const activeBrevoKey = req.body.brevoApiKey || process.env.BREVO_API_KEY;
+      let activeBrevoKey = req.body.brevoApiKey || process.env.BREVO_API_KEY || '';
+      const DEFAULT_BREVO_SENDER = 'indodigital1978@gmail.com';
 
       // ========================================================================
       // OPSI 1: BREVO API DIRECT INTEGRATION (300 Email Gratis/Hari)
@@ -483,8 +484,12 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
             console.warn('[Brevo Contacts Warning]:', contactErr);
           }
 
-          // B. Kirim Welcome Email Transactional via Brevo SMTP API
-          const senderEmail = req.body.senderEmail || process.env.BREVO_SENDER_EMAIL || 'support@jualrugi.id';
+          // B. Kirim Welcome Email Transactional via Brevo SMTP API dengan verified sender
+          let senderEmail = req.body.senderEmail || process.env.BREVO_SENDER_EMAIL || DEFAULT_BREVO_SENDER;
+          if (senderEmail === 'support@jualrugi.id' || senderEmail === 'bca.ccpl@gmail.com') {
+            senderEmail = DEFAULT_BREVO_SENDER;
+          }
+
           const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
             headers: {

@@ -45,8 +45,8 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
   defaultEmail = 'bca.ccpl@gmail.com',
   onSuccessToast,
 }) => {
-  // Pilihan Tab Metode (Make.com / Brevo / EmailJS / Surat)
-  const [activeTab, setActiveTab] = useState<'make' | 'brevo' | 'emailjs' | 'surat'>('make');
+  // Pilihan Tab Metode (Brevo aktif sebagai integrasi utama)
+  const [activeTab, setActiveTab] = useState<'make' | 'brevo' | 'emailjs' | 'surat'>('brevo');
 
   // State Brevo API
   const [brevoConfig, setBrevoConfig] = useState<BrevoConfig>(() => getBrevoConfig());
@@ -330,17 +330,20 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
 
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Sender Email Terverifikasi di Brevo:
+                      Sender Email Terverifikasi di Brevo (Wajib Terverifikasi):
                     </label>
                     <input
                       type="email"
-                      placeholder="support@jualrugi.id atau email Anda"
+                      placeholder="indodigital1978@gmail.com"
                       value={brevoConfig.senderEmail || ''}
                       onChange={(e) =>
                         setBrevoConfig({ ...brevoConfig, senderEmail: e.target.value.trim() })
                       }
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-900 outline-none focus:border-blue-500"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-900 outline-none focus:border-blue-500 font-mono"
                     />
+                    <p className="text-[10px] text-emerald-700 font-semibold mt-1">
+                      ✓ Sender aktif di akun Brevo Anda: <code>indodigital1978@gmail.com</code> (jualrugi apps)
+                    </p>
                   </div>
                 </div>
 
