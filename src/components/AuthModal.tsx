@@ -500,13 +500,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </button>
 
-              {/* Akun Gmail Alternatif */}
+              {/* Akun Gmail Alternatif (indodigital1978@gmail.com) */}
               <button
                 type="button"
                 onClick={() =>
                   handleSelectGoogleAccount(
-                    'Rian Pratama (Google)',
-                    'rian.pratama@gmail.com',
+                    'Indo Digital',
+                    'indodigital1978@gmail.com',
                     'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=200&q=80'
                   )
                 }
@@ -514,14 +514,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                    R
+                    I
                   </div>
                   <div className="truncate">
                     <p className="text-xs font-bold text-slate-900 group-hover:text-sky-950">
-                      Rian Pratama
+                      Indo Digital
                     </p>
                     <p className="text-[11px] text-slate-500 font-mono truncate">
-                      rian.pratama@gmail.com
+                      indodigital1978@gmail.com
                     </p>
                   </div>
                 </div>
