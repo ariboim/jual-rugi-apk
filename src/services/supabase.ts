@@ -262,6 +262,15 @@ export async function updateListingInSupabase(
     status: string;
     expires_at: string;
     sold_at: string;
+    title: string;
+    category: string;
+    normal_price: number;
+    selling_price: number;
+    discount_percentage: number;
+    location: string;
+    condition: string;
+    urgent_reason: string;
+    image_url: string;
   }>
 ): Promise<boolean> {
   const client = getSupabaseClient();
@@ -274,6 +283,15 @@ export async function updateListingInSupabase(
     if (updates.status) payload.status = updates.status;
     if (updates.expires_at) payload.expires_at = updates.expires_at;
     if (updates.sold_at) payload.sold_at = updates.sold_at;
+    if (updates.title !== undefined) payload.title = updates.title;
+    if (updates.category !== undefined) payload.category = updates.category;
+    if (updates.normal_price !== undefined) payload.normal_price = updates.normal_price;
+    if (updates.selling_price !== undefined) payload.selling_price = updates.selling_price;
+    if (updates.discount_percentage !== undefined) payload.discount_percentage = updates.discount_percentage;
+    if (updates.location !== undefined) payload.location = updates.location;
+    if (updates.condition !== undefined) payload.condition = updates.condition;
+    if (updates.urgent_reason !== undefined) payload.urgent_reason = updates.urgent_reason;
+    if (updates.image_url !== undefined) payload.image_url = updates.image_url;
 
     const { error } = await client.from('listings').update(payload).eq('id', id);
 

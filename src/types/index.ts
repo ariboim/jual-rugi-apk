@@ -46,7 +46,7 @@ export interface ProductPhoto {
   description?: string;
 }
 
-export type ListingStatus = 'active' | 'sold' | 'expired' | 'deleted';
+export type ListingStatus = 'active' | 'sold' | 'expired' | 'deleted' | 'in_moderation';
 
 export interface Listing {
   id: string;

@@ -18,6 +18,7 @@ import {
   FileText,
   Mail,
   Calendar,
+  Pencil,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { MonetizationType } from './QRISModal';
@@ -39,6 +40,7 @@ interface SellerDashboardProps {
   onOpenSupabaseSettings?: () => void;
   onOpenPanduanModal?: () => void;
   onOpenWelcomeEmailSetup?: () => void;
+  onEditListing?: (listing: Listing) => void;
 }
 
 export const SellerDashboard: React.FC<SellerDashboardProps> = ({
@@ -55,6 +57,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   onOpenSupabaseSettings,
   onOpenPanduanModal,
   onOpenWelcomeEmailSetup,
+  onEditListing,
 }) => {
   const hasActiveAccount = isLoggedIn && currentUser.id !== 'guest';
 
@@ -363,9 +366,15 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                           <ArrowUp className="w-3 h-3 text-sky-600" /> SUNDUL TERATAS
                         </span>
                       )}
-                      <span className="text-[10px] text-sky-700 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-sky-500" /> Tayang & Produk Terverifikasi
-                      </span>
+                      {item.status === 'in_moderation' ? (
+                        <span className="text-[10px] text-amber-900 font-black flex items-center gap-1 bg-amber-200 border border-amber-400 px-2 py-0.5 rounded-md animate-pulse">
+                          <Clock className="w-3 h-3 text-amber-700" /> Sedang Dimoderasi Ulang
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-sky-700 font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-sky-500" /> Tayang & Produk Terverifikasi
+                        </span>
+                      )}
                     </div>
 
                     <h4 className={`text-sm font-bold hover:text-sky-600 line-clamp-1 ${
@@ -410,8 +419,20 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   </div>
                 </div>
 
-                {/* Monetization Action Buttons */}
+                {/* Monetization & Edit Action Buttons */}
                 <div className="flex sm:flex-col gap-2 w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-sky-50">
+                  {/* Edit Iklan Button */}
+                  {onEditListing && (
+                    <button
+                      onClick={() => onEditListing(item)}
+                      className="grow sm:grow-0 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm shadow-amber-500/20"
+                      title="Edit rincian, harga BU, atau minus kondisi iklan ini"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-white" />
+                      <span>Edit Iklan</span>
+                    </button>
+                  )}
+
                   {/* Sundul Button - Sky Blue */}
                   <button
                     onClick={() => onOpenQRIS(item, 'sundul')}

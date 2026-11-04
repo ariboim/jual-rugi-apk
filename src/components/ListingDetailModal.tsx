@@ -13,6 +13,7 @@ import {
   Check,
   Calendar,
   AlertCircle,
+  Pencil,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { getListingPhotos } from '../data/initialData';
@@ -45,6 +46,7 @@ interface ListingDetailModalProps {
   currentUser?: UserProfile;
   onExtendListing?: (listing: Listing) => void;
   onMarkAsSold?: (listingId: string) => void;
+  onEditListing?: (listing: Listing) => void;
 }
 
 export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
@@ -59,6 +61,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   currentUser,
   onExtendListing,
   onMarkAsSold,
+  onEditListing,
 }) => {
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -195,6 +198,19 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
               <WhatsAppIcon className="w-4 h-4 fill-[#25D366]" />
               <span className="hidden xs:inline text-[11px]">Share WA</span>
             </button>
+
+            {/* Edit Iklan Button (Owner Only - Header Shortcut) */}
+            {isOwner && onEditListing && (
+              <button
+                type="button"
+                onClick={() => onEditListing(listing)}
+                className="px-2.5 py-1.5 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-black cursor-pointer transition-all flex items-center gap-1.5 text-xs shadow-xs active:scale-95"
+                title="Edit rincian atau harga iklan ini"
+              >
+                <Pencil className="w-3.5 h-3.5 text-white" />
+                <span className="text-[11px]">Edit Iklan</span>
+              </button>
+            )}
 
             {/* General Share Button */}
             <button
@@ -582,6 +598,17 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
 
           {isOwner ? (
             <div className="grow flex items-center gap-2">
+              {onEditListing && (
+                <button
+                  type="button"
+                  onClick={() => onEditListing(listing)}
+                  className="py-3 px-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-amber-500/25 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all shrink-0"
+                  title="Ubah rincian, harga BU, atau kondisi minus iklan ini"
+                >
+                  <Pencil className="w-4 h-4 text-white shrink-0" />
+                  <span>Edit Iklan</span>
+                </button>
+              )}
               {onExtendListing && (
                 <button
                   type="button"

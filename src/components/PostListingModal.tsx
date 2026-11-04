@@ -8,12 +8,16 @@ import {
   RefreshCw,
   ShieldCheck,
   Lock,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { Category, CATEGORIES, Listing, UserProfile, ProductPhoto, MonetizationPackage } from '../types';
 import { DEMO_PRESET_IMAGES } from '../data/initialData';
 import { PhotoUploadManager } from './gallery/PhotoUploadManager';
 import { QuotaExceededModal } from './QuotaExceededModal';
 import { CameraGalleryPermissionModal } from './CameraGalleryPermissionModal';
+import { ModerationStatusModal } from './ModerationStatusModal';
+import { requestBrowserNotificationPermission } from '../services/notificationService';
 
 interface PostListingModalProps {
   onClose: () => void;
@@ -51,6 +55,11 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationStep, setVerificationStep] = useState('');
   const [rejectionNotice, setRejectionNotice] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Modal Status Moderasi (Interaktif 5 Detik / Konfirmasi "Saya Mengerti")
+  const [isModerationModalOpen, setIsModerationModalOpen] = useState(false);
+  const [pendingListingToApprove, setPendingListingToApprove] = useState<Listing | null>(null);
 
   const numNormal = Number(normalPrice) || 0;
   const numSelling = Number(sellingPrice) || 0;
@@ -83,11 +92,26 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
 
     setPhotos(presetPhotos);
     setRejectionNotice(null);
+    setValidationError(null);
+  };
+
+  const handleConfirmModerationAndFinish = () => {
+    setIsModerationModalOpen(false);
+    if (pendingListingToApprove) {
+      onListingApproved(pendingListingToApprove);
+      onClose();
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isVerifying) return; // Mencegah double-click / spam klik
+
     setRejectionNotice(null);
+    setValidationError(null);
+
+    // Minta izin Web Push Notification browser langsung pada gesture klik user
+    requestBrowserNotificationPermission();
 
     // 1. Validasi Aturan Kuota Iklan (User Baru Kuota 1x Gratis, Berbayar via Mayar)
     if (currentUser.listingQuota <= 0) {
@@ -95,20 +119,21 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
       return;
     }
 
+    // 2. Validasi input tanpa alert bawaan browser
     if (!title.trim()) {
-      alert('Mohon isi judul iklan barang Anda.');
+      setValidationError('Mohon isi judul iklan barang Anda.');
       return;
     }
     if (!normalPrice || !sellingPrice) {
-      alert('Mohon isi harga pasaran normal dan harga jual BU.');
+      setValidationError('Mohon isi harga pasaran normal dan harga jual BU.');
       return;
     }
     if (discountPercentage < 15) {
-      alert('JualRugi.my.id mengkhususkan iklan Butuh Uang (BU) dengan diskon minimal 15%.');
+      setValidationError('JualRugi.my.id mengkhususkan iklan Butuh Uang (BU) dengan diskon minimal 15%.');
       return;
     }
     if (photos.length === 0) {
-      alert('Mohon unggah minimal 1 foto fisik asli barang Anda (maksimal 6 foto).');
+      setValidationError('Mohon unggah minimal 1 foto fisik asli barang Anda (maksimal 6 foto).');
       return;
     }
 
@@ -118,11 +143,11 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
     try {
       setTimeout(() => {
         setVerificationStep('📸 Memeriksa otentisitas foto fisik barang...');
-      }, 700);
+      }, 600);
 
       setTimeout(() => {
         setVerificationStep('📊 Memverifikasi kewajaran harga jual rugi & deskripsi minus...');
-      }, 1500);
+      }, 1200);
 
       const primaryPhoto = photos[0];
 
@@ -182,8 +207,9 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
           savedCount: 0,
         };
 
-        onListingApproved(newListing);
-        onClose();
+        // Simpan listing dan tampilkan Modal Interaktif Status Moderasi (Opsi A & Opsi B)
+        setPendingListingToApprove(newListing);
+        setIsModerationModalOpen(true);
       } else {
         setRejectionNotice(
           result.reason ||
@@ -223,6 +249,26 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto grow p-5 space-y-4 text-xs bg-[#f0f9ff]/40">
+          {/* Interactive Form Validation Alert (Tanpa alert bawaan browser) */}
+          {validationError && (
+            <div className="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-950 flex items-start justify-between gap-2.5 animate-in fade-in duration-200 shadow-xs">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-extrabold text-xs block text-rose-950">Perhatian:</span>
+                  <span className="text-[11px] text-rose-800 leading-snug">{validationError}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setValidationError(null)}
+                className="p-1 rounded-lg text-rose-500 hover:text-rose-800 hover:bg-rose-100 transition cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Kuota Status Banner */}
           <div
             className={`p-3.5 rounded-2xl border flex items-center justify-between ${
@@ -490,9 +536,20 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
             <button
               type="submit"
               disabled={isVerifying}
-              className="w-2/3 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold shadow-md shadow-sky-500/25 flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 transition text-xs"
+              className={`w-2/3 py-2.5 rounded-xl font-extrabold shadow-md flex items-center justify-center gap-2 transition text-xs select-none ${
+                isVerifying
+                  ? 'bg-sky-400 text-white cursor-not-allowed opacity-90 shadow-none'
+                  : 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/25 cursor-pointer active:scale-98'
+              }`}
             >
-              <span>Verifikasi & Tayangkan Iklan</span>
+              {isVerifying ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Memverifikasi & Merekam...</span>
+                </>
+              ) : (
+                <span>Verifikasi & Tayangkan Iklan</span>
+              )}
             </button>
           </div>
         </form>
@@ -521,6 +578,15 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
             onUpdatePermissions({ cameraGalleryGranted: true });
           }
         }}
+      />
+
+      {/* Sub-Modal: Interaktif Status Moderasi (Opsi A: Tombol "Saya Mengerti", Opsi B: Auto-timer 5 Detik) */}
+      <ModerationStatusModal
+        isOpen={isModerationModalOpen}
+        listingTitle={pendingListingToApprove?.title || title}
+        category={pendingListingToApprove?.category || category}
+        autoCloseSeconds={5}
+        onClose={handleConfirmModerationAndFinish}
       />
     </div>
   );

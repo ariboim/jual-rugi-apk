@@ -17,15 +17,32 @@ import {
   X,
   CheckCircle2,
   LogOut,
+  Clock,
+  BellRing,
+  Mail,
+  ExternalLink,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 import { Category, CATEGORIES, Listing, UserProfile, MonetizationPackage } from './types';
+import {
+  scheduleModerationPushNotification,
+  sendSystemPushNotification,
+  getPendingModerations,
+} from './services/notificationService';
+import {
+  triggerAdPublishedEmail,
+  getDynamicAdLink,
+} from './services/adPublishedEmailService';
 import { INITIAL_LISTINGS } from './data/initialData';
 import { Navbar } from './components/Navbar';
 import { BottomNav, TabType } from './components/BottomNav';
 import { ListingCard } from './components/ListingCard';
 import { ListingDetailModal } from './components/ListingDetailModal';
 import { PostListingModal } from './components/PostListingModal';
+import { EditListingModal } from './components/EditListingModal';
+import { EditModerationModal } from './components/EditModerationModal';
 import { ChatModal } from './components/ChatModal';
 import { QRISModal, MonetizationType } from './components/QRISModal';
 import { SellerDashboard } from './components/SellerDashboard';
@@ -355,6 +372,33 @@ export default function App() {
   const [aiApprovalNotification, setAiApprovalNotification] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // State Simulasi Push Notifikasi Moderasi (Jeda 2-3 Menit)
+  const [pendingModeration, setPendingModeration] = useState<{
+    id: string;
+    title: string;
+    category: string;
+    triggerAt: number;
+  } | null>(null);
+
+  const [adApprovedNotification, setAdApprovedNotification] = useState<{
+    title: string;
+    body: string;
+    viaPush: boolean;
+    listingTitle: string;
+    listingId: string;
+    adLink: string;
+    emailSentTo?: string;
+  } | null>(null);
+
+  // State Edit Iklan Pemasang
+  const [editingListing, setEditingListing] = useState<Listing | null>(null);
+  const [isEditListingModalOpen, setIsEditListingModalOpen] = useState(false);
+  const [editModerationNotice, setEditModerationNotice] = useState<{
+    isOpen: boolean;
+    listing: Listing | null;
+  }>({ isOpen: false, listing: null });
+  const [adLinkCopied, setAdLinkCopied] = useState(false);
+
   // Interactive Vertical Opening Promo Banner (image_3.png) & Auth Modal state
   const [isPromoBannerOpen, setIsPromoBannerOpen] = useState<boolean>(() => {
     try {
@@ -507,14 +551,210 @@ export default function App() {
       activeListingCount: (prev.activeListingCount || 0) + 1,
     }));
 
-    setAiApprovalNotification(
-      `🎉 Selamat! Iklan ${newListing.title} Anda telah disetujui dalam moderasi dan telah tayang!`
-    );
-    setActiveTab('home');
+    // Simulasi trigger waktu tunda 2-3 menit (150 detik = 2.5 menit)
+    const delayMs = 150000;
+    setPendingModeration({
+      id: newListing.id,
+      title: newListing.title,
+      category: newListing.category,
+      triggerAt: Date.now() + delayMs,
+    });
 
-    setTimeout(() => {
-      setAiApprovalNotification(null);
-    }, 8000);
+    scheduleModerationPushNotification(
+      newListing.id,
+      newListing.title,
+      newListing.category,
+      delayMs,
+      async ({ title, body, viaPush }) => {
+        setPendingModeration(null);
+        const dynamicUrl = getDynamicAdLink(newListing.id);
+        const recipient = currentUser.email || 'seller@jualrugi.my.id';
+
+        // 1. Eksekusi pengiriman email notifikasi otomatis "Iklan Tayang"
+        await triggerAdPublishedEmail({
+          listingId: newListing.id,
+          listingTitle: newListing.title,
+          recipientEmail: recipient,
+          recipientName: currentUser.name,
+          sellingPrice: newListing.sellingPrice,
+          category: newListing.category,
+        });
+
+        // 2. Set banner notifikasi lengkap dengan link dinamis
+        setAdApprovedNotification({
+          title,
+          body,
+          viaPush,
+          listingTitle: newListing.title,
+          listingId: newListing.id,
+          adLink: dynamicUrl,
+          emailSentTo: recipient,
+        });
+
+        showToast(`✉️ Email notifikasi "Iklan Tayang" terkirim ke ${recipient}`);
+      }
+    );
+
+    setActiveTab('home');
+  };
+
+  // Helper untuk memicu notifikasi moderasi seketika (berguna saat pengujian langsung tanpa menunggu 2.5 menit)
+  const handleTriggerPendingImmediately = async () => {
+    if (!pendingModeration) return;
+    const dynamicUrl = getDynamicAdLink(pendingModeration.id);
+    const recipient = currentUser.email || 'seller@jualrugi.my.id';
+
+    const viaPush = await sendSystemPushNotification(
+      'Iklan Berhasil Tayang! 🎉',
+      'Selamat, iklan Anda telah selesai dimoderasi dan resmi tayang di JualRugi.my.id.',
+      {
+        tag: `ad-approved-${pendingModeration.id}`,
+        data: { listingId: pendingModeration.id, url: dynamicUrl },
+      }
+    );
+
+    // Kirim notifikasi email "Iklan Tayang"
+    await triggerAdPublishedEmail({
+      listingId: pendingModeration.id,
+      listingTitle: pendingModeration.title,
+      recipientEmail: recipient,
+      recipientName: currentUser.name,
+      category: pendingModeration.category,
+    });
+
+    // Kembalikan status listing ke 'active' (resmi tayang)
+    setListings((prev) =>
+      prev.map((item) => (item.id === pendingModeration.id ? { ...item, status: 'active' } : item))
+    );
+    setSelectedListing((prev) =>
+      prev && prev.id === pendingModeration.id ? { ...prev, status: 'active' } : prev
+    );
+    updateListingInSupabase(pendingModeration.id, { status: 'active' });
+
+    setAdApprovedNotification({
+      title: 'Iklan Berhasil Tayang! 🎉',
+      body: 'Selamat, iklan Anda telah selesai dimoderasi dan resmi tayang di JualRugi.my.id.',
+      viaPush,
+      listingTitle: pendingModeration.title,
+      listingId: pendingModeration.id,
+      adLink: dynamicUrl,
+      emailSentTo: recipient,
+    });
+
+    showToast(`✉️ Email notifikasi "Iklan Tayang" terkirim ke ${recipient}`);
+    setPendingModeration(null);
+  };
+
+  // Handler Buka Modal Edit Iklan
+  const handleOpenEditListing = (listing: Listing) => {
+    setEditingListing(listing);
+    setIsEditListingModalOpen(true);
+  };
+
+  // Handler Simpan Perubahan Iklan: Reset status ke 'in_moderation' & buka modal "Saya Paham"
+  const handleSaveEditedListing = async (updated: Listing) => {
+    // 1. Reset status ke mode moderasi: 'in_moderation'
+    const moderatedListing: Listing = {
+      ...updated,
+      status: 'in_moderation',
+    };
+
+    // 2. Simpan perubahan data yang baru diinput ke listings state
+    setListings((prev) =>
+      prev.map((item) => (item.id === moderatedListing.id ? moderatedListing : item))
+    );
+
+    // Update selectedListing jika sedang terbuka di detail modal
+    setSelectedListing((prev) =>
+      prev && prev.id === moderatedListing.id ? moderatedListing : prev
+    );
+
+    // 3. Sinkronisasi ke Supabase
+    await updateListingInSupabase(moderatedListing.id, {
+      status: 'in_moderation',
+      title: moderatedListing.title,
+      category: moderatedListing.category,
+      normal_price: moderatedListing.normalPrice,
+      selling_price: moderatedListing.sellingPrice,
+      discount_percentage: moderatedListing.discountPercentage,
+      location: moderatedListing.location,
+      condition: moderatedListing.condition,
+      urgent_reason: moderatedListing.urgentReason,
+      image_url: moderatedListing.imageUrl,
+    });
+
+    // 4. Sembunyikan/tutup form modal edit
+    setIsEditListingModalOpen(false);
+    setEditingListing(null);
+
+    // 5. Tampilkan Modal Konfirmasi "Saya Paham"
+    setEditModerationNotice({
+      isOpen: true,
+      listing: moderatedListing,
+    });
+  };
+
+  // Handler saat tombol "Saya Paham" di modal konfirmasi diklik
+  const handleConfirmEditModeration = () => {
+    const target = editModerationNotice.listing;
+    setEditModerationNotice({ isOpen: false, listing: null });
+
+    if (!target) return;
+
+    // 3. Siklus Notifikasi Ulang (Simulasi Jeda Moderasi 2-3 Menit):
+    const delayMs = 150000; // 2.5 menit
+
+    setPendingModeration({
+      id: target.id,
+      title: target.title,
+      category: target.category,
+      triggerAt: Date.now() + delayMs,
+    });
+
+    scheduleModerationPushNotification(
+      target.id,
+      target.title,
+      target.category,
+      delayMs,
+      async ({ title, body, viaPush }) => {
+        setPendingModeration(null);
+
+        // Status kembali menjadi 'active' (tayang)
+        setListings((prev) =>
+          prev.map((item) => (item.id === target.id ? { ...item, status: 'active' } : item))
+        );
+        setSelectedListing((prev) =>
+          prev && prev.id === target.id ? { ...prev, status: 'active' } : prev
+        );
+        updateListingInSupabase(target.id, { status: 'active' });
+
+        const dynamicUrl = getDynamicAdLink(target.id);
+        const recipient = currentUser.email || 'seller@jualrugi.my.id';
+
+        // Kirim notifikasi email "Iklan Tayang"
+        await triggerAdPublishedEmail({
+          listingId: target.id,
+          listingTitle: target.title,
+          recipientEmail: recipient,
+          recipientName: currentUser.name,
+          sellingPrice: target.sellingPrice,
+          category: target.category,
+        });
+
+        // Tampilkan push / in-app notification banner
+        setAdApprovedNotification({
+          title,
+          body,
+          viaPush,
+          listingTitle: target.title,
+          listingId: target.id,
+          adLink: dynamicUrl,
+          emailSentTo: recipient,
+        });
+
+        showToast(`✉️ Email notifikasi pembaruan iklan terkirim ke ${recipient}`);
+      }
+    );
   };
 
   const handleQRISSuccess = (listingId: string, type: MonetizationType) => {
@@ -684,6 +924,10 @@ export default function App() {
   const filteredListings = useMemo(() => {
     return listings
       .filter((item) => {
+        // Iklan yang sedang dalam moderasi tidak ditampilkan di feed publik sampai disetujui
+        if (item.status === 'in_moderation') {
+          return false;
+        }
         if (selectedCategory !== 'all' && item.category !== selectedCategory) {
           return false;
         }
@@ -771,8 +1015,140 @@ export default function App() {
         onLogout={handlePromptLogout}
       />
 
-      {/* In-App Push Notification Banner for Approval - Lowered position for clear visibility */}
-      {aiApprovalNotification && (
+      {/* Active Moderation Tracker Banner (2-3 Menit Jeda Moderasi) */}
+      {pendingModeration && (
+        <div className="fixed top-24 sm:top-28 left-4 right-4 max-w-xl mx-auto z-50 animate-slide-down">
+          <div className="bg-amber-500 text-white px-4 py-3 rounded-2xl shadow-xl shadow-amber-900/20 border-2 border-amber-300/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <span className="p-2 rounded-xl bg-white/20 shrink-0 animate-spin-slow">
+                <Clock className="w-5 h-5 text-white" />
+              </span>
+              <div>
+                <p className="text-xs sm:text-sm font-bold text-white leading-tight">
+                  Iklan "{pendingModeration.title}" sedang dimoderasi
+                </p>
+                <p className="text-[11px] text-amber-100 mt-0.5">
+                  Est. 2-3 menit. Notifikasi push sistem akan otomatis muncul di browser/HP Anda.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                onClick={handleTriggerPendingImmediately}
+                className="px-2.5 py-1.5 bg-white text-amber-700 hover:bg-amber-50 text-[11px] font-bold rounded-xl shadow-sm transition active:scale-95 cursor-pointer whitespace-nowrap"
+                title="Picu notifikasi tayang sekarang tanpa menunggu 2.5 menit"
+              >
+                ⚡ Tes Notifikasi Sekarang
+              </button>
+              <button
+                onClick={() => setPendingModeration(null)}
+                className="p-1 hover:bg-white/20 rounded-lg text-white/90 hover:text-white transition cursor-pointer"
+                title="Tutup Status Bar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Push / In-App & Email Notification Banner saat Iklan Selesai Dimoderasi & Resmi Tayang */}
+      {adApprovedNotification && (
+        <div className="fixed top-24 sm:top-28 left-4 right-4 max-w-xl mx-auto z-50 animate-slide-down">
+          <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-700 text-white p-4 sm:p-5 rounded-3xl shadow-2xl shadow-emerald-950/30 border-2 border-emerald-300/40 flex items-start justify-between gap-3 backdrop-blur-md">
+            <div className="flex items-start gap-3 grow">
+              <span className="p-2.5 rounded-2xl bg-white/20 shrink-0 mt-0.5">
+                <BellRing className="w-5 h-5 text-emerald-100 animate-bounce" />
+              </span>
+              <div className="space-y-2 grow">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm sm:text-base font-black text-white tracking-tight">
+                    {adApprovedNotification.title}
+                  </h4>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-emerald-100 border border-white/20">
+                    {adApprovedNotification.viaPush ? '🔔 Web Push Browser' : '📱 In-App Alert'}
+                  </span>
+                  {adApprovedNotification.emailSentTo && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-200 border border-emerald-400/40 flex items-center gap-1">
+                      <Mail className="w-3 h-3" /> Email: "Iklan Tayang"
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-black/20 rounded-2xl p-3 border border-white/15 space-y-1.5">
+                  <p className="text-xs text-white font-medium leading-relaxed">
+                    Selamat, iklan Anda telah tayang!
+                  </p>
+                  <p className="text-[11px] text-emerald-100 leading-snug">
+                    Silakan cek iklan Anda melalui link berikut:
+                  </p>
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    <a
+                      href={adApprovedNotification.adLink}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        const found = listings.find((l) => l.id === adApprovedNotification.listingId);
+                        if (found) {
+                          setSelectedListing(found);
+                          setAdApprovedNotification(null);
+                        } else {
+                          window.open(adApprovedNotification.adLink, '_blank');
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs font-mono font-bold bg-white/20 hover:bg-white/30 text-white px-2.5 py-1.5 rounded-xl border border-white/30 transition truncate max-w-full"
+                      title="Klik untuk membuka iklan"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{adApprovedNotification.adLink}</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(adApprovedNotification.adLink);
+                        setAdLinkCopied(true);
+                        setTimeout(() => setAdLinkCopied(false), 2000);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-white text-emerald-800 hover:bg-emerald-50 text-[11px] font-black flex items-center gap-1 transition shadow-xs cursor-pointer shrink-0"
+                    >
+                      {adLinkCopied ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span>Tersalin!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Salin Link</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {adApprovedNotification.emailSentTo && (
+                  <p className="text-[11px] text-emerald-200 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      Notifikasi resmi terkirim ke: <strong className="text-white underline">{adApprovedNotification.emailSentTo}</strong>
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => setAdApprovedNotification(null)}
+              className="p-1.5 hover:bg-white/20 rounded-xl text-white/90 hover:text-white shrink-0 cursor-pointer transition active:scale-90"
+              title="Tutup Notifikasi"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Legacy/Quick notification fallback if any */}
+      {aiApprovalNotification && !adApprovedNotification && (
         <div className="fixed top-24 sm:top-28 left-4 right-4 max-w-xl mx-auto z-50 animate-slide-down">
           <div className="bg-sky-500 text-white px-4 py-3.5 rounded-2xl shadow-xl shadow-sky-900/25 border-2 border-white/40 flex items-center justify-between gap-3 backdrop-blur-sm">
             <div className="flex items-center gap-3 grow">
@@ -1231,6 +1607,7 @@ export default function App() {
             onOpenSupabaseSettings={() => setIsSupabaseModalOpen(true)}
             onOpenPanduanModal={() => setIsPanduanModalOpen(true)}
             onOpenWelcomeEmailSetup={() => setIsWelcomeEmailModalOpen(true)}
+            onEditListing={handleOpenEditListing}
           />
         )}
       </main>
@@ -1262,6 +1639,29 @@ export default function App() {
           currentUser={currentUser}
           onExtendListing={handleExtendListing}
           onMarkAsSold={handleMarkAsSold}
+          onEditListing={handleOpenEditListing}
+        />
+      )}
+
+      {/* MODAL EDIT IKLAN */}
+      {isEditListingModalOpen && (
+        <EditListingModal
+          isOpen={isEditListingModalOpen}
+          listing={editingListing}
+          onClose={() => {
+            setIsEditListingModalOpen(false);
+            setEditingListing(null);
+          }}
+          onSave={handleSaveEditedListing}
+        />
+      )}
+
+      {/* MODAL KONFIRMASI MODERASI PASCA EDIT ("SAYA PAHAM") */}
+      {editModerationNotice.isOpen && (
+        <EditModerationModal
+          isOpen={editModerationNotice.isOpen}
+          listingTitle={editModerationNotice.listing?.title}
+          onConfirm={handleConfirmEditModeration}
         />
       )}
 
