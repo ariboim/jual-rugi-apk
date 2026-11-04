@@ -13,7 +13,7 @@ import { ProductPhoto } from '../../types';
 
 /**
  * =========================================================================
- * CARA INTEGRASI DATA ARRAY FORM UPLOAD FOTO (JualRugi.id)
+ * CARA INTEGRASI DATA ARRAY FORM UPLOAD FOTO (JualRugi.my.id)
  * =========================================================================
  * Modul ini menerima state `photos` bertipe `ProductPhoto[]` dan fungsi `onChange`.
  *

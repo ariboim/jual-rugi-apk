@@ -104,7 +104,7 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
       return;
     }
     if (discountPercentage < 15) {
-      alert('JualRugi.id mengkhususkan iklan Butuh Uang (BU) dengan diskon minimal 15%.');
+      alert('JualRugi.my.id mengkhususkan iklan Butuh Uang (BU) dengan diskon minimal 15%.');
       return;
     }
     if (photos.length === 0) {

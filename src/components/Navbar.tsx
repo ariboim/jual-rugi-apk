@@ -61,7 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-2 select-none cursor-pointer">
             <img
               src="/assets/aistudio/logo_transparent.png"
-              alt="JualRugi.id"
+              alt="JualRugi.my.id"
               className="h-8 sm:h-9.5 md:h-10 w-auto object-contain select-none"
             />
             <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-sky-50 text-sky-700 border border-sky-200 font-extrabold uppercase tracking-wider hidden md:inline-block">
@@ -121,7 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             onLogin && (
               <button
                 onClick={onLogin}
-                title="Masuk ke Akun JualRugi.id"
+                title="Masuk ke Akun JualRugi.my.id"
                 aria-label="Tombol Masuk Akun"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold transition cursor-pointer active:scale-95 shadow-xs shadow-sky-500/25"
               >

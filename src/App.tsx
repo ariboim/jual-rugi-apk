@@ -1177,7 +1177,7 @@ export default function App() {
             <div className="p-3.5 rounded-2xl bg-amber-300 text-amber-950 text-xs font-bold flex items-center gap-2.5 shadow-xs border border-amber-400">
               <ShieldCheck className="w-5 h-5 shrink-0 text-amber-900" />
               <span>
-                Peringatan: JualRugi.id tidak menengahi pembayaran. Jangan pernah transfer DP atau uang muka kepada siapapun!
+                Peringatan: JualRugi.my.id tidak menengahi pembayaran. Jangan pernah transfer DP atau uang muka kepada siapapun!
               </span>
             </div>
 

@@ -126,7 +126,7 @@ jobs:
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
-                  android:label="JualRugi.id"
+                  android:label="JualRugi.my.id"
                   android:roundIcon="@mipmap/ic_launcher"
                   android:supportsRtl="true"
                   android:theme="@style/Theme.JualRugi"
@@ -148,7 +148,7 @@ jobs:
           # 6. strings.xml & styles.xml
           cat << 'EOF' > android/app/src/main/res/values/strings.xml
           <resources>
-              <string name="app_name">JualRugi.id</string>
+              <string name="app_name">JualRugi.my.id</string>
           </resources>
           EOF
 
@@ -352,12 +352,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG_NAME="v1.0.${{ github.run_number }}-${{ github.run_attempt }}"
-          TITLE="JualRugi.id Debug APK v1.0.${{ github.run_number }}"
+          TITLE="JualRugi.my.id Debug APK v1.0.${{ github.run_number }}"
           gh release create "$TAG_NAME" "release-asset/app-debug.apk" \
             --title "$TITLE" \
             --target "${{ github.sha }}" \
             --latest \
-            --notes "### Unduh Aplikasi Android JualRugi.id
+            --notes "### Unduh Aplikasi Android JualRugi.my.id
           - **File:** app-debug.apk
           - **Status:** Siap diinstall di HP Android (Debug Build)
           - **Versi:** Build #${{ github.run_number }}"

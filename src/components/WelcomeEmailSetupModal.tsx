@@ -21,15 +21,14 @@ import {
   Link,
 } from 'lucide-react';
 import {
-  getEmailJsConfig,
-  saveEmailJsConfig,
   getFreeWebhookUrl,
   saveFreeWebhookUrl,
   getBrevoConfig,
   saveBrevoConfig,
   sendWelcomeEmailAutomation,
-  EmailJsConfig,
   BrevoConfig,
+  DEFAULT_BREVO_SENDER_EMAIL,
+  DEFAULT_BREVO_SENDER_NAME,
 } from '../services/welcomeEmail';
 
 interface WelcomeEmailSetupModalProps {
@@ -45,18 +44,11 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
   defaultEmail = 'bca.ccpl@gmail.com',
   onSuccessToast,
 }) => {
-  // Pilihan Tab Metode (Brevo aktif sebagai integrasi utama)
-  const [activeTab, setActiveTab] = useState<'make' | 'brevo' | 'emailjs' | 'surat'>('brevo');
+  // Pilihan Tab Metode (Brevo aktif sebagai integrasi utama dengan branded domain)
+  const [activeTab, setActiveTab] = useState<'brevo' | 'make' | 'surat'>('brevo');
 
   // State Brevo API
   const [brevoConfig, setBrevoConfig] = useState<BrevoConfig>(() => getBrevoConfig());
-
-  // State EmailJS
-  const [emailJsConfig, setEmailJsConfig] = useState<EmailJsConfig>({
-    serviceId: '',
-    templateId: '',
-    publicKey: '',
-  });
 
   // State Make.com / Webhook Gratis
   const [webhookUrl, setWebhookUrl] = useState(() => getFreeWebhookUrl());
@@ -82,7 +74,6 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setEmailJsConfig(getEmailJsConfig());
       setWebhookUrl(getFreeWebhookUrl());
       setBrevoConfig(getBrevoConfig());
       setTestResult(null);
@@ -96,14 +87,6 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
     saveBrevoConfig(brevoConfig);
     if (onSuccessToast) {
       onSuccessToast('✅ Konfigurasi Brevo API berhasil disimpan!');
-    }
-  };
-
-  const handleSaveEmailJs = (e: React.FormEvent) => {
-    e.preventDefault();
-    saveEmailJsConfig(emailJsConfig);
-    if (onSuccessToast) {
-      onSuccessToast('✅ Konfigurasi EmailJS berhasil disimpan!');
     }
   };
 
@@ -127,8 +110,6 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
     // Simpan konfigurasi aktif terlebih dahulu
     if (activeTab === 'brevo') {
       saveBrevoConfig(brevoConfig);
-    } else if (activeTab === 'emailjs') {
-      saveEmailJsConfig(emailJsConfig);
     } else if (activeTab === 'make') {
       saveFreeWebhookUrl(webhookUrl);
     }
@@ -213,19 +194,8 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
           </p>
         </div>
 
-        {/* Tab Pilihan Solusi Gratis */}
-        <div className="grid grid-cols-4 p-1 bg-slate-100 rounded-2xl mt-4 mb-2 shrink-0 text-xs font-bold gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab('make')}
-            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1 ${
-              activeTab === 'make'
-                ? 'bg-white text-sky-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <span>🔄 Make.com</span>
-          </button>
+        {/* Tab Pilihan Solusi Otomatisasi Email */}
+        <div className="grid grid-cols-3 p-1 bg-slate-100 rounded-2xl mt-4 mb-2 shrink-0 text-xs font-bold gap-1">
           <button
             type="button"
             onClick={() => setActiveTab('brevo')}
@@ -235,18 +205,18 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <span>🔵 Brevo</span>
+            <span>🔵 Brevo API</span>
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('emailjs')}
+            onClick={() => setActiveTab('make')}
             className={`py-2 px-1 rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1 ${
-              activeTab === 'emailjs'
-                ? 'bg-white text-emerald-900 shadow-xs'
+              activeTab === 'make'
+                ? 'bg-white text-sky-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <span>⭐ EmailJS</span>
+            <span>🔄 Webhook</span>
           </button>
           <button
             type="button"
@@ -334,15 +304,15 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
                     </label>
                     <input
                       type="email"
-                      placeholder="indodigital1978@gmail.com"
-                      value={brevoConfig.senderEmail || ''}
+                      placeholder="admin@jualrugi.my.id"
+                      value={brevoConfig.senderEmail || DEFAULT_BREVO_SENDER_EMAIL}
                       onChange={(e) =>
                         setBrevoConfig({ ...brevoConfig, senderEmail: e.target.value.trim() })
                       }
                       className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-900 outline-none focus:border-blue-500 font-mono"
                     />
                     <p className="text-[10px] text-emerald-700 font-semibold mt-1">
-                      ✓ Sender aktif di akun Brevo Anda: <code>indodigital1978@gmail.com</code> (jualrugi apps)
+                      ✓ Sender resmi terotentikasi & branded domain: <code>admin@jualrugi.my.id</code> (JualRugi.my.id)
                     </p>
                   </div>
                 </div>
@@ -354,118 +324,6 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
                   Simpan Konfigurasi Brevo
                 </button>
               </form>
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* TAB 1: EMAILJS (REKOMENDASI UTAMA: 100% GRATIS, TANPA CC) */}
-          {/* ======================================================== */}
-          {activeTab === 'emailjs' && (
-            <div className="space-y-4 animate-in fade-in">
-              <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-1.5">
-                <div className="flex items-center gap-2 text-emerald-950 font-black text-xs">
-                  <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Rekomendasi Terbaik: EmailJS (Gratis 200 Email/Bulan)</span>
-                </div>
-                <p className="text-[11px] text-emerald-900 leading-relaxed">
-                  <strong>EmailJS</strong> adalah layanan paling ramah pemula untuk mengirim email otomatis. 
-                  <strong> 100% GRATIS dan TIDAK PERLU Kartu Kredit sama sekali</strong>. Email dikirim langsung dari akun Gmail Anda sendiri ke Gmail pendaftar!
-                </p>
-              </div>
-
-              {/* Form Input Kunci EmailJS */}
-              <form onSubmit={handleSaveEmailJs} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between pb-1 border-b border-slate-200">
-                  <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Masukkan 3 Kunci EmailJS Anda:</span>
-                  </span>
-                  <a
-                    href="https://www.emailjs.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 underline"
-                  >
-                    <span>Daftar di emailjs.com</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-
-                <div className="space-y-2.5">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      1. Service ID (contoh: <code>service_abc123</code>):
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="service_xxxxxxx"
-                      value={emailJsConfig.serviceId}
-                      onChange={(e) =>
-                        setEmailJsConfig({ ...emailJsConfig, serviceId: e.target.value.trim() })
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      2. Template ID (contoh: <code>template_xyz890</code>):
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="template_xxxxxxx"
-                      value={emailJsConfig.templateId}
-                      onChange={(e) =>
-                        setEmailJsConfig({ ...emailJsConfig, templateId: e.target.value.trim() })
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      3. Public Key (Account &gt; API Keys):
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Public Key Anda (cth: aBcDeFgHiJkLmNoP)"
-                      value={emailJsConfig.publicKey}
-                      onChange={(e) =>
-                        setEmailJsConfig({ ...emailJsConfig, publicKey: e.target.value.trim() })
-                      }
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono text-slate-900 outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition cursor-pointer shadow-xs active:scale-98"
-                >
-                  Simpan Konfigurasi EmailJS
-                </button>
-              </form>
-
-              {/* Panduan 3 Menit EmailJS */}
-              <div className="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2">
-                <h4 className="font-extrabold text-slate-900 text-xs">
-                  Panduan Singkat Setup EmailJS (3 Menit, Tanpa Koding):
-                </h4>
-                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 pl-1">
-                  <li>
-                    Buka <a href="https://www.emailjs.com" target="_blank" rel="noreferrer" className="text-emerald-700 font-bold underline">emailjs.com</a>, daftar akun gratis menggunakan email Google Anda.
-                  </li>
-                  <li>
-                    Di menu <strong>Email Services</strong> &gt; klik <strong>Add Service</strong> &gt; pilih <strong>Gmail</strong>. Klik <em>Connect Account</em> untuk menghubungkan akun Gmail Anda ({defaultEmail}). Salin <strong>Service ID</strong>.
-                  </li>
-                  <li>
-                    Di menu <strong>Email Templates</strong> &gt; klik <strong>Create New Template</strong>. Pada kolom <em>To Email</em>, ketik: <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-800">{"{{to_email}}"}</code>. Salin <strong>Template ID</strong>.
-                  </li>
-                  <li>
-                    Di menu <strong>Account</strong> (ikon profil pojok kanan atas), salin <strong>Public Key</strong> Anda.
-                  </li>
-                </ol>
-              </div>
             </div>
           )}
 
@@ -538,7 +396,7 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
           {activeTab === 'surat' && (
             <div className="space-y-3 animate-in fade-in">
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 flex items-center justify-between text-xs">
-                <span className="font-bold">✉️ Surat Resmi Selamat Datang JualRugi.id</span>
+                <span className="font-bold">✉️ Surat Resmi Selamat Datang JualRugi.my.id</span>
                 <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full">
                   Bonus 1 Kuota Aktif
                 </span>
@@ -550,7 +408,7 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
                     Pemberitahuan Akun Baru
                   </span>
                   <h3 className="text-base font-black text-slate-950 mt-1.5">
-                    Selamat Bergabung di JualRugi.id! 👋
+                    Selamat Bergabung di JualRugi.my.id! 👋
                   </h3>
                   <p className="text-[11px] text-slate-500">
                     Akun: <strong>{testEmail}</strong>

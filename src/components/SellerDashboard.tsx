@@ -182,7 +182,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2 justify-center sm:justify-start">
-              <h3 className="font-black text-sm text-white">Aplikasi Android JualRugi.id</h3>
+              <h3 className="font-black text-sm text-white">Aplikasi Android JualRugi.my.id</h3>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black">
                 APK Resmi
               </span>

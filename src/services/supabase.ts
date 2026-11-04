@@ -111,7 +111,7 @@ export async function testSupabaseConnection(): Promise<{
 }
 
 /**
- * Konversi baris data dari Supabase ke format Listing aplikasi JualRugi.id
+ * Konversi baris data dari Supabase ke format Listing aplikasi JualRugi.my.id
  */
 function mapRowToListing(row: any): Listing {
   const sellingPrice = Number(row.price || row.selling_price || 0);
@@ -183,7 +183,7 @@ function mapListingToRow(listing: Listing, userEmail?: string, userPhone?: strin
     image_url: listing.imageUrl,
     seller_name: listing.seller?.name || 'Member JualRugi',
     seller_phone: userPhone || listing.seller?.phoneMasked || '0812-9988-7766',
-    seller_email: userEmail || 'member@jualrugi.id',
+    seller_email: userEmail || 'member@jualrugi.my.id',
     user_id: userEmail || listing.seller?.id || listing.user_id || null,
     is_priority: Boolean(listing.isSuperBU),
     status: listing.status || 'active',

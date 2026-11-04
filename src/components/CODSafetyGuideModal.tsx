@@ -23,7 +23,7 @@ export const CODSafetyGuideModal: React.FC<CODSafetyGuideModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-sky-950">Panduan Aman Transaksi COD</h3>
-              <p className="text-[11px] text-slate-500">Protokol Keamanan JualRugi.id</p>
+              <p className="text-[11px] text-slate-500">Protokol Keamanan JualRugi.my.id</p>
             </div>
           </div>
           <button
@@ -43,7 +43,7 @@ export const CODSafetyGuideModal: React.FC<CODSafetyGuideModalProps> = ({
               <span>ATURAN EMAS: JANGAN PERNAH TRANSFER DP!</span>
             </div>
             <p className="text-xs text-red-900">
-              Modus penipuan paling umum adalah meminta DP uang muka, ongkir kurir, atau uang booking. <strong>Semua transaksi di JualRugi.id 100% wajib COD tunai/QRIS di tempat.</strong> Jika ada penjual memaksa transfer dulu, langsung tolak!
+              Modus penipuan paling umum adalah meminta DP uang muka, ongkir kurir, atau uang booking. <strong>Semua transaksi di JualRugi.my.id 100% wajib COD tunai/QRIS di tempat.</strong> Jika ada penjual memaksa transfer dulu, langsung tolak!
             </p>
           </div>
 

@@ -1,7 +1,7 @@
 import { Listing, Category } from '../types';
 
 /**
- * Durasi masa tayang standar untuk iklan di JualRugi.id: 30 Hari
+ * Durasi masa tayang standar untuk iklan di JualRugi.my.id: 30 Hari
  */
 export const LISTING_LIFESPAN_DAYS = 30;
 export const LISTING_LIFESPAN_MS = LISTING_LIFESPAN_DAYS * 24 * 60 * 60 * 1000;

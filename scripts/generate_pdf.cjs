@@ -17,7 +17,7 @@ const doc = new PDFDocument({
 const writeStream = fs.createWriteStream(outputPath);
 doc.pipe(writeStream);
 
-// Palet Warna Profesional JualRugi.id
+// Palet Warna Profesional JualRugi.my.id
 const PRIMARY_BLUE = '#0284c7'; // Sky-600
 const DARK_NAVY = '#0f172a';    // Slate-900
 const TEXT_MUTED = '#475569';   // Slate-600
@@ -34,7 +34,7 @@ doc
   .fillColor('#ffffff')
   .fontSize(16)
   .font('Helvetica-Bold')
-  .text('JUALRUGI.ID - PANDUAN SETUP SUPABASE', 60, 52);
+  .text('JUALRUGI.MY.ID - PANDUAN SETUP SUPABASE', 60, 52);
 
 doc
   .fontSize(10)
@@ -55,7 +55,7 @@ doc
   .font('Helvetica')
   .fillColor(TEXT_MUTED)
   .text(
-    'Panduan ini dibuat khusus bagi Anda yang tidak memiliki latar belakang koding (non-programmer) untuk mengaktifkan database online gratis di Supabase, agar data iklan yang dipasang di jualrugi.id tersimpan permanen di cloud dan bisa dihubungkan ke Zapier / Mayar.',
+    'Panduan ini dibuat khusus bagi Anda yang tidak memiliki latar belakang koding (non-programmer) untuk mengaktifkan database online gratis di Supabase, agar data iklan yang dipasang di jualrugi.my.id tersimpan permanen di cloud dan bisa dihubungkan ke Zapier / Mayar.',
     { align: 'justify', lineGap: 3 }
   );
 
@@ -157,7 +157,7 @@ doc
   .fillColor('#ffffff')
   .fontSize(13)
   .font('Helvetica-Bold')
-  .text('JUALRUGI.ID - KONEKSI APLIKASI & ZAPIER / MAYAR', 60, 54);
+  .text('JUALRUGI.MY.ID - KONEKSI APLIKASI & ZAPIER / MAYAR', 60, 54);
 
 doc.y = 105;
 
@@ -185,13 +185,13 @@ doc
   .fillColor(PRIMARY_BLUE)
   .fontSize(11)
   .font('Helvetica-Bold')
-  .text('LANGKAH 4: MENGHUBUNGKAN KE APLIKASI JUALRUGI.ID');
+  .text('LANGKAH 4: MENGHUBUNGKAN KE APLIKASI JUALRUGI.MY.ID');
 
 doc
   .fontSize(9)
   .font('Helvetica')
   .fillColor(DARK_NAVY)
-  .text('1. Buka aplikasi web jualrugi.id.', { lineGap: 2 })
+  .text('1. Buka aplikasi web jualrugi.my.id.', { lineGap: 2 })
   .text('2. Klik tab "Akun Saya" di bilah navigasi bawah.', { lineGap: 2 })
   .text('3. Pada kartu "Database Online (Supabase & Zapier)", klik tombol "Koneksi Supabase".', { lineGap: 2 })
   .text('4. Tempelkan (paste) Project URL dan Anon Key yang tadi Anda salin.', { lineGap: 2 })
@@ -250,7 +250,7 @@ doc
   .fillColor(TEXT_MUTED)
   .font('Helvetica')
   .text(
-    'Dokumen ini di-generate otomatis oleh Sistem JualRugi.id - Pasar Butuh Uang (BU) Terverifikasi',
+    'Dokumen ini di-generate otomatis oleh Sistem JualRugi.my.id - Pasar Butuh Uang (BU) Terverifikasi',
     45,
     780,
     { align: 'center', width: 505 }

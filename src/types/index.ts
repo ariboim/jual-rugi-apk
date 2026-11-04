@@ -30,7 +30,7 @@ export interface PhotoAngle {
 }
 
 /**
- * Interface data foto produk jualrugi.id
+ * Interface data foto produk jualrugi.my.id
  * Format data array yang digunakan:
  * [
  *   { id: '1', url: 'https://...', caption: 'Tampak depan layar nyala mulus' },

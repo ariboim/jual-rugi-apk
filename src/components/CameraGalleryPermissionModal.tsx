@@ -45,7 +45,7 @@ export const CameraGalleryPermissionModal: React.FC<CameraGalleryPermissionModal
 
           {/* Exact required copy from prompt */}
           <div className="mt-3 p-3.5 rounded-2xl bg-sky-50 border border-sky-200 text-sky-950 text-xs sm:text-sm font-semibold leading-relaxed">
-            "Izinkan akses galeri & kamera untuk mengambil foto produk yang akan Anda jual di jualrugi.id."
+            "Izinkan akses galeri & kamera untuk mengambil foto produk yang akan Anda jual di jualrugi.my.id."
           </div>
         </div>
 

@@ -13,7 +13,7 @@ import { FullscreenLightbox } from './FullscreenLightbox';
 
 /**
  * =========================================================================
- * CARA INTEGRASI DATA ARRAY FOTO PRODUK (JualRugi.id Product Gallery)
+ * CARA INTEGRASI DATA ARRAY FOTO PRODUK (JualRugi.my.id Product Gallery)
  * =========================================================================
  * Contoh format data array yang diteruskan ke komponen <ProductGallery />:
  *

@@ -114,7 +114,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
     if (activeSpeaker === 'buyer' && !isCod) {
       setTimeout(() => {
         const replyText = hasWarning
-          ? 'Maaf kak, saya patuh aturan JualRugi.id. TIDAK TERIMA TRANSFER ATAU DP. Wajib COD ketemuan langsung, tes unit baru bayar cash.'
+          ? 'Maaf kak, saya patuh aturan JualRugi.my.id. TIDAK TERIMA TRANSFER ATAU DP. Wajib COD ketemuan langsung, tes unit baru bayar cash.'
           : 'Bisa kak! Unit siap dibawa. Mau COD di minimarket terdekat atau mall mana biar sama-sama aman?';
 
         setMessages((prev) => [

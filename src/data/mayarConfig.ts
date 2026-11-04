@@ -1,7 +1,7 @@
 import { MayarProductConfig, MonetizationPackage } from '../types';
 
 /**
- * Konfigurasi Resmi Produk Monetisasi JualRugi.id dengan Payment Gateway Mayar.id
+ * Konfigurasi Resmi Produk Monetisasi JualRugi.my.id dengan Payment Gateway Mayar.id
  */
 export const MAYAR_PRODUCTS: Record<MonetizationPackage, MayarProductConfig> = {
   sundul: {

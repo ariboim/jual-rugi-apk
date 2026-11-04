@@ -32,7 +32,7 @@ export const QRISModal: React.FC<QRISModalProps> = ({
   type,
   onSuccess,
   userId = 'user-current',
-  userEmail = 'member@jualrugi.id',
+  userEmail = 'member@jualrugi.my.id',
 }) => {
   const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 mins
   const [isProcessing, setIsProcessing] = useState(false);

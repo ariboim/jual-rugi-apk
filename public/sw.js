@@ -1,10 +1,12 @@
-// Service Worker Minimal untuk JualRugi.id PWA (Standar WebAPK Android & Chrome)
-const CACHE_NAME = 'jualrugi-cache-v1';
+// Service Worker Minimal untuk JualRugi.my.id PWA (Standar WebAPK Android & Chrome)
+const CACHE_NAME = 'jualrugi-cache-v2';
 
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/assets/aistudio/logo_transparent.png',
+  '/assets/aistudio/logo_icon_transparent.png',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/pwa-maskable-512x512.png',

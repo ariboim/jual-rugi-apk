@@ -1,5 +1,5 @@
 /**
- * Modul Galeri Produk & Manajemen Upload Foto - JualRugi.id
+ * Modul Galeri Produk & Manajemen Upload Foto - JualRugi.my.id
  *
  * Contoh Integrasi Array Data Foto:
  * ```ts

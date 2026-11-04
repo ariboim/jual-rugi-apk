@@ -74,7 +74,7 @@ export const PromoBannerModal: React.FC<PromoBannerModalProps> = ({
         {/* Background Poster Artwork Lengkap (Tanpa Timpaan Teks Ganda) */}
         <img
           src="/assets/aistudio/1793501947913_573c05e1.jpg"
-          alt="Semua Barang Harga Gila Ada di Sini! - JualRugi.id"
+          alt="Semua Barang Harga Gila Ada di Sini! - JualRugi.my.id"
           className="w-full h-full object-cover object-center pointer-events-none"
           onError={(e) => {
             (e.target as HTMLImageElement).src = '/assets/aistudio/image_3.png';

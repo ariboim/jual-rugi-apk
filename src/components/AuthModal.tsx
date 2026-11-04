@@ -194,12 +194,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="inline-flex items-center justify-center p-2 rounded-2xl bg-sky-50 mb-2 border border-sky-100">
             <img
               src="/assets/aistudio/logo_transparent.png"
-              alt="JualRugi.id"
+              alt="JualRugi.my.id"
               className="h-8 w-auto object-contain"
             />
           </div>
           <h2 className="text-lg sm:text-xl font-black text-sky-950">
-            {mode === 'register' ? 'Daftar Akun JualRugi.id' : 'Masuk ke Akun Anda'}
+            {mode === 'register' ? 'Daftar Akun JualRugi.my.id' : 'Masuk ke Akun Anda'}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             {mode === 'register'
@@ -367,14 +367,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div className="flex items-start gap-1.5">
                     <span className="font-bold text-amber-950 shrink-0">•</span>
                     <p>
-                      <strong className="text-amber-950">Posisi Platform:</strong> <span className="font-semibold text-slate-900">jualrugi.id</span> bertindak semata-mata sebagai platform/aplikasi pihak ketiga penyedia ruang listing, bukan pihak penengah transaksi.
+                      <strong className="text-amber-950">Posisi Platform:</strong> <span className="font-semibold text-slate-900">jualrugi.my.id</span> bertindak semata-mata sebagai platform/aplikasi pihak ketiga penyedia ruang listing, bukan pihak penengah transaksi.
                     </p>
                   </div>
 
                   <div className="flex items-start gap-1.5">
                     <span className="font-bold text-amber-950 shrink-0">•</span>
                     <p>
-                      <strong className="text-amber-950">Batasan Tanggung Jawab:</strong> <span className="font-semibold text-slate-900">jualrugi.id</span> tidak bertanggung jawab dalam bentuk apa pun atas segala tindak penipuan, kerugian finansial, sengketa, atau cacat barang.
+                      <strong className="text-amber-950">Batasan Tanggung Jawab:</strong> <span className="font-semibold text-slate-900">jualrugi.my.id</span> tidak bertanggung jawab dalam bentuk apa pun atas segala tindak penipuan, kerugian finansial, sengketa, atau cacat barang.
                     </p>
                   </div>
 
@@ -436,7 +436,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Footer Note */}
         <p className="text-[10px] text-slate-400 text-center mt-4">
-          Dengan melanjutkan, Anda menyetujui Ketentuan Layanan & Protokol Transaksi COD Aman JualRugi.id.
+          Dengan melanjutkan, Anda menyetujui Ketentuan Layanan & Protokol Transaksi COD Aman JualRugi.my.id.
         </p>
       </div>
 
@@ -593,7 +593,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {/* Disclaimer & Keamanan Google */}
             <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-400 leading-relaxed space-y-1">
               <p>
-                Dengan memilih akun, Anda menyetujui bahwa Google akan membagikan nama, email, dan foto profil Anda ke <strong>JualRugi.id</strong> serta menyetujui seluruh <strong>Syarat, Ketentuan & Disclaimer Transaksi</strong>.
+                Dengan memilih akun, Anda menyetujui bahwa Google akan membagikan nama, email, dan foto profil Anda ke <strong>JualRugi.my.id</strong> serta menyetujui seluruh <strong>Syarat, Ketentuan & Disclaimer Transaksi</strong>.
               </p>
             </div>
           </div>

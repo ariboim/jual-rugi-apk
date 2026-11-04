@@ -89,7 +89,7 @@ async function startServer() {
           approved: false,
           discount_percentage: calculatedDiscount,
           reason:
-            'Di JualRugi.id, diskon minimal untuk iklan Butuh Uang (BU) adalah 15% dari harga pasaran wajar.',
+            'Di JualRugi.my.id, diskon minimal untuk iklan Butuh Uang (BU) adalah 15% dari harga pasaran wajar.',
         });
       }
 
@@ -114,7 +114,7 @@ async function startServer() {
           }
 
           const promptText = `
-Tolong lakukan audit verifikasi listing barang bekas Jual Rugi / Butuh Uang (BU) di platform JualRugi.id.
+Tolong lakukan audit verifikasi listing barang bekas Jual Rugi / Butuh Uang (BU) di platform JualRugi.my.id.
 Detail Iklan:
 - Judul: ${title}
 - Kategori: ${category}
@@ -413,7 +413,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       const targetWebhook =
         activeWebhook || globalZapierWebhookUrl || process.env.MAKE_WELCOME_EMAIL_WEBHOOK_URL || DEFAULT_WEBHOOK_URL;
 
-      const welcomeSubject = `🎉 Selamat Datang di JualRugi.id, ${userName}! Panduan Transaksi COD Aman`;
+      const welcomeSubject = `🎉 Selamat Datang di JualRugi.my.id, ${userName}! Panduan Transaksi COD Aman`;
       const welcomeHtml = `
 <!DOCTYPE html>
 <html>
@@ -432,15 +432,15 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
   <div class="card">
     <div class="header">
       <span class="badge">Akun Berhasil Diaktifkan</span>
-      <h2 style="color: #0f172a; margin: 12px 0 4px;">Selamat Datang di JualRugi.id! 👋</h2>
+      <h2 style="color: #0f172a; margin: 12px 0 4px;">Selamat Datang di JualRugi.my.id! 👋</h2>
       <p style="color: #64748b; font-size: 14px; margin: 0;">Pasar Butuh Uang (BU) Diskon Ekstrim & Transaksi COD Terpercaya</p>
     </div>
 
     <p>Halo <strong>${userName}</strong>,</p>
-    <p>Terima kasih telah mendaftar di <strong>JualRugi.id</strong> menggunakan email <code>${email}</code>. Akun Anda telah aktif dan siap digunakan untuk mencari barang diskon sadis atau menjual barang BU Anda!</p>
+    <p>Terima kasih telah mendaftar di <strong>JualRugi.my.id</strong> menggunakan email <code>${email}</code>. Akun Anda telah aktif dan siap digunakan untuk mencari barang diskon sadis atau menjual barang BU Anda!</p>
 
     <div class="tip-box">
-      <strong>🛡️ 3 Tips Aman Transaksi di JualRugi.id:</strong>
+      <strong>🛡️ 3 Tips Aman Transaksi di JualRugi.my.id:</strong>
       <ul style="margin: 6px 0 0; padding-left: 18px;">
         <li>Selalu bertransaksi dengan <strong>COD (Cash On Delivery) tatap muka</strong> di tempat ramai (Mall, Minimarket, Stasiun).</li>
         <li><strong>Jangan pernah mentransfer DP / uang muka</strong> sebelum memegang dan menguji langsung fisik barang.</li>
@@ -451,17 +451,17 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     <p>🎁 <strong>Bonus Pendaftaran:</strong> Anda mendapatkan <strong>1 Slot Kuota Pasang Iklan Gratis</strong> untuk mulai memasang iklan barang butuh uang hari ini!</p>
 
     <div style="text-align: center; margin: 24px 0 12px;">
-      <a href="https://jualrugi.id/?action=post" class="button" style="display: inline-block; background: #0284c7; color: #ffffff !important; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(2, 132, 199, 0.3);">
+      <a href="https://jualrugi.my.id/?action=post" class="button" style="display: inline-block; background: #0284c7; color: #ffffff !important; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(2, 132, 199, 0.3);">
         🚀 Pasang Iklan Sekarang (Gunakan Kuota Gratis)
       </a>
     </div>
     <p style="text-align: center; font-size: 12px; color: #64748b; margin: 6px 0 20px;">
-      Direct Link Pasang Iklan: <a href="https://jualrugi.id/?action=post" style="color: #0284c7; font-weight: 600;">https://jualrugi.id/?action=post</a>
+      Direct Link Pasang Iklan: <a href="https://jualrugi.my.id/?action=post" style="color: #0284c7; font-weight: 600;">https://jualrugi.my.id/?action=post</a>
     </p>
 
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0 20px;" />
     <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
-      Email otomatis ini dikirimkan khusus untuk ${email} atas pendaftaran di JualRugi.id.<br/>
+      Email otomatis ini dikirimkan khusus untuk ${email} atas pendaftaran di JualRugi.my.id.<br/>
       Jika Anda tidak merasa mendaftar, Anda dapat mengabaikan email ini.
     </p>
   </div>
@@ -490,12 +490,14 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         SYSTEM_BREVO_KEY;
 
       const DEFAULT_BREVO_SENDER =
-        serverConfig.brevoSenderEmail ||
         process.env.BREVO_SENDER_EMAIL ||
-        'indodigital1978@gmail.com';
+        serverConfig.brevoSenderEmail ||
+        'admin@jualrugi.my.id';
+      const DEFAULT_BREVO_NAME =
+        process.env.BREVO_SENDER_NAME || 'JualRugi.my.id';
 
       // ========================================================================
-      // OPSI 1: BREVO API DIRECT INTEGRATION (300 Email Gratis/Hari)
+      // OPSI 1: BREVO API DIRECT INTEGRATION (Authenticated Domain: jualrugi.my.id)
       // ========================================================================
       if (activeBrevoKey && typeof activeBrevoKey === 'string' && activeBrevoKey.startsWith('xkeysib-')) {
         try {
@@ -520,11 +522,12 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
             console.warn('[Brevo Contacts Warning]:', contactErr);
           }
 
-          // B. Kirim Welcome Email Transactional via Brevo SMTP API dengan verified sender
-          let senderEmail = req.body.senderEmail || process.env.BREVO_SENDER_EMAIL || DEFAULT_BREVO_SENDER;
-          if (senderEmail === 'support@jualrugi.id' || senderEmail === 'bca.ccpl@gmail.com') {
+          // B. Kirim Welcome Email Transactional via Brevo SMTP API dengan branded sender
+          let senderEmail = req.body.senderEmail || DEFAULT_BREVO_SENDER;
+          if (!senderEmail || senderEmail.includes('gmail.com') || senderEmail.startsWith('support@')) {
             senderEmail = DEFAULT_BREVO_SENDER;
           }
+          const senderName = req.body.senderName || DEFAULT_BREVO_NAME;
 
           const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
@@ -534,7 +537,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
             },
             body: JSON.stringify({
               sender: {
-                name: 'JualRugi.id',
+                name: senderName,
                 email: senderEmail,
               },
               to: [{ email, name: userName }],
@@ -584,8 +587,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
               phone: userPhone,
               subject: welcomeSubject,
               htmlContent: welcomeHtml,
-              appUrl: 'https://jualrugi.id',
-              postAdUrl: 'https://jualrugi.id/?action=post',
+              appUrl: 'https://jualrugi.my.id',
+              postAdUrl: 'https://jualrugi.my.id/?action=post',
               bonusQuota: '1 Slot Iklan Gratis',
               timestamp: new Date().toISOString(),
             }),
@@ -744,7 +747,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
   app.get('/api/health', (req, res) => {
     res.json({
       status: 'ok',
-      service: 'JualRugi.id API & Mayar Payment Service',
+      service: 'JualRugi.my.id API & Mayar Payment Service',
       timestamp: new Date().toISOString(),
     });
   });
@@ -770,7 +773,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
   }
 
   httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 JualRugi.id server running at http://0.0.0.0:${PORT}`);
+    console.log(`🚀 JualRugi.my.id server running at http://0.0.0.0:${PORT}`);
   });
 }
 

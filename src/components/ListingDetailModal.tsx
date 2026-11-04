@@ -110,11 +110,15 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   // Construct URL deep link for this listing
   const getListingShareUrl = () => {
     try {
-      const url = new URL(window.location.href);
-      url.searchParams.set('deal', listing.id);
-      return url.toString();
+      const isCustomDomain =
+        window.location.hostname === 'jualrugi.my.id' ||
+        window.location.hostname.endsWith('jualrugi.my.id');
+      const baseDomain = isCustomDomain
+        ? window.location.origin
+        : 'https://jualrugi.my.id';
+      return `${baseDomain}/?deal=${encodeURIComponent(listing.id)}`;
     } catch {
-      return `${window.location.origin}/?deal=${encodeURIComponent(listing.id)}`;
+      return `https://jualrugi.my.id/?deal=${encodeURIComponent(listing.id)}`;
     }
   };
 
@@ -140,7 +144,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
       `👉 *Cek foto fisik & nego langsung dengan penjual:*`,
       shareUrl,
       ``,
-      `_Aman COD: Cek barang sepuasnya tanpa DP di jualrugi.id_`,
+      `_Aman COD: Cek barang sepuasnya tanpa DP di jualrugi.my.id_`,
     ];
 
     const message = lines.filter(Boolean).join('\n');
@@ -553,7 +557,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
           <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
             <div className="flex items-center gap-1.5 font-bold text-amber-900">
               <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
-              Protokol Aman COD JualRugi.id:
+              Protokol Aman COD JualRugi.my.id:
             </div>
             <p className="text-slate-700 text-[11px] leading-relaxed">
               1. Cek fisik & tes fungsi menyeluruh sebelum bayar.<br />

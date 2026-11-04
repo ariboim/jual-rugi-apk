@@ -4,7 +4,7 @@ import { ArrowRight, Sparkles, Tag, ExternalLink } from 'lucide-react';
 interface InFeedBannerProps {
   /**
    * Callback saat banner diklik.
-   * Di dalam SPA jualrugi.id, ini langsung memfilter feed ke kategori Handphone/Smartphone.
+   * Di dalam SPA jualrugi.my.id, ini langsung memfilter feed ke kategori Handphone/Smartphone.
    */
   onClick?: () => void;
   /**
@@ -144,7 +144,7 @@ export const InFeedBanner: React.FC<InFeedBannerProps> = ({
         <div className="relative w-full aspect-[3.2/1] sm:aspect-[3.6/1] md:aspect-[3.8/1] overflow-hidden bg-orange-600">
           <img
             src={imageUrl}
-            alt="Handphone Impresif, Harga Gila-Gilaan! - JualRugi.id"
+            alt="Handphone Impresif, Harga Gila-Gilaan! - JualRugi.my.id"
             className="w-full h-full object-cover object-center group-hover:scale-[1.015] transition-transform duration-500 ease-out"
             loading="lazy"
             onError={(e) => {

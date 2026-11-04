@@ -73,7 +73,7 @@ TO anon, authenticated
 USING (true);`;
 
   const fullGuideText = `========================================================
-PANDUAN LENGKAP SETUP DATABASE SUPABASE - JUALRUGI.ID
+PANDUAN LENGKAP SETUP DATABASE SUPABASE - JUALRUGI.MY.ID
 ========================================================
 
 LANGKAH 1: DAFTAR AKUN SUPABASE (GRATIS)
@@ -104,7 +104,7 @@ LANGKAH 3: AMBIL URL & ANON KEY
    - Project API keys (anon public) (kunci berawalan eyJhbGciOi...)
 
 LANGKAH 4: HUBUNGKAN KE APLIKASI
-1. Buka aplikasi jualrugi.id > Tab "Akun Saya".
+1. Buka aplikasi jualrugi.my.id > Tab "Akun Saya".
 2. Klik "Koneksi Supabase".
 3. Paste Project URL dan Anon Key, lalu klik "Simpan & Uji Koneksi".
 4. Status akan berubah menjadi "🟢 Terhubung"!
@@ -331,7 +331,7 @@ LANGKAH 5: INTEGRASI ZAPIER & MAYAR
               <span className="w-6 h-6 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center text-xs">
                 4
               </span>
-              <h3>Hubungkan ke Aplikasi JualRugi.id</h3>
+              <h3>Hubungkan ke Aplikasi JualRugi.my.id</h3>
             </div>
             <ol className="list-decimal list-inside space-y-1.5 text-slate-600 pl-1">
               <li>
@@ -372,7 +372,7 @@ LANGKAH 5: INTEGRASI ZAPIER & MAYAR
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Dokumen panduan resmi sistem JualRugi.id</span>
+            <span>Dokumen panduan resmi sistem JualRugi.my.id</span>
           </div>
           <button
             type="button"

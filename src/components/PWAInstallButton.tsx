@@ -71,7 +71,7 @@ export const PWAInstallButton: React.FC = () => {
               <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-sky-800 text-sky-200">app-debug.apk</span>
             </h4>
             <p className="mt-1 text-slate-300 leading-relaxed">
-              Jika file sudah selesai terunduh di bilah notifikasi ponsel Anda, ketuk file tersebut lalu pilih <strong>Install</strong> untuk memasang aplikasi JualRugi.id di layar HP Anda.
+              Jika file sudah selesai terunduh di bilah notifikasi ponsel Anda, ketuk file tersebut lalu pilih <strong>Install</strong> untuk memasang aplikasi JualRugi.my.id di layar HP Anda.
             </p>
             <div className="mt-2.5 flex items-center gap-3">
               <a
@@ -102,7 +102,7 @@ export const PWAInstallButton: React.FC = () => {
               <div className="flex items-center gap-2">
                 <img
                   src="/assets/aistudio/logo_transparent.png"
-                  alt="JualRugi.id"
+                  alt="JualRugi.my.id"
                   className="h-7 w-auto object-contain"
                 />
                 <div>
