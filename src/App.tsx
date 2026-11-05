@@ -57,6 +57,7 @@ import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { PanduanPDFModal } from './components/PanduanPDFModal';
 import { LiveActivityTicker } from './components/LiveActivityTicker';
 import { WelcomeEmailSetupModal } from './components/WelcomeEmailSetupModal';
+import { AdminDashboardModal } from './components/AdminDashboardModal';
 import {
   fetchListingsFromSupabase,
   saveListingToSupabase,
@@ -230,6 +231,17 @@ export default function App() {
 
         if (isPostAction) {
           setIsPostModalOpen(true);
+        }
+
+        // Check direct link ke dashboard admin (?admin=true, #admin, /admin)
+        const isAdminAction =
+          params.get('admin') === 'true' ||
+          params.has('admin') ||
+          window.location.hash === '#admin' ||
+          path.includes('/admin');
+
+        if (isAdminAction) {
+          setIsAdminModalOpen(true);
         }
 
         const dealId = params.get('deal') || window.location.hash.replace(/^#deal-/, '');
@@ -414,6 +426,28 @@ export default function App() {
   const [isWelcomeEmailModalOpen, setIsWelcomeEmailModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return (
+        params.get('admin') === 'true' ||
+        params.has('admin') ||
+        window.location.hash === '#admin' ||
+        window.location.pathname.toLowerCase().includes('/admin')
+      );
+    } catch {
+      return false;
+    }
+  });
+
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('jualrugi_blocked_users');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('jualrugi_is_logged_in');
@@ -809,6 +843,67 @@ export default function App() {
     showToast('Iklan berhasil dihapus.');
   };
 
+  const handleToggleBlockUser = (userId: string, isBlocked: boolean) => {
+    setBlockedUserIds((prev) => {
+      const next = isBlocked
+        ? Array.from(new Set([...prev, userId]))
+        : prev.filter((id) => id !== userId);
+      try {
+        localStorage.setItem('jualrugi_blocked_users', JSON.stringify(next));
+      } catch (e) {
+        console.warn('Gagal menyimpan status blocked user:', e);
+      }
+      return next;
+    });
+  };
+
+  const handleAdminToggleSundul = (listingId: string, currentStatus: boolean) => {
+    const now = new Date().toISOString();
+    const willActivate = !currentStatus;
+
+    setListings((prev) => {
+      const idx = prev.findIndex((l) => l.id === listingId);
+      if (idx === -1) return prev;
+      const target = { ...prev[idx] };
+      if (willActivate) {
+        target.sundulAt = now;
+        target.createdAt = now;
+        const remaining = prev.filter((l) => l.id !== listingId);
+        return [target, ...remaining];
+      } else {
+        delete target.sundulAt;
+        return prev.map((l) => (l.id === listingId ? target : l));
+      }
+    });
+
+    updateListingInSupabase(listingId, {
+      sundulAt: willActivate ? now : undefined,
+      createdAt: willActivate ? now : undefined,
+    });
+  };
+
+  const handleAdminToggleSuperBU = (listingId: string, currentStatus: boolean) => {
+    const willActivate = !currentStatus;
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    setListings((prev) =>
+      prev.map((l) => {
+        if (l.id === listingId) {
+          return {
+            ...l,
+            isSuperBU: willActivate,
+            superBUExpiresAt: willActivate ? expiresAt : undefined,
+          };
+        }
+        return l;
+      })
+    );
+
+    updateListingInSupabase(listingId, {
+      isSuperBU: willActivate,
+    });
+  };
+
   // Handler perpanjang masa tayang iklan (Ad Expiry Extension: +30 Hari)
   const handleExtendListing = (listing: Listing) => {
     const now = new Date().toISOString();
@@ -1013,6 +1108,7 @@ export default function App() {
         isLoggedIn={isLoggedIn}
         onLogin={handleOpenLogin}
         onLogout={handlePromptLogout}
+        onOpenAdmin={() => setIsAdminModalOpen(true)}
       />
 
       {/* Active Moderation Tracker Banner (2-3 Menit Jeda Moderasi) */}
@@ -1608,6 +1704,7 @@ export default function App() {
             onOpenPanduanModal={() => setIsPanduanModalOpen(true)}
             onOpenWelcomeEmailSetup={() => setIsWelcomeEmailModalOpen(true)}
             onEditListing={handleOpenEditListing}
+            onOpenAdmin={() => setIsAdminModalOpen(true)}
           />
         )}
       </main>
@@ -1640,6 +1737,7 @@ export default function App() {
           onExtendListing={handleExtendListing}
           onMarkAsSold={handleMarkAsSold}
           onEditListing={handleOpenEditListing}
+          onUpgradeMayar={handleOpenQRIS}
         />
       )}
 
@@ -1669,6 +1767,7 @@ export default function App() {
         <PostListingModal
           onClose={() => setIsPostModalOpen(false)}
           currentUser={currentUser}
+          isBlocked={blockedUserIds.includes(currentUser.id)}
           onListingApproved={handleListingApproved}
           onOpenMayarPromotion={(pkg) => {
             setQrisListing(null);
@@ -1708,6 +1807,22 @@ export default function App() {
           onSuccess={handleQRISSuccess}
           userId={currentUser.id}
           userEmail={currentUser.email}
+        />
+      )}
+
+      {/* DASHBOARD KONTROL ADMIN TERPROTEKSI */}
+      {isAdminModalOpen && (
+        <AdminDashboardModal
+          isOpen={isAdminModalOpen}
+          onClose={() => setIsAdminModalOpen(false)}
+          listings={listings}
+          onToggleSundul={handleAdminToggleSundul}
+          onToggleSuperBU={handleAdminToggleSuperBU}
+          onDeleteListing={handleDeleteListing}
+          users={[BUYER_USER, SELLER_USER, currentUser]}
+          blockedUserIds={blockedUserIds}
+          onToggleBlockUser={handleToggleBlockUser}
+          onViewListingDetail={(listing) => setSelectedListing(listing)}
         />
       )}
 

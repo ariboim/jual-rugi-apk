@@ -12,6 +12,7 @@ interface NavbarProps {
   isLoggedIn?: boolean;
   onLogin?: () => void;
   onLogout?: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -22,6 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isLoggedIn = false,
   onLogin,
   onLogout,
+  onOpenAdmin,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-sky-100 shadow-xs">
@@ -103,6 +105,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </div>
           </button>
+
+          {/* Admin Dashboard Access */}
+          {onOpenAdmin && (
+            <button
+              onClick={onOpenAdmin}
+              title="Buka Dashboard Admin (Manajemen Iklan, Mayar & User)"
+              aria-label="Dashboard Admin"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-300 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition cursor-pointer active:scale-95 shadow-xs"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+              <span className="hidden sm:inline">Admin</span>
+            </button>
+          )}
 
           {/* Tombol Logout (Jika Login) / Tombol Masuk (Jika Logout) */}
           {isLoggedIn ? (

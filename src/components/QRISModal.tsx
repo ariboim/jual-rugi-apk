@@ -1,19 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   X,
-  Clock,
+  ExternalLink,
+  MessageCircle,
+  ShieldCheck,
   CheckCircle2,
   Flame,
   ArrowUp,
-  ExternalLink,
-  ShieldCheck,
-  CreditCard,
-  QrCode,
+  Receipt,
   Copy,
   Check,
+  CreditCard,
+  QrCode,
+  Sparkles,
 } from 'lucide-react';
 import { Listing, MonetizationPackage } from '../types';
-import { MAYAR_PRODUCTS, buildMayarCheckoutUrl } from '../data/mayarConfig';
+import {
+  MAYAR_SUNDUL_URL,
+  MAYAR_BU_PRIORITAS_URL,
+  WA_ADMIN_PHONE,
+  buildWhatsAppConfirmationUrl,
+  generateWhatsAppMessage,
+} from '../data/mayarConfig';
 
 export type MonetizationType = 'sundul' | 'superbu' | 'prioritas_bu';
 
@@ -29,243 +37,406 @@ interface QRISModalProps {
 export const QRISModal: React.FC<QRISModalProps> = ({
   onClose,
   listing,
-  type,
+  type: initialType,
   onSuccess,
-  userId = 'user-current',
-  userEmail = 'member@jualrugi.my.id',
 }) => {
-  const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 mins
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isPaid, setIsPaid] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-
-  const normalizedType: MonetizationPackage = type === 'sundul' ? 'sundul' : 'prioritas_bu';
-  const productConfig = MAYAR_PRODUCTS[normalizedType];
-  const price = productConfig.price; // 25000 or 75000
-  const title = productConfig.name;
-
-  const mayarUrl = buildMayarCheckoutUrl(
-    normalizedType,
-    userId,
-    listing?.id,
-    userEmail
+  // Allow switching between Sundul and BU Prioritas inside the modal
+  const [selectedPackage, setSelectedPackage] = useState<'sundul' | 'prioritas_bu'>(
+    initialType === 'sundul' ? 'sundul' : 'prioritas_bu'
   );
+  const [hasClickedPay, setHasClickedPay] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [copiedWA, setCopiedWA] = useState(false);
+  const [copiedTxId, setCopiedTxId] = useState(false);
+  const [isSimulatingInstantSuccess, setIsSimulatingInstantSuccess] = useState(false);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // Listing data attributes
+  const idIklan = listing?.id || `ad-${Date.now()}`;
+  const judulIklan = listing?.title || 'Iklan JualRugi (Upgrade Akun)';
+  const namaPengiklan = listing?.seller?.name || 'Pengiklan JualRugi';
 
-  const formatTimer = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  const isSundul = selectedPackage === 'sundul';
+  const namaPaket = isSundul ? 'Sundul Iklan' : 'Pasang BU Prioritas';
+  const nominal = isSundul ? 25000 : 75000;
+  const payUrl = isSundul ? MAYAR_SUNDUL_URL : MAYAR_BU_PRIORITAS_URL;
+
+  // Generate WhatsApp confirmation URL with exact injected parameters
+  const waUrl = buildWhatsAppConfirmationUrl({
+    id_iklan: idIklan,
+    nama_paket: namaPaket,
+    nominal: nominal,
+    judul_iklan: judulIklan,
+    nama_pengiklan: namaPengiklan,
+  });
+
+  const rawWaMessage = generateWhatsAppMessage({
+    id_iklan: idIklan,
+    nama_paket: namaPaket,
+    nominal: nominal,
+    judul_iklan: judulIklan,
+    nama_pengiklan: namaPengiklan,
+  });
+
+  // Dummy Transaction ID for Mayar receipt
+  const dummyTxId = `MYR-TX-${idIklan.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase() || '789123'}`;
+
+  const handleOpenPaymentLink = (url: string) => {
+    setHasClickedPay(true);
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const handleSimulatePayment = () => {
-    setIsProcessing(true);
+  const handleCopyWAMessage = () => {
+    navigator.clipboard?.writeText(rawWaMessage);
+    setCopiedWA(true);
+    setTimeout(() => setCopiedWA(false), 2500);
+  };
+
+  const handleSimulateInstant = () => {
+    setIsSimulatingInstantSuccess(true);
     setTimeout(() => {
-      setIsProcessing(false);
-      setIsPaid(true);
-      setTimeout(() => {
-        onSuccess(listing ? listing.id : 'general-quota', type);
-        onClose();
-      }, 1500);
-    }, 900);
-  };
-
-  const handleCopyPaymentLink = () => {
-    navigator.clipboard?.writeText(mayarUrl);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
+      onSuccess(listing ? listing.id : 'general-quota', selectedPackage);
+      onClose();
+    }, 1200);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-sky-950/40 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="relative w-full max-w-sm rounded-3xl bg-white border border-sky-100 shadow-2xl overflow-hidden flex flex-col text-slate-800 my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+      <div className="relative w-full max-w-lg rounded-3xl bg-white border border-sky-100 shadow-2xl overflow-hidden flex flex-col text-slate-800 my-auto animate-scale-up">
         {/* Header */}
-        <div className="px-5 py-3.5 bg-white border-b border-sky-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black px-2 py-0.5 rounded-sm bg-sky-500 text-white">
-              MAYAR
+        <div className="px-5 py-4 bg-gradient-to-r from-sky-600 to-sky-700 text-white flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-white text-sky-700 tracking-wider shadow-xs">
+              MAYAR.ID
             </span>
-            <span className="text-xs font-bold text-sky-950">Payment Gateway</span>
+            <div>
+              <h3 className="text-sm font-bold leading-tight">Upgrade Promosi Iklan</h3>
+              <p className="text-[11px] text-sky-100">Gateway Resmi Mayar & Konfirmasi WhatsApp</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-sky-50 cursor-pointer"
+            className="p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/15 transition cursor-pointer"
+            aria-label="Tutup Modal"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-5 text-center space-y-4 bg-sky-50/50">
+        <div className="p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+          {/* Listing Brief Badge */}
+          <div className="p-3 rounded-2xl bg-sky-50/80 border border-sky-100 flex items-center justify-between gap-3 text-xs">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-bold text-sky-600 block uppercase tracking-wider">
+                Target Iklan (ID: <span className="font-mono text-slate-800">{idIklan}</span>)
+              </span>
+              <p className="font-bold text-slate-900 truncate mt-0.5">{judulIklan}</p>
+              <p className="text-[11px] text-slate-500 truncate">Pengiklan: {namaPengiklan}</p>
+            </div>
+            {listing?.imageUrl && (
+              <img
+                src={listing.imageUrl}
+                alt={judulIklan}
+                className="w-12 h-12 rounded-xl object-cover border border-sky-200 shrink-0"
+              />
+            )}
+          </div>
+
+          {/* 1. Pemilihan Paket (2 Opsi Sesuai Instruksi) */}
           <div>
-            <div className="flex items-center justify-center gap-1.5 text-xs font-black text-sky-900 mb-1">
-              {normalizedType === 'sundul' ? (
-                <ArrowUp className="w-4 h-4 text-sky-600 stroke-[2.5]" />
-              ) : (
-                <Flame className="w-4 h-4 text-amber-500 fill-amber-500 animate-pulse" />
-              )}
-              <span>{title}</span>
-            </div>
-
-            {listing ? (
-              <p className="text-[11px] text-slate-500 truncate max-w-[280px] mx-auto font-medium">
-                Iklan: {listing.title}
-              </p>
-            ) : (
-              <p className="text-[11px] text-slate-500 font-medium">
-                Membuka kuota posting +1 slot iklan baru
-              </p>
-            )}
-
-            <div className="mt-2 text-2xl font-black text-sky-950">
-              Rp {price.toLocaleString('id-ID')}
-            </div>
-
-            {/* Quota bonus pill */}
-            <div className="inline-flex items-center gap-1 mt-1 text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              <span>Otomatis Tambah Kuota Posting +1 Slot</span>
-            </div>
-
-            <div className="text-[10px] text-slate-400 mt-1">
-              Gateway: Mayar.id • QRIS / VA BCA / Mandiri / GoPay / OVO
-            </div>
-          </div>
-
-          {/* QR Code Container with Sky Blue Pattern */}
-          <div className="p-4 bg-white rounded-2xl mx-auto w-56 aspect-square flex flex-col items-center justify-center shadow-sm relative border-2 border-sky-200">
-            {isPaid ? (
-              <div className="text-center text-slate-900 animate-scale-up">
-                <CheckCircle2 className="w-16 h-16 text-emerald-600 mx-auto" />
-                <h4 className="font-black text-sm mt-2 text-emerald-800">
-                  Pembayaran Terverifikasi!
-                </h4>
-                <p className="text-[11px] font-bold text-slate-700 mt-1">
-                  🎉 Kuota +1 slot berhasil ditambahkan ke akun Anda!
-                </p>
-                {normalizedType === 'sundul' ? (
-                  <p className="text-[10px] text-sky-700 font-semibold mt-0.5">
-                    🚀 Iklan disundul langsung ke urutan #1 teratas feed!
-                  </p>
-                ) : (
-                  <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
-                    🔥 Highlight emas & lencana PALING BU aktif 24 jam!
-                  </p>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="w-full h-full flex flex-col items-center justify-between p-1">
-                  <div className="w-full flex items-center justify-between px-1">
-                    <span className="text-[9px] font-black tracking-widest text-sky-800">
-                      QRIS MAYAR
+            <label className="block text-xs font-bold text-slate-700 mb-2">
+              Pilih Paket Upgrade Mayar:
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Opsi 1: Sundul Iklan */}
+              <div
+                onClick={() => setSelectedPackage('sundul')}
+                className={`p-3.5 rounded-2xl border-2 transition cursor-pointer flex flex-col justify-between ${
+                  selectedPackage === 'sundul'
+                    ? 'border-sky-500 bg-sky-50/60 shadow-sm'
+                    : 'border-slate-200 hover:border-sky-300 bg-white'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-black text-sky-700">
+                      <ArrowUp className="w-3.5 h-3.5 text-sky-600 stroke-[2.5]" />
+                      Sundul Iklan
                     </span>
-                    <span className="text-[8px] font-bold text-sky-600">GPN</span>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                      Top #1 Feed
+                    </span>
                   </div>
-
-                  {/* Sky Blue QR Matrix */}
-                  <svg
-                    viewBox="0 0 100 100"
-                    className="w-38 h-38"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <rect x="5" y="5" width="28" height="28" rx="4" fill="#0284c7" />
-                    <rect x="9" y="9" width="20" height="20" rx="2" fill="#ffffff" />
-                    <rect x="13" y="13" width="12" height="12" rx="2" fill="#0284c7" />
-
-                    <rect x="67" y="5" width="28" height="28" rx="4" fill="#0284c7" />
-                    <rect x="71" y="9" width="20" height="20" rx="2" fill="#ffffff" />
-                    <rect x="75" y="13" width="12" height="12" rx="2" fill="#0284c7" />
-
-                    <rect x="5" y="67" width="28" height="28" rx="4" fill="#0284c7" />
-                    <rect x="9" y="71" width="20" height="20" rx="2" fill="#ffffff" />
-                    <rect x="13" y="75" width="12" height="12" rx="2" fill="#0284c7" />
-
-                    <rect x="38" y="8" width="6" height="6" fill="#0284c7" />
-                    <rect x="48" y="14" width="6" height="6" fill="#0284c7" />
-                    <rect x="38" y="24" width="6" height="6" fill="#0284c7" />
-                    <rect x="56" y="24" width="6" height="6" fill="#0284c7" />
-                    <rect x="8" y="38" width="6" height="6" fill="#0284c7" />
-                    <rect x="18" y="48" width="6" height="6" fill="#0284c7" />
-                    <rect x="28" y="38" width="6" height="6" fill="#0284c7" />
-                    <rect x="38" y="38" width="6" height="6" fill="#0284c7" />
-                    <rect x="48" y="44" width="6" height="6" fill="#0284c7" />
-                    <rect x="58" y="38" width="6" height="6" fill="#0284c7" />
-                    <rect x="68" y="44" width="6" height="6" fill="#0284c7" />
-                    <rect x="78" y="38" width="6" height="6" fill="#0284c7" />
-                    <rect x="88" y="44" width="6" height="6" fill="#0284c7" />
-                    <rect x="44" y="58" width="6" height="6" fill="#0284c7" />
-                    <rect x="54" y="68" width="6" height="6" fill="#0284c7" />
-                    <rect x="64" y="58" width="6" height="6" fill="#0284c7" />
-                    <rect x="74" y="68" width="6" height="6" fill="#0284c7" />
-                    <rect x="84" y="58" width="6" height="6" fill="#0284c7" />
-                    <rect x="38" y="78" width="6" height="6" fill="#0284c7" />
-                    <rect x="48" y="84" width="6" height="6" fill="#0284c7" />
-                    <rect x="60" y="78" width="6" height="6" fill="#0284c7" />
-                    <rect x="78" y="84" width="6" height="6" fill="#0284c7" />
-
-                    <circle cx="50" cy="50" r="10" fill="#ffffff" />
-                    <image
-                      href="/assets/aistudio/logo_icon_transparent.png"
-                      x="42"
-                      y="42"
-                      width="16"
-                      height="16"
-                    />
-                  </svg>
-
-                  <div className="text-[8px] text-slate-500 font-mono">
-                    Scan via BCA, Mandiri, GoPay, OVO, Dana
-                  </div>
+                  <div className="text-lg font-black text-slate-900">Rp 25.000</div>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                    Naik langsung ke peringkat #1 teratas beranda seketika & views melesat.
+                  </p>
                 </div>
-              </>
-            )}
+
+                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-emerald-700">
+                    +1 Kuota Posting Baru
+                  </span>
+                  <input
+                    type="radio"
+                    name="package-select"
+                    checked={selectedPackage === 'sundul'}
+                    onChange={() => setSelectedPackage('sundul')}
+                    className="accent-sky-600 w-4 h-4 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Opsi 2: Pasang BU Prioritas */}
+              <div
+                onClick={() => setSelectedPackage('prioritas_bu')}
+                className={`p-3.5 rounded-2xl border-2 transition cursor-pointer flex flex-col justify-between ${
+                  selectedPackage === 'prioritas_bu'
+                    ? 'border-amber-500 bg-amber-50/50 shadow-sm ring-1 ring-amber-400'
+                    : 'border-slate-200 hover:border-amber-300 bg-white'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-black text-amber-700">
+                      <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500 animate-pulse" />
+                      BU Prioritas
+                    </span>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                      24 Jam Eksklusif
+                    </span>
+                  </div>
+                  <div className="text-lg font-black text-amber-900">Rp 75.000</div>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                    Badge kuning emas menyala & prioritas terdepan radar pembeli siap bayar.
+                  </p>
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-emerald-700">
+                    +1 Kuota Posting Baru
+                  </span>
+                  <input
+                    type="radio"
+                    name="package-select"
+                    checked={selectedPackage === 'prioritas_bu'}
+                    onChange={() => setSelectedPackage('prioritas_bu')}
+                    className="accent-amber-600 w-4 h-4 cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Countdown & Instructions */}
-          {!isPaid && (
-            <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
-              <Clock className="w-3.5 h-3.5 text-sky-600" />
-              <span>Selesaikan dalam: </span>
-              <strong className="text-sky-700 font-mono">{formatTimer(timeLeft)}</strong>
-            </div>
-          )}
+          {/* Action Buttons: Buka Link Mayar Resmi */}
+          <div className="space-y-2.5 pt-1">
+            <button
+              onClick={() => handleOpenPaymentLink(payUrl)}
+              className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm text-white shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-98 ${
+                isSundul
+                  ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-500/25'
+                  : 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/25'
+              }`}
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>
+                {isSundul
+                  ? 'Bayar Sundul Iklan - Rp 25.000 via Mayar'
+                  : 'Pasang BU Prioritas - Rp 75.000 via Mayar'}
+              </span>
+              <ExternalLink className="w-3.5 h-3.5 text-white/80" />
+            </button>
 
-          {/* Mayar Link Button & Instant Verification Simulator */}
-          {!isPaid && (
-            <div className="space-y-2">
-              <button
-                onClick={handleSimulatePayment}
-                disabled={isProcessing}
-                className="w-full py-3 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs shadow-md shadow-sky-500/25 cursor-pointer active:scale-98 transition flex items-center justify-center gap-2"
-              >
-                <CheckCircle2 className="w-4 h-4 text-white" />
-                <span>
-                  {isProcessing
-                    ? 'Memverifikasi Webhook Mayar...'
-                    : `Simulasi Bayar Rp ${price.toLocaleString('id-ID')} via Mayar`}
-                </span>
-              </button>
+            <p className="text-[10.5px] text-center text-slate-500">
+              Link resmi: <span className="font-mono text-slate-700 font-semibold">{payUrl}</span>
+            </p>
+          </div>
 
-              <button
-                type="button"
-                onClick={handleCopyPaymentLink}
-                className="w-full py-2 rounded-xl border border-sky-200 hover:bg-white text-sky-900 font-semibold text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer"
-              >
-                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedLink ? 'Link Pembayaran Mayar Disalin!' : 'Salin Tautan Mayar Payment Link'}</span>
-              </button>
+          {/* 2. Tombol Konfirmasi Pembayaran (CTA WA Otomatis) */}
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-3">
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <MessageCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-emerald-950">
+                  Konfirmasi Pembayaran via WhatsApp
+                </h4>
+                <p className="text-[11px] text-emerald-800 leading-relaxed mt-0.5">
+                  Setelah bayar di Mayar, klik tombol di bawah untuk kirim bukti ke WhatsApp Admin ({WA_ADMIN_PHONE}). ID Iklan otomatis tersemat!
+                </p>
+              </div>
             </div>
-          )}
+
+            <a
+              href={waUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2 cursor-pointer block text-center"
+            >
+              <MessageCircle className="w-4 h-4 fill-white" />
+              <span>Konfirmasi Pembayaran via WhatsApp</span>
+            </a>
+
+            {/* WA Message Preview Accordion */}
+            <div className="bg-white p-2.5 rounded-xl border border-emerald-200/80 text-[11px]">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-slate-600 text-[10.5px]">Format Pesan Terkirim:</span>
+                <button
+                  onClick={handleCopyWAMessage}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                >
+                  {copiedWA ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedWA ? 'Tersalin' : 'Salin Pesan'}</span>
+                </button>
+              </div>
+              <pre className="text-[10px] text-slate-700 whitespace-pre-wrap font-sans bg-slate-50 p-2 rounded-lg border border-slate-100">
+                {rawWaMessage}
+              </pre>
+            </div>
+          </div>
+
+          {/* 3. Demo / Simulasi Interaktif Bukti Transfer Mayar */}
+          <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center gap-2">
+            <button
+              onClick={() => setShowReceiptModal(true)}
+              className="w-full sm:flex-1 py-2 px-3 rounded-xl border border-sky-300 hover:bg-sky-50 text-sky-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+            >
+              <Receipt className="w-3.5 h-3.5 text-sky-600" />
+              <span>Lihat Bukti Transfer Mayar (Demo)</span>
+            </button>
+
+            <button
+              onClick={handleSimulateInstant}
+              disabled={isSimulatingInstantSuccess}
+              className="w-full sm:flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>
+                {isSimulatingInstantSuccess
+                  ? 'Mengaktifkan...'
+                  : 'Simulasi Instan (Tanpa Keluar)'}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* DUMMY MAYAR RECEIPT MODAL */}
+      {showReceiptModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="relative w-full max-w-sm rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden text-slate-900">
+            {/* Struk Header */}
+            <div className="p-4 bg-sky-600 text-white text-center relative">
+              <button
+                onClick={() => setShowReceiptModal(false)}
+                className="absolute top-3 right-3 p-1 rounded-full text-white/80 hover:text-white hover:bg-white/20 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white text-sky-700 text-[10px] font-black uppercase mb-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                Bukti Pembayaran Mayar.id
+              </div>
+              <h4 className="text-sm font-black">TRANSAKSI BERHASIL (LUNAS)</h4>
+              <p className="text-[10px] text-sky-100 mt-0.5">
+                {new Date().toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}{' '}
+                WIB
+              </p>
+            </div>
+
+            {/* Receipt Details Body */}
+            <div className="p-5 space-y-3.5 text-xs bg-slate-50/60 font-sans">
+              <div className="text-center py-2 border-b border-dashed border-slate-300">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">
+                  Total Pembayaran
+                </span>
+                <span className="text-2xl font-black text-slate-900">
+                  Rp {nominal.toLocaleString('id-ID')}
+                </span>
+                <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                  <CheckCircle2 className="w-3 h-3" /> Status: Lunas / Paid
+                </div>
+              </div>
+
+              <div className="space-y-2 text-[11px] divide-y divide-slate-200/70">
+                <div className="flex justify-between pt-1">
+                  <span className="text-slate-500">ID Transaksi Mayar</span>
+                  <div className="flex items-center gap-1">
+                    <span className="font-mono font-bold text-slate-800">{dummyTxId}</span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard?.writeText(dummyTxId);
+                        setCopiedTxId(true);
+                        setTimeout(() => setCopiedTxId(false), 2000);
+                      }}
+                      className="text-sky-600 hover:text-sky-800 cursor-pointer"
+                    >
+                      {copiedTxId ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between pt-1.5">
+                  <span className="text-slate-500">Metode Bayar</span>
+                  <span className="font-bold text-slate-800">QRIS / Instant Mayar</span>
+                </div>
+
+                <div className="flex justify-between pt-1.5">
+                  <span className="text-slate-500">Paket</span>
+                  <span className="font-bold text-slate-800">{namaPaket}</span>
+                </div>
+
+                <div className="flex justify-between pt-1.5">
+                  <span className="text-slate-500">ID Iklan</span>
+                  <span className="font-mono font-bold text-sky-700">{idIklan}</span>
+                </div>
+
+                <div className="flex justify-between pt-1.5">
+                  <span className="text-slate-500">Judul Iklan</span>
+                  <span className="font-bold text-slate-800 max-w-[170px] truncate text-right">
+                    {judulIklan}
+                  </span>
+                </div>
+
+                <div className="flex justify-between pt-1.5">
+                  <span className="text-slate-500">Pengiklan</span>
+                  <span className="font-bold text-slate-800">{namaPengiklan}</span>
+                </div>
+              </div>
+
+              {/* Receipt Footer CTA */}
+              <div className="pt-2 space-y-2">
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition text-center cursor-pointer"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 fill-white" />
+                  <span>Kirim Struk Ini ke WhatsApp Admin</span>
+                </a>
+
+                <button
+                  onClick={() => {
+                    setShowReceiptModal(false);
+                    handleSimulateInstant();
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs flex items-center justify-center gap-1 transition cursor-pointer"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Konfirmasi & Terapkan Status Iklan</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

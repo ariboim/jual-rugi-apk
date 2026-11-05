@@ -10,9 +10,11 @@ import {
   Lock,
   Loader2,
   AlertCircle,
+  Zap,
 } from 'lucide-react';
 import { Category, CATEGORIES, Listing, UserProfile, ProductPhoto, MonetizationPackage } from '../types';
 import { DEMO_PRESET_IMAGES } from '../data/initialData';
+import { ADMIN_TEST_PRESETS, AdminTestPreset } from '../data/adminTestPresets';
 import { PhotoUploadManager } from './gallery/PhotoUploadManager';
 import { QuotaExceededModal } from './QuotaExceededModal';
 import { CameraGalleryPermissionModal } from './CameraGalleryPermissionModal';
@@ -25,6 +27,8 @@ interface PostListingModalProps {
   onListingApproved: (newListing: Listing) => void;
   onOpenMayarPromotion?: (packageType: MonetizationPackage) => void;
   onUpdatePermissions?: (perms: { cameraGalleryGranted: boolean }) => void;
+  initialPreset?: AdminTestPreset | null;
+  isBlocked?: boolean;
 }
 
 export const PostListingModal: React.FC<PostListingModalProps> = ({
@@ -33,14 +37,26 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
   onListingApproved,
   onOpenMayarPromotion,
   onUpdatePermissions,
+  initialPreset,
+  isBlocked = false,
 }) => {
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<Category>('Smartphone & Gadget');
-  const [location, setLocation] = useState('Jakarta Selatan');
-  const [normalPrice, setNormalPrice] = useState<number | ''>('');
-  const [sellingPrice, setSellingPrice] = useState<number | ''>('');
-  const [condition, setCondition] = useState('');
-  const [urgentReason, setUrgentReason] = useState('');
+  const [title, setTitle] = useState(initialPreset ? initialPreset.title : '');
+  const [category, setCategory] = useState<Category>(
+    initialPreset ? initialPreset.category : 'Smartphone & Gadget'
+  );
+  const [location, setLocation] = useState(
+    initialPreset ? initialPreset.location : 'Jakarta Selatan'
+  );
+  const [normalPrice, setNormalPrice] = useState<number | ''>(
+    initialPreset ? initialPreset.normalPrice : ''
+  );
+  const [sellingPrice, setSellingPrice] = useState<number | ''>(
+    initialPreset ? initialPreset.sellingPrice : ''
+  );
+  const [condition, setCondition] = useState(initialPreset ? initialPreset.condition : '');
+  const [urgentReason, setUrgentReason] = useState(
+    initialPreset ? initialPreset.urgentReason : ''
+  );
 
   // Kuota & Permission States
   const [isQuotaModalOpen, setIsQuotaModalOpen] = useState(false);
@@ -50,7 +66,9 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
   );
 
   // Sistem Upload & Manajemen Foto (Maksimal 6 Foto dengan Caption)
-  const [photos, setPhotos] = useState<ProductPhoto[]>([]);
+  const [photos, setPhotos] = useState<ProductPhoto[]>(
+    initialPreset ? initialPreset.photos : []
+  );
 
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationStep, setVerificationStep] = useState('');
@@ -112,6 +130,14 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
 
     // Minta izin Web Push Notification browser langsung pada gesture klik user
     requestBrowserNotificationPermission();
+
+    // 0. Validasi Pengguna Diblokir oleh Admin
+    if (isBlocked) {
+      setValidationError(
+        'Akun Anda saat ini diblokir oleh Admin JualRugi. Anda dicegah memasang iklan baru. Hubungi CS WhatsApp Admin: 0896-7368-6625 untuk pembukaan blokir.'
+      );
+      return;
+    }
 
     // 1. Validasi Aturan Kuota Iklan (User Baru Kuota 1x Gratis, Berbayar via Mayar)
     if (currentUser.listingQuota <= 0) {
@@ -266,6 +292,21 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
               >
                 <X className="w-3.5 h-3.5" />
               </button>
+            </div>
+          )}
+
+          {/* Banner Peringatan Akun Diblokir */}
+          {isBlocked && (
+            <div className="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-950 flex items-start gap-2.5 shadow-sm">
+              <AlertOctagon className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-black text-xs block text-rose-800">
+                  ⛔ AKUN DIBLOKIR OLEH ADMIN
+                </span>
+                <p className="text-[11px] text-rose-700 mt-0.5 leading-snug">
+                  Akun Anda sedang dibatasi dari membuat iklan baru. Silakan hubungi CS WhatsApp Admin di <strong className="font-mono">0896-7368-6625</strong> untuk verifikasi status akun.
+                </p>
+              </div>
             </div>
           )}
 

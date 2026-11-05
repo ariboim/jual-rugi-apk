@@ -14,6 +14,7 @@ import {
   Calendar,
   AlertCircle,
   Pencil,
+  ArrowUp,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { getListingPhotos } from '../data/initialData';
@@ -47,6 +48,7 @@ interface ListingDetailModalProps {
   onExtendListing?: (listing: Listing) => void;
   onMarkAsSold?: (listingId: string) => void;
   onEditListing?: (listing: Listing) => void;
+  onUpgradeMayar?: (listing: Listing, type: 'sundul' | 'superbu') => void;
 }
 
 export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
@@ -62,6 +64,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   onExtendListing,
   onMarkAsSold,
   onEditListing,
+  onUpgradeMayar,
 }) => {
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -428,6 +431,19 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                       Tanggal: {expiryInfo.formattedLong}
                     </span>
                   </div>
+
+                  {/* Tombol Upgrade Sundul / BU Prioritas via Mayar */}
+                  {onUpgradeMayar && (
+                    <button
+                      type="button"
+                      onClick={() => onUpgradeMayar(listing, 'sundul')}
+                      className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                      title="Sundul atau Pasang BU Prioritas via Mayar"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+                      <span>Upgrade Mayar</span>
+                    </button>
+                  )}
 
                   {/* Tombol Perpanjang / Sundul jika expired atau ingin extend */}
                   {onExtendListing && (

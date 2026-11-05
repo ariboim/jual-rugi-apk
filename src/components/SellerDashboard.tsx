@@ -19,12 +19,15 @@ import {
   Mail,
   Calendar,
   Pencil,
+  Zap,
+  Sparkles,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { MonetizationType } from './QRISModal';
 import { APK_DOWNLOAD_URL } from './PWAInstallButton';
 import { isSupabaseConfigured } from '../services/supabase';
 import { getAdExpiryInfo } from '../services/listingLifecycle';
+import { ADMIN_TEST_PRESETS, AdminTestPreset } from '../data/adminTestPresets';
 
 interface SellerDashboardProps {
   currentUser: UserProfile;
@@ -41,6 +44,9 @@ interface SellerDashboardProps {
   onOpenPanduanModal?: () => void;
   onOpenWelcomeEmailSetup?: () => void;
   onEditListing?: (listing: Listing) => void;
+  onQuickTestAd?: (presetIndex?: number) => void;
+  onPrefillTestAd?: (preset: AdminTestPreset) => void;
+  onOpenAdmin?: () => void;
 }
 
 export const SellerDashboard: React.FC<SellerDashboardProps> = ({
@@ -58,12 +64,22 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   onOpenPanduanModal,
   onOpenWelcomeEmailSetup,
   onEditListing,
+  onQuickTestAd,
+  onPrefillTestAd,
+  onOpenAdmin,
 }) => {
   const hasActiveAccount = isLoggedIn && currentUser.id !== 'guest';
 
   const myListings = React.useMemo(() => {
     return listings
-      .filter((l) => l.seller.id === currentUser.id || l.seller.id === 'seller-agus')
+      .filter(
+        (l) =>
+          l.seller.id === currentUser.id ||
+          l.seller.id === 'seller-agus' ||
+          l.seller.id === 'admin-main' ||
+          l.seller.name.toLowerCase() === 'admin' ||
+          (l as any).seller_email === 'bca.ccpl@gmail.com'
+      )
       .sort((a, b) => {
         const aSundul = a.sundulAt ? new Date(a.sundulAt).getTime() : 0;
         const bSundul = b.sundulAt ? new Date(b.sundulAt).getTime() : 0;
@@ -111,8 +127,18 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons: Pasang Iklan + Logout / Login */}
+        {/* Action Buttons: Pasang Iklan + Admin + Logout / Login */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          {onOpenAdmin && (
+            <button
+              onClick={onOpenAdmin}
+              className="w-full sm:w-auto py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-900 border border-slate-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer active:scale-95 transition"
+            >
+              <ShieldCheck className="w-4 h-4 text-sky-400" />
+              <span>Dashboard Admin</span>
+            </button>
+          )}
+
           <button
             onClick={onOpenNewListing}
             className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm shadow-sky-500/20 cursor-pointer active:scale-95 transition"
@@ -146,6 +172,93 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             )
           )}
         </div>
+      </div>
+
+      {/* ================================================================= */}
+      {/* FITUR KHUSUS ADMIN: QUICK TEST PASANG IKLAN DENGAN FOTO FISIK REAL */}
+      {/* ================================================================= */}
+      <div className="bg-gradient-to-br from-slate-900 via-sky-950 to-indigo-950 text-white p-5 rounded-3xl shadow-xl border-2 border-sky-400/40 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 rounded-2xl bg-amber-400 text-slate-950 font-black shadow-md flex items-center justify-center shrink-0 animate-pulse">
+              <Zap className="w-5 h-5 fill-slate-950" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-black tracking-tight text-white">
+                  Fitur Khusus Admin: Quick Test Pasang Iklan
+                </h3>
+                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40">
+                  Foto Fisik Real • 100% Lolos Moderasi
+                </span>
+              </div>
+              <p className="text-xs text-sky-200/90 mt-0.5">
+                Admin Terdaftar: <strong className="text-white underline">bca.ccpl@gmail.com</strong> (Nama: <strong className="text-white">admin</strong>)
+              </p>
+            </div>
+          </div>
+
+          {/* Tombol Utama: 1-Klik Quick Test Ad Langsung Tayang (Active) */}
+          {onQuickTestAd && (
+            <button
+              type="button"
+              onClick={() => onQuickTestAd(0)}
+              className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 transition active:scale-95 cursor-pointer shrink-0"
+              title="1-Klik buat iklan dengan gambar asli dan langsung aktifkan status 'active' tanpa ditolak sistem"
+            >
+              <Zap className="w-4 h-4 fill-slate-950" />
+              <span>⚡ 1-Klik Quick Test Ad (Langsung Active)</span>
+            </button>
+          )}
+        </div>
+
+        <p className="text-xs text-slate-300 leading-relaxed">
+          Mengatasi masalah gambar tidak asli: Fitur ini otomatis memasang iklan dummy dengan <strong>foto fisik nyata resolusi tinggi dari Unsplash</strong> (iPhone, MacBook, Motor, Smart TV). Diskon BU dijamin &gt;15%, deskripsi minus jujur, dan sistem <strong>langsung menjadwalkan status 'active'</strong> serta mengirimkan email notifikasi.
+        </p>
+
+        {/* 4 Pilihan Preset Real Fisik */}
+        <div className="space-y-1.5 pt-1">
+          <span className="text-[11px] font-bold text-sky-200 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            Pilih Kategori Katalog Real untuk 1-Klik Tayang:
+          </span>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {ADMIN_TEST_PRESETS.map((preset, idx) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => onQuickTestAd && onQuickTestAd(idx)}
+                className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition text-xs cursor-pointer group active:scale-95"
+              >
+                <div className="flex items-center gap-1.5 font-bold text-white group-hover:text-amber-300 transition line-clamp-1">
+                  <span>{preset.tagLabel}</span>
+                </div>
+                <div className="text-[10px] text-slate-300 mt-0.5">
+                  Rp {preset.sellingPrice.toLocaleString('id-ID')} (-{preset.discountPercentage}%)
+                </div>
+                <div className="text-[9.5px] text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Foto Real Siap Tayang
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Opsi Uji Coba Formulir Manual */}
+        {onPrefillTestAd && (
+          <div className="flex items-center justify-between pt-2 border-t border-white/10 flex-wrap gap-2 text-xs">
+            <span className="text-slate-400 text-[11px]">
+              Ingin menguji alur form pasang iklan manual dengan foto asli?
+            </span>
+            <button
+              type="button"
+              onClick={() => onPrefillTestAd(ADMIN_TEST_PRESETS[0])}
+              className="text-sky-300 hover:text-white underline font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <span>Isi Form Pasang Iklan Manual (Preset iPhone 13 Real) &rarr;</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Kartu Surat Sambutan & Welcome Email Zapier */}

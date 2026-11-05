@@ -231,3 +231,135 @@ export async function triggerAdPublishedEmail(
     provider: 'simulation_fallback',
   };
 }
+
+export interface MonetizationEmailPayload {
+  listingId: string;
+  listingTitle: string;
+  recipientEmail: string;
+  recipientName?: string;
+  packageType: 'sundul' | 'prioritas';
+}
+
+/**
+ * Mengirimkan Email Notifikasi saat Admin Mengaktifkan Paket Sundul / BU Prioritas
+ * Sesuai format wajib:
+ * "Selamat, iklan [sundul/prioritas] Anda sudah aktif! Silakan cek iklan Anda melalui: https://jualrugi.my.id/iklan/{id_iklan}"
+ */
+export async function triggerMonetizationActivatedEmail(
+  payload: MonetizationEmailPayload
+): Promise<AdPublishedEmailResponse> {
+  const { listingId, listingTitle, recipientEmail, recipientName, packageType } = payload;
+  const adLink = getDynamicAdLink(listingId);
+  const packageLabel = packageType === 'sundul' ? 'sundul' : 'prioritas';
+  const packageName = packageType === 'sundul' ? 'Sundul Iklan (#1 Feed)' : 'BU Prioritas (Highlight Emas)';
+
+  const textContent = `Selamat, iklan ${packageLabel} Anda sudah aktif!\nSilakan cek iklan Anda melalui: ${adLink}`;
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Iklan ${packageName} Aktif - JualRugi.my.id</title>
+</head>
+<body style="margin:0;padding:24px;background-color:#f0f9ff;font-family:sans-serif;color:#0f172a;">
+  <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:16px;border:1px solid #bae6fd;padding:28px;box-shadow:0 4px 20px rgba(0,0,0,0.06);">
+    <div style="text-align:center;margin-bottom:20px;">
+      <span style="display:inline-block;background:#e0f2fe;color:#0284c7;padding:4px 14px;border-radius:9999px;font-size:12px;font-weight:bold;text-transform:uppercase;">
+        Pembayaran Terverifikasi Admin
+      </span>
+      <h2 style="color:#0369a1;margin:12px 0 6px;">Selamat, iklan ${packageLabel} Anda sudah aktif! 🎉</h2>
+      <p style="font-weight:600;color:#334155;margin:4px 0;">"${listingTitle}"</p>
+    </div>
+    <p style="font-size:14px;line-height:1.6;color:#334155;">
+      Status paket <strong>${packageName}</strong> telah resmi diaktifkan oleh Admin JualRugi setelah verifikasi bukti pembayaran Mayar.
+    </p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${adLink}" style="display:inline-block;background:#0284c7;color:#ffffff;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:10px;text-decoration:none;">
+        Cek Iklan Anda Sekarang
+      </a>
+      <div style="margin-top:14px;font-size:12px;color:#64748b;word-break:break-all;">
+        Silakan cek iklan Anda melalui: <br/>
+        <a href="${adLink}" style="color:#0284c7;font-weight:bold;">${adLink}</a>
+      </div>
+    </div>
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center;">
+      JualRugi.my.id • Sistem Notifikasi Status Iklan Otomatis
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const brevoConfig = getBrevoConfig();
+  const apiKey = brevoConfig.apiKey || DEFAULT_BREVO_API_KEY;
+  const senderEmail = brevoConfig.senderEmail || DEFAULT_BREVO_SENDER_EMAIL;
+  const senderName = brevoConfig.senderName || DEFAULT_BREVO_SENDER_NAME;
+
+  const logEntry = {
+    id: `email-monetize-${Date.now()}`,
+    listingId,
+    listingTitle,
+    recipientEmail,
+    packageType,
+    sentAt: new Date().toISOString(),
+    adLink,
+  };
+
+  try {
+    const existingLogs = JSON.parse(
+      localStorage.getItem('jualrugi_ad_published_emails') || '[]'
+    );
+    localStorage.setItem(
+      'jualrugi_ad_published_emails',
+      JSON.stringify([logEntry, ...existingLogs].slice(0, 50))
+    );
+  } catch (e) {
+    console.warn('Gagal menyimpan log email aktivasi ke localStorage:', e);
+  }
+
+  if (apiKey && apiKey.startsWith('xkeysib-') && recipientEmail && recipientEmail.includes('@')) {
+    try {
+      const response = await fetch(EMAIL_API_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: senderName, email: senderEmail },
+          to: [{ email: recipientEmail.trim(), name: recipientName || 'Pengiklan JualRugi' }],
+          subject: `Iklan ${packageLabel} Anda Sudah Aktif - JualRugi.my.id`,
+          htmlContent,
+          textContent,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        return {
+          success: true,
+          message: `Email aktivasi ${packageLabel} berhasil dikirim ke ${recipientEmail}`,
+          sentTo: recipientEmail,
+          listingId,
+          adLink,
+          provider: 'brevo',
+          messageId: data.messageId,
+        };
+      }
+    } catch (apiErr) {
+      console.warn('Gagal memanggil Brevo API untuk aktivasi:', apiErr);
+    }
+  }
+
+  return {
+    success: true,
+    message: `Notifikasi aktivasi ${packageLabel} tercatat untuk ${recipientEmail}`,
+    sentTo: recipientEmail,
+    listingId,
+    adLink,
+    provider: 'simulation_fallback',
+  };
+}
+
