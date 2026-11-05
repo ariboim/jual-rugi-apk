@@ -186,10 +186,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
       </div>
 
       {/* ================================================================= */}
-      {/* FITUR KHUSUS ADMIN: QUICK TEST PASANG IKLAN DENGAN FOTO FISIK REAL */}
+      {/* FITUR KHUSUS ADMIN: UJI COBA PASANG IKLAN & NOTIFIKASI TAYANG */}
       {/* ================================================================= */}
       <div className="bg-gradient-to-br from-slate-900 via-sky-950 to-indigo-950 text-white p-5 rounded-3xl shadow-xl border-2 border-sky-400/40 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="p-2.5 rounded-2xl bg-amber-400 text-slate-950 font-black shadow-md flex items-center justify-center shrink-0 animate-pulse">
               <Zap className="w-5 h-5 fill-slate-950" />
@@ -197,99 +197,116 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm sm:text-base font-black tracking-tight text-white">
-                  Fitur Khusus Admin: Quick Test Pasang Iklan
+                  Fitur Khusus Admin: Uji Coba Pasang Iklan &amp; Notifikasi Tayang
                 </h3>
                 <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40">
                   Foto Fisik Real • 100% Lolos Moderasi
                 </span>
               </div>
               <p className="text-xs text-sky-200/90 mt-0.5">
-                Admin Terdaftar: <strong className="text-white underline">bca.ccpl@gmail.com</strong> (Nama: <strong className="text-white">admin</strong>)
+                Email Notifikasi Admin: <strong className="text-white underline font-mono">bca.ccpl@gmail.com</strong> • Subject: <strong className="text-amber-300">"Iklan Tayang"</strong>
               </p>
             </div>
           </div>
 
-          {/* Tombol Utama: 1-Klik Quick Test Ad Langsung Tayang (Active) */}
-          {onQuickTestAd && (
-            <button
-              type="button"
-              onClick={() => handleCardClick(0)}
-              className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 transition active:scale-95 cursor-pointer shrink-0"
-              title="1-Klik buat iklan dengan gambar asli dan langsung aktifkan status 'active' tanpa ditolak sistem"
-            >
-              <Zap className="w-4 h-4 fill-slate-950" />
-              <span>⚡ 1-Klik Quick Test Ad (Langsung Active)</span>
-            </button>
-          )}
+          {/* Dua Tombol Aksi Utama Admin: 1-Klik Tayang vs Form Pasang Iklan */}
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {onPrefillTestAd && (
+              <button
+                type="button"
+                onClick={() => onPrefillTestAd(ADMIN_TEST_PRESETS[0])}
+                className="py-2.5 px-3.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition active:scale-95 cursor-pointer"
+                title="Buka formulir input Pasang Iklan baru dengan data fisik siap uji coba"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>📝 Buka Form Pasang Iklan</span>
+              </button>
+            )}
+
+            {onQuickTestAd && (
+              <button
+                type="button"
+                onClick={() => handleCardClick(0)}
+                className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 transition active:scale-95 cursor-pointer"
+                title="Langsung tayangkan iklan, munculkan banner 'Selamat, iklan Anda telah tayang!', dan kirim email ke bca.ccpl@gmail.com"
+              >
+                <Zap className="w-4 h-4 fill-slate-950" />
+                <span>⚡ 1-Klik Quick Test Tayang</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <p className="text-xs text-slate-300 leading-relaxed">
-          Mengatasi masalah gambar tidak asli: Fitur ini otomatis memasang iklan dummy dengan <strong>foto fisik nyata resolusi tinggi dari Unsplash</strong> (iPhone, MacBook, Motor, Smart TV). Diskon BU dijamin &gt;15%, deskripsi minus jujur, dan sistem <strong>langsung menjadwalkan status 'active'</strong> serta mengirimkan email notifikasi.
+          Uji alur <strong>Pasang Iklan</strong> secara nyata: Anda dapat membuka formulir pasang iklan untuk menguji penekanan tombol <em>"Pasang Iklan Sekarang"</em> dengan foto fisik asli (iPhone, MacBook, Motor, Smart TV), atau gunakan <strong>1-Klik Quick Test</strong> untuk langsung memunculkan banner notifikasi <strong>"Selamat, iklan Anda telah tayang!"</strong> di bagian atas layar dan mengirimkan email resmi dengan subject <strong>"Iklan Tayang"</strong> ke <strong>bca.ccpl@gmail.com</strong>.
         </p>
 
-        {/* 4 Pilihan Preset Real Fisik */}
+        {/* 4 Pilihan Preset Real Fisik dengan 2 Opsi Aksi per Kartu */}
         <div className="space-y-1.5 pt-1">
           <span className="text-[11px] font-bold text-sky-200 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            Pilih Kategori Katalog Real untuk 1-Klik Tayang:
+            Pilih Katalog Real untuk Pengujian:
           </span>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             {ADMIN_TEST_PRESETS.map((preset, idx) => {
               const isBusy = clickingIndex === idx;
               return (
-                <button
+                <div
                   key={preset.id}
-                  type="button"
-                  disabled={isBusy}
-                  onClick={() => handleCardClick(idx)}
-                  className={`p-2.5 rounded-xl border text-left transition text-xs cursor-pointer group active:scale-95 ${
+                  className={`p-3 rounded-2xl border transition text-xs flex flex-col justify-between ${
                     isBusy
-                      ? 'bg-amber-400 text-slate-950 border-amber-300 ring-2 ring-amber-300 animate-pulse'
-                      : 'bg-white/10 hover:bg-white/20 border-white/15 hover:border-amber-400/60'
+                      ? 'bg-amber-400/20 border-amber-300 ring-2 ring-amber-300'
+                      : 'bg-white/10 hover:bg-white/15 border-white/15'
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 font-bold text-white group-hover:text-amber-300 transition line-clamp-1">
-                    {isBusy ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-950 shrink-0" />
-                    ) : null}
-                    <span className={isBusy ? 'text-slate-950' : ''}>{preset.tagLabel}</span>
+                  <div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-bold text-white line-clamp-1">{preset.tagLabel}</span>
+                      <span className="text-[9.5px] font-extrabold px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 shrink-0">
+                        -{preset.discountPercentage}%
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-black text-amber-300 mt-0.5">
+                      Rp {preset.sellingPrice.toLocaleString('id-ID')}
+                    </div>
+                    <div className="text-[10px] text-slate-300 line-clamp-1 mt-0.5">
+                      {preset.title}
+                    </div>
                   </div>
-                  <div
-                    className={`text-[10px] mt-0.5 ${
-                      isBusy ? 'text-slate-900 font-bold' : 'text-slate-300'
-                    }`}
-                  >
-                    Rp {preset.sellingPrice.toLocaleString('id-ID')} (-{preset.discountPercentage}%)
+
+                  <div className="grid grid-cols-2 gap-1.5 pt-2.5 mt-2 border-t border-white/10">
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => handleCardClick(idx)}
+                      className="py-1.5 px-2 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-black text-[10px] flex items-center justify-center gap-1 shadow-xs cursor-pointer active:scale-95 transition"
+                      title="Langsung tayangkan iklan dan kirim notifikasi"
+                    >
+                      {isBusy ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Zap className="w-3 h-3 fill-slate-950" />
+                      )}
+                      <span>1-Klik Tayang</span>
+                    </button>
+
+                    {onPrefillTestAd && (
+                      <button
+                        type="button"
+                        onClick={() => onPrefillTestAd(preset)}
+                        className="py-1.5 px-2 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-[10px] flex items-center justify-center gap-1 border border-white/20 cursor-pointer active:scale-95 transition"
+                        title="Buka form pasang iklan dengan data produk ini"
+                      >
+                        <PlusCircle className="w-3 h-3" />
+                        <span>Buka Form</span>
+                      </button>
+                    )}
                   </div>
-                  <div
-                    className={`text-[9.5px] font-semibold mt-1 flex items-center gap-1 ${
-                      isBusy ? 'text-slate-950 font-bold' : 'text-emerald-400'
-                    }`}
-                  >
-                    <CheckCircle2 className="w-3 h-3" />
-                    <span>{isBusy ? '⚡ Menayangkan...' : 'Foto Real Siap Tayang'}</span>
-                  </div>
-                </button>
+                </div>
               );
             })}
           </div>
         </div>
-
-        {/* Opsi Uji Coba Formulir Manual */}
-        {onPrefillTestAd && (
-          <div className="flex items-center justify-between pt-2 border-t border-white/10 flex-wrap gap-2 text-xs">
-            <span className="text-slate-400 text-[11px]">
-              Ingin menguji alur form pasang iklan manual dengan foto asli?
-            </span>
-            <button
-              type="button"
-              onClick={() => onPrefillTestAd(ADMIN_TEST_PRESETS[0])}
-              className="text-sky-300 hover:text-white underline font-bold flex items-center gap-1 cursor-pointer"
-            >
-              <span>Isi Form Pasang Iklan Manual (Preset iPhone 13 Real) &rarr;</span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Kartu Surat Sambutan & Welcome Email Zapier */}

@@ -126,14 +126,25 @@ export function generateAdPublishedEmailContent(listingId: string, listingTitle?
   return { textContent, htmlContent, adLink };
 }
 
+export interface AdPublishedEmailPayload {
+  listingId: string;
+  listingTitle: string;
+  recipientEmail: string;
+  recipientName?: string;
+  sellingPrice?: number;
+  category?: string;
+  subject?: string;
+}
+
 /**
  * Mengirimkan Email Notifikasi "Iklan Tayang" setelah moderasi selesai
- * @param payload Detail iklan dan email penerima
+ * @param payload Detail iklan dan email penerima (Default Subject: "Iklan Tayang")
  */
 export async function triggerAdPublishedEmail(
   payload: AdPublishedEmailPayload
 ): Promise<AdPublishedEmailResponse> {
-  const { listingId, listingTitle, recipientEmail, recipientName } = payload;
+  const { listingId, listingTitle, recipientEmail, recipientName, subject } = payload;
+  const emailSubject = subject || 'Iklan Tayang';
   const { textContent, htmlContent, adLink } = generateAdPublishedEmailContent(
     listingId,
     listingTitle
@@ -150,6 +161,7 @@ export async function triggerAdPublishedEmail(
     listingId,
     listingTitle,
     recipientEmail,
+    subject: emailSubject,
     sentAt: new Date().toISOString(),
     adLink,
   };
@@ -166,7 +178,40 @@ export async function triggerAdPublishedEmail(
     console.warn('Gagal menyimpan log email ke localStorage:', e);
   }
 
-  // 1. Eksekusi pengiriman via Brevo Transactional Email API
+  // 1. Prioritas Utama: Kirim via endpoint proxy server Express (/api/send-ad-published-email)
+  try {
+    const serverRes = await fetch('/api/send-ad-published-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        listingId,
+        listingTitle,
+        recipientEmail,
+        recipientName,
+        sellingPrice: payload.sellingPrice,
+        category: payload.category,
+        subject: emailSubject,
+      }),
+    });
+
+    if (serverRes.ok) {
+      const serverData = await serverRes.json();
+      console.log('✅ Email "Iklan Tayang" berhasil dikirim via server proxy:', serverData);
+      return {
+        success: true,
+        message: serverData.message || `Email notifikasi "Iklan Tayang" berhasil dikirim ke ${recipientEmail}`,
+        sentTo: recipientEmail,
+        listingId,
+        adLink,
+        provider: serverData.provider || 'brevo',
+        messageId: serverData.messageId,
+      };
+    }
+  } catch (serverErr) {
+    console.warn('Server proxy email unreachable, mencoba direct dispatch:', serverErr);
+  }
+
+  // 2. Eksekusi fallback pengiriman direct client via Brevo Transactional Email API
   if (apiKey && apiKey.startsWith('xkeysib-') && recipientEmail.includes('@')) {
     try {
       const response = await fetch(EMAIL_API_ENDPOINT, {
@@ -187,7 +232,7 @@ export async function triggerAdPublishedEmail(
               name: recipientName || 'Pengiklan JualRugi',
             },
           ],
-          subject: 'Iklan Tayang',
+          subject: emailSubject,
           htmlContent,
           textContent,
         }),
@@ -195,10 +240,10 @@ export async function triggerAdPublishedEmail(
 
       if (response.ok) {
         const data = await response.json().catch(() => ({}));
-        console.log('✅ Email notifikasi "Iklan Tayang" berhasil dikirim via Brevo:', data);
+        console.log('✅ Email notifikasi "Iklan Tayang" berhasil dikirim via Brevo direct:', data);
         return {
           success: true,
-          message: `Email notifikasi tayang berhasil dikirim ke ${recipientEmail}`,
+          message: `Email notifikasi "${emailSubject}" berhasil dikirim ke ${recipientEmail}`,
           sentTo: recipientEmail,
           listingId,
           adLink,
@@ -210,21 +255,21 @@ export async function triggerAdPublishedEmail(
         console.warn('Brevo API merespons non-OK:', response.status, errorData);
       }
     } catch (apiErr) {
-      console.warn('Gagal memanggil Brevo API, beralih ke fallback:', apiErr);
+      console.warn('Gagal memanggil Brevo API direct:', apiErr);
     }
   }
 
-  // 2. Fallback mode (berlaku jika offline atau running dalam simulasi preview)
-  console.log('📧 Simulasi pengiriman email "Iklan Tayang" tercatat:', {
+  // 3. Fallback mode simulasi
+  console.log('📧 Notifikasi email "Iklan Tayang" tercatat di sistem:', {
     to: recipientEmail,
-    subject: 'Iklan Tayang',
+    subject: emailSubject,
     adLink,
     textContent,
   });
 
   return {
     success: true,
-    message: `Notifikasi tayang tercatat untuk ${recipientEmail} (Link: ${adLink})`,
+    message: `Notifikasi "Iklan Tayang" tercatat untuk ${recipientEmail} (Link: ${adLink})`,
     sentTo: recipientEmail,
     listingId,
     adLink,

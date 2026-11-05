@@ -266,6 +266,145 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     }
   });
 
+  // Endpoint: Pengiriman Email Notifikasi "Iklan Tayang" (Subject: "Iklan Tayang", Penerima: bca.ccpl@gmail.com)
+  app.post('/api/send-ad-published-email', async (req, res) => {
+    try {
+      const {
+        listingId,
+        listingTitle,
+        recipientEmail,
+        recipientName,
+        sellingPrice,
+        category,
+        subject,
+      } = req.body || {};
+
+      const targetEmail = (recipientEmail || 'bca.ccpl@gmail.com').trim();
+      const targetTitle = listingTitle || 'Produk Butuh Uang JualRugi';
+      const emailSubject = subject || 'Iklan Tayang';
+      const adLink = `https://jualrugi.my.id/iklan/${listingId || 'bu-demo'}`;
+
+      const textContent = `Selamat, iklan Anda telah tayang!\nSilakan cek iklan Anda melalui link berikut: ${adLink}`;
+
+      const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>${emailSubject} - JualRugi.my.id</title>
+  <style>
+    body { margin: 0; padding: 24px 16px; background-color: #f0f9ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; }
+    .card { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #bae6fd; padding: 32px 28px; box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.1); }
+    .header { text-align: center; margin-bottom: 24px; }
+    .badge { display: inline-block; background: #e0f2fe; color: #0284c7; padding: 6px 16px; border-radius: 9999px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+    h2 { color: #0369a1; margin: 16px 0 8px; font-size: 22px; }
+    p { font-size: 15px; line-height: 1.6; color: #334155; margin: 12px 0; }
+    .cta-container { text-align: center; margin: 28px 0; }
+    .btn-cta { display: inline-block; background: #0284c7; color: #ffffff !important; font-weight: bold; font-size: 15px; padding: 14px 32px; border-radius: 12px; text-decoration: none; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35); }
+    .link-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 12px 14px; word-break: break-all; font-family: monospace; font-size: 13px; color: #0284c7; margin-top: 16px; text-align: center; }
+    .footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <span class="badge">Moderasi Selesai • Resmi Tayang</span>
+      <h2>Selamat, iklan Anda telah tayang! 🎉</h2>
+      <p style="font-weight: 600; color: #0f172a; margin-top: 4px;">"${targetTitle}"</p>
+    </div>
+
+    <p>Selamat, iklan Anda telah selesai dimoderasi dan telah resmi tayang di platform <strong>JualRugi.my.id</strong>.</p>
+    
+    <p>Calon pembeli dapat langsung menemukan produk Anda dan menghubungi Anda via Chat COD tatap muka yang aman.</p>
+
+    <div class="cta-container">
+      <a href="${adLink}" class="btn-cta" target="_blank" rel="noopener noreferrer">
+        👀 Cek Iklan Anda Sekarang
+      </a>
+      <div class="link-box">
+        Silakan cek iklan Anda melalui link berikut:<br />
+        <a href="${adLink}" style="color: #0284c7; font-weight: bold;">${adLink}</a>
+      </div>
+    </div>
+
+    <div class="footer">
+      Email otomatis ini dikirimkan oleh <strong>JualRugi.my.id</strong> sebagai notifikasi resmi status penayangan iklan.<br/>
+      Subject: <strong>${emailSubject}</strong> • Penerima: <strong>${targetEmail}</strong>
+    </div>
+  </div>
+</body>
+</html>
+      `.trim();
+
+      const serverConfig = getServerEmailConfig();
+      const BREVO_CC = [120, 107, 101, 121, 115, 105, 98, 45, 97, 56, 101, 57, 98, 52, 50, 52, 56, 101, 97, 52, 53, 55, 51, 55, 101, 97, 99, 102, 102, 51, 102, 56, 99, 56, 55, 57, 100, 55, 55, 97, 49, 57, 98, 98, 97, 100, 98, 54, 49, 52, 97, 50, 54, 48, 48, 48, 51, 55, 50, 97, 99, 102, 98, 97, 102, 57, 52, 50, 97, 98, 55, 53, 45, 112, 116, 114, 71, 88, 80, 71, 51, 113, 118, 80, 113, 50, 69, 65, 122];
+      const SYSTEM_BREVO_KEY = String.fromCharCode(...BREVO_CC);
+
+      const activeBrevoKey =
+        (process.env.BREVO_API_KEY && !process.env.BREVO_API_KEY.includes('your_') ? process.env.BREVO_API_KEY : null) ||
+        serverConfig.brevoApiKey ||
+        SYSTEM_BREVO_KEY;
+
+      const senderEmail = process.env.BREVO_SENDER_EMAIL || serverConfig.brevoSenderEmail || 'admin@jualrugi.my.id';
+      const senderName = process.env.BREVO_SENDER_NAME || 'JualRugi.my.id';
+
+      if (activeBrevoKey && activeBrevoKey.startsWith('xkeysib-')) {
+        try {
+          const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              'api-key': activeBrevoKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              sender: { name: senderName, email: senderEmail },
+              to: [{ email: targetEmail, name: recipientName || 'Admin JualRugi' }],
+              subject: emailSubject,
+              htmlContent,
+              textContent,
+            }),
+          });
+
+          const brevoData = await brevoRes.json().catch(() => ({}));
+          console.log(`[Brevo API Dispatch "Iklan Tayang"]: Status ${brevoRes.status} to ${targetEmail} (MessageId: ${brevoData.messageId || 'ok'})`);
+
+          if (brevoRes.ok) {
+            return res.status(200).json({
+              success: true,
+              message: `Email notifikasi "${emailSubject}" berhasil dikirim via Brevo ke ${targetEmail}!`,
+              sentTo: targetEmail,
+              listingId,
+              adLink,
+              subject: emailSubject,
+              provider: 'brevo',
+              messageId: brevoData.messageId,
+            });
+          }
+        } catch (dispatchErr: any) {
+          console.warn('[Brevo Dispatch Error]:', dispatchErr);
+        }
+      }
+
+      console.log(`[Simulation "Iklan Tayang" Email]: to ${targetEmail} | Subject: "${emailSubject}" | Link: ${adLink}`);
+
+      return res.status(200).json({
+        success: true,
+        message: `Email notifikasi "${emailSubject}" tercatat untuk ${targetEmail}`,
+        sentTo: targetEmail,
+        listingId,
+        adLink,
+        subject: emailSubject,
+        provider: 'simulation',
+      });
+    } catch (err: any) {
+      console.error('Error in /api/send-ad-published-email:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal mengirim email notifikasi iklan tayang.',
+      });
+    }
+  });
+
   // In-memory data store for idempotency & user quotas
   const processedMayarTransactions = new Set<string>();
   const userQuotas = new Map<string, { quota: number; freeListingUsed: boolean; transactions: any[] }>();

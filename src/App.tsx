@@ -605,22 +605,39 @@ export default function App() {
       async ({ title, body, viaPush }) => {
         setPendingModeration(null);
         const dynamicUrl = getDynamicAdLink(newListing.id);
-        const recipient = currentUser.email || 'seller@jualrugi.my.id';
+        const recipient =
+          currentUser.email && currentUser.email.includes('@')
+            ? currentUser.email
+            : 'bca.ccpl@gmail.com';
 
         // 1. Eksekusi pengiriman email notifikasi otomatis "Iklan Tayang"
         await triggerAdPublishedEmail({
           listingId: newListing.id,
           listingTitle: newListing.title,
           recipientEmail: recipient,
-          recipientName: currentUser.name,
+          recipientName: currentUser.name || 'Admin Tester',
           sellingPrice: newListing.sellingPrice,
           category: newListing.category,
+          subject: 'Iklan Tayang',
         });
+
+        // Juga kirim tembusan ke email admin resmi bca.ccpl@gmail.com jika berbeda
+        if (recipient !== 'bca.ccpl@gmail.com') {
+          triggerAdPublishedEmail({
+            listingId: newListing.id,
+            listingTitle: newListing.title,
+            recipientEmail: 'bca.ccpl@gmail.com',
+            recipientName: 'Admin JualRugi',
+            sellingPrice: newListing.sellingPrice,
+            category: newListing.category,
+            subject: 'Iklan Tayang',
+          });
+        }
 
         // 2. Set banner notifikasi lengkap dengan link dinamis
         setAdApprovedNotification({
-          title,
-          body,
+          title: 'Selamat, iklan Anda telah tayang!',
+          body: `Selamat, iklan "${newListing.title}" telah resmi aktif tayang di JualRugi.my.id.`,
           viaPush,
           listingTitle: newListing.title,
           listingId: newListing.id,
@@ -639,10 +656,13 @@ export default function App() {
   const handleTriggerPendingImmediately = async () => {
     if (!pendingModeration) return;
     const dynamicUrl = getDynamicAdLink(pendingModeration.id);
-    const recipient = currentUser.email || 'seller@jualrugi.my.id';
+    const recipient =
+      currentUser.email && currentUser.email.includes('@')
+        ? currentUser.email
+        : 'bca.ccpl@gmail.com';
 
     const viaPush = await sendSystemPushNotification(
-      'Iklan Berhasil Tayang! 🎉',
+      'Selamat, iklan Anda telah tayang!',
       'Selamat, iklan Anda telah selesai dimoderasi dan resmi tayang di JualRugi.my.id.',
       {
         tag: `ad-approved-${pendingModeration.id}`,
@@ -655,21 +675,31 @@ export default function App() {
       listingId: pendingModeration.id,
       listingTitle: pendingModeration.title,
       recipientEmail: recipient,
-      recipientName: currentUser.name,
+      recipientName: currentUser.name || 'Admin Tester',
       category: pendingModeration.category,
+      subject: 'Iklan Tayang',
     });
+
+    if (recipient !== 'bca.ccpl@gmail.com') {
+      triggerAdPublishedEmail({
+        listingId: pendingModeration.id,
+        listingTitle: pendingModeration.title,
+        recipientEmail: 'bca.ccpl@gmail.com',
+        recipientName: 'Admin JualRugi',
+        category: pendingModeration.category,
+        subject: 'Iklan Tayang',
+      });
+    }
 
     // Kembalikan status listing ke 'active' (resmi tayang)
     setListings((prev) =>
       prev.map((item) => (item.id === pendingModeration.id ? { ...item, status: 'active' } : item))
     );
-    setSelectedListing((prev) =>
-      prev && prev.id === pendingModeration.id ? { ...prev, status: 'active' } : prev
-    );
+    setSelectedListing(null);
     updateListingInSupabase(pendingModeration.id, { status: 'active' });
 
     setAdApprovedNotification({
-      title: 'Iklan Berhasil Tayang! 🎉',
+      title: 'Selamat, iklan Anda telah tayang!',
       body: 'Selamat, iklan Anda telah selesai dimoderasi dan resmi tayang di JualRugi.my.id.',
       viaPush,
       listingTitle: pendingModeration.title,
@@ -960,28 +990,57 @@ export default function App() {
     setListings((prev) => [newListing, ...prev]);
     saveListingToSupabase(newListing, currentUser.email, currentUser.phone);
 
-    // Kirim notifikasi email tayang
-    const recipientEmail = currentUser.email || 'bca.ccpl@gmail.com';
+    const dynamicUrl = getDynamicAdLink(newId);
+    const targetAdminEmail = 'bca.ccpl@gmail.com';
+
+    // 1. Kirim notifikasi email "Iklan Tayang" ke email admin bca.ccpl@gmail.com
     triggerAdPublishedEmail({
       listingId: newId,
       listingTitle: newListing.title,
-      recipientEmail,
-      recipientName: currentUser.name || 'Admin Tester',
+      recipientEmail: targetAdminEmail,
+      recipientName: 'Admin JualRugi',
       sellingPrice: newListing.sellingPrice,
       category: newListing.category,
+      subject: 'Iklan Tayang',
     });
 
-    showToast(`✅ Iklan Test ${preset.tagLabel} Berhasil Ditayangkan Langsung ke Feed!`);
+    if (currentUser.email && currentUser.email.includes('@') && currentUser.email !== targetAdminEmail) {
+      triggerAdPublishedEmail({
+        listingId: newId,
+        listingTitle: newListing.title,
+        recipientEmail: currentUser.email,
+        recipientName: currentUser.name || 'Pengiklan',
+        sellingPrice: newListing.sellingPrice,
+        category: newListing.category,
+        subject: 'Iklan Tayang',
+      });
+    }
 
-    // Buka detail iklan & arahkan langsung ke feed beranda
-    setSelectedListing(newListing);
+    // 2. Tampilkan BANNER NOTIFIKASI TAYANG: "Selamat, iklan Anda telah tayang!"
+    setAdApprovedNotification({
+      title: 'Selamat, iklan Anda telah tayang!',
+      body: `Selamat, iklan "${newListing.title}" telah resmi aktif tayang di JualRugi.my.id.`,
+      viaPush: true,
+      listingTitle: newListing.title,
+      listingId: newId,
+      adLink: dynamicUrl,
+      emailSentTo: targetAdminEmail,
+    });
+
+    // 3. Tutup modal detail (jangan langsung membuka Edit Iklan) dan arahkan langsung ke Beranda
+    setSelectedListing(null);
+    setIsPostModalOpen(false);
     setActiveTab('home');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    showToast(`✅ Notifikasi "Iklan Anda sudah tayang" aktif & email "Iklan Tayang" terkirim ke ${targetAdminEmail}!`);
   };
 
   const handlePrefillTestAd = (preset: AdminTestPreset) => {
+    setSelectedListing(null);
     setPostInitialPreset(preset);
     setIsPostModalOpen(true);
-    showToast(`📝 Form pasang iklan diisi otomatis dengan data fisik ${preset.tagLabel}`);
+    showToast(`📝 Form Pasang Iklan dibuka dengan preset fisik ${preset.tagLabel}. Silakan uji klik tombol "Pasang Iklan Sekarang" di dalam form.`);
   };
 
   // Handler perpanjang masa tayang iklan (Ad Expiry Extension: +30 Hari)
