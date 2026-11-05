@@ -62,7 +62,7 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
   const [isQuotaModalOpen, setIsQuotaModalOpen] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [cameraPermissionGranted, setCameraPermissionGranted] = useState(
-    Boolean(currentUser.permissions?.cameraGalleryGranted)
+    Boolean(currentUser.permissions?.cameraGalleryGranted) || Boolean(initialPreset)
   );
 
   // Sistem Upload & Manajemen Foto (Maksimal 6 Foto dengan Caption)

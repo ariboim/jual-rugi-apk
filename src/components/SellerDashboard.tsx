@@ -21,6 +21,7 @@ import {
   Pencil,
   Zap,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { MonetizationType } from './QRISModal';
@@ -69,15 +70,25 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   onOpenAdmin,
 }) => {
   const hasActiveAccount = isLoggedIn && currentUser.id !== 'guest';
+  const [clickingIndex, setClickingIndex] = React.useState<number | null>(null);
+
+  const handleCardClick = (idx: number) => {
+    setClickingIndex(idx);
+    if (onQuickTestAd) {
+      onQuickTestAd(idx);
+    }
+    setTimeout(() => setClickingIndex(null), 1500);
+  };
 
   const myListings = React.useMemo(() => {
     return listings
       .filter(
         (l) =>
+          l.user_id === currentUser.id ||
           l.seller.id === currentUser.id ||
           l.seller.id === 'seller-agus' ||
           l.seller.id === 'admin-main' ||
-          l.seller.name.toLowerCase() === 'admin' ||
+          l.seller.name.toLowerCase().includes('admin') ||
           (l as any).seller_email === 'bca.ccpl@gmail.com'
       )
       .sort((a, b) => {
@@ -202,7 +213,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           {onQuickTestAd && (
             <button
               type="button"
-              onClick={() => onQuickTestAd(0)}
+              onClick={() => handleCardClick(0)}
               className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 transition active:scale-95 cursor-pointer shrink-0"
               title="1-Klik buat iklan dengan gambar asli dan langsung aktifkan status 'active' tanpa ditolak sistem"
             >
@@ -223,24 +234,44 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             Pilih Kategori Katalog Real untuk 1-Klik Tayang:
           </span>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {ADMIN_TEST_PRESETS.map((preset, idx) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => onQuickTestAd && onQuickTestAd(idx)}
-                className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-left transition text-xs cursor-pointer group active:scale-95"
-              >
-                <div className="flex items-center gap-1.5 font-bold text-white group-hover:text-amber-300 transition line-clamp-1">
-                  <span>{preset.tagLabel}</span>
-                </div>
-                <div className="text-[10px] text-slate-300 mt-0.5">
-                  Rp {preset.sellingPrice.toLocaleString('id-ID')} (-{preset.discountPercentage}%)
-                </div>
-                <div className="text-[9.5px] text-emerald-400 font-semibold mt-1 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Foto Real Siap Tayang
-                </div>
-              </button>
-            ))}
+            {ADMIN_TEST_PRESETS.map((preset, idx) => {
+              const isBusy = clickingIndex === idx;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => handleCardClick(idx)}
+                  className={`p-2.5 rounded-xl border text-left transition text-xs cursor-pointer group active:scale-95 ${
+                    isBusy
+                      ? 'bg-amber-400 text-slate-950 border-amber-300 ring-2 ring-amber-300 animate-pulse'
+                      : 'bg-white/10 hover:bg-white/20 border-white/15 hover:border-amber-400/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-bold text-white group-hover:text-amber-300 transition line-clamp-1">
+                    {isBusy ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-950 shrink-0" />
+                    ) : null}
+                    <span className={isBusy ? 'text-slate-950' : ''}>{preset.tagLabel}</span>
+                  </div>
+                  <div
+                    className={`text-[10px] mt-0.5 ${
+                      isBusy ? 'text-slate-900 font-bold' : 'text-slate-300'
+                    }`}
+                  >
+                    Rp {preset.sellingPrice.toLocaleString('id-ID')} (-{preset.discountPercentage}%)
+                  </div>
+                  <div
+                    className={`text-[9.5px] font-semibold mt-1 flex items-center gap-1 ${
+                      isBusy ? 'text-slate-950 font-bold' : 'text-emerald-400'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>{isBusy ? '⚡ Menayangkan...' : 'Foto Real Siap Tayang'}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 

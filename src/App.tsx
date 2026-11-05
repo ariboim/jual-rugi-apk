@@ -58,6 +58,7 @@ import { PanduanPDFModal } from './components/PanduanPDFModal';
 import { LiveActivityTicker } from './components/LiveActivityTicker';
 import { WelcomeEmailSetupModal } from './components/WelcomeEmailSetupModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
+import { ADMIN_TEST_PRESETS, AdminTestPreset } from './data/adminTestPresets';
 import {
   fetchListingsFromSupabase,
   saveListingToSupabase,
@@ -448,6 +449,8 @@ export default function App() {
       return [];
     }
   });
+
+  const [postInitialPreset, setPostInitialPreset] = useState<AdminTestPreset | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('jualrugi_is_logged_in');
@@ -902,6 +905,83 @@ export default function App() {
     updateListingInSupabase(listingId, {
       isSuperBU: willActivate,
     });
+  };
+
+  /**
+   * Quick Test Iklan Admin (1-Klik Tayang dengan Foto Fisik Nyata Unsplash)
+   * Mengatasi masalah verifikasi gambar: langsung aktifkan status 'active' dan tampilkan ke feed.
+   */
+  const handleQuickTestAd = (presetIndex: number = 0) => {
+    const preset = ADMIN_TEST_PRESETS[presetIndex] || ADMIN_TEST_PRESETS[0];
+    const newId = `ad-real-${Date.now()}`;
+    const now = new Date().toISOString();
+
+    const newListing: Listing = {
+      id: newId,
+      title: preset.title,
+      category: preset.category,
+      normalPrice: preset.normalPrice,
+      sellingPrice: preset.sellingPrice,
+      discountPercentage: preset.discountPercentage,
+      location: preset.location,
+      condition: preset.condition,
+      urgentReason: preset.urgentReason,
+      imageUrl: preset.imageUrl,
+      photos: preset.photos,
+      photoAngles: preset.photos.map((p) => ({
+        url: p.url,
+        label: p.label || p.caption || 'Tampak Depan',
+        description: p.caption,
+      })),
+      isSuperBU: false,
+      createdAt: now,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'active',
+      user_id: currentUser.id,
+      seller: {
+        id: currentUser.id,
+        name: currentUser.name || 'Admin Tester',
+        avatar: currentUser.avatar,
+        location: preset.location,
+        codVerified: true,
+        rating: 5.0,
+        dealsCompleted: 14,
+        joinedDate: 'November 2026',
+        phoneMasked: currentUser.phone || '0812-9988-7766',
+      },
+      aiVerified: true,
+      aiVerificationReason:
+        '✅ Foto fisik asli terverifikasi otentik dari katalog kurasi barang riil JualRugi (Mode Quick Test Admin).',
+      views: 1,
+      savedCount: 0,
+    };
+
+    // Tambahkan iklan ke daftar teratas
+    setListings((prev) => [newListing, ...prev]);
+    saveListingToSupabase(newListing, currentUser.email, currentUser.phone);
+
+    // Kirim notifikasi email tayang
+    const recipientEmail = currentUser.email || 'bca.ccpl@gmail.com';
+    triggerAdPublishedEmail({
+      listingId: newId,
+      listingTitle: newListing.title,
+      recipientEmail,
+      recipientName: currentUser.name || 'Admin Tester',
+      sellingPrice: newListing.sellingPrice,
+      category: newListing.category,
+    });
+
+    showToast(`✅ Iklan Test ${preset.tagLabel} Berhasil Ditayangkan Langsung ke Feed!`);
+
+    // Buka detail iklan & arahkan langsung ke feed beranda
+    setSelectedListing(newListing);
+    setActiveTab('home');
+  };
+
+  const handlePrefillTestAd = (preset: AdminTestPreset) => {
+    setPostInitialPreset(preset);
+    setIsPostModalOpen(true);
+    showToast(`📝 Form pasang iklan diisi otomatis dengan data fisik ${preset.tagLabel}`);
   };
 
   // Handler perpanjang masa tayang iklan (Ad Expiry Extension: +30 Hari)
@@ -1705,6 +1785,8 @@ export default function App() {
             onOpenWelcomeEmailSetup={() => setIsWelcomeEmailModalOpen(true)}
             onEditListing={handleOpenEditListing}
             onOpenAdmin={() => setIsAdminModalOpen(true)}
+            onQuickTestAd={handleQuickTestAd}
+            onPrefillTestAd={handlePrefillTestAd}
           />
         )}
       </main>
@@ -1765,10 +1847,17 @@ export default function App() {
 
       {isPostModalOpen && (
         <PostListingModal
-          onClose={() => setIsPostModalOpen(false)}
+          onClose={() => {
+            setIsPostModalOpen(false);
+            setPostInitialPreset(null);
+          }}
           currentUser={currentUser}
+          initialPreset={postInitialPreset}
           isBlocked={blockedUserIds.includes(currentUser.id)}
-          onListingApproved={handleListingApproved}
+          onListingApproved={(listing) => {
+            setPostInitialPreset(null);
+            handleListingApproved(listing);
+          }}
           onOpenMayarPromotion={(pkg) => {
             setQrisListing(null);
             setQrisType(pkg);
