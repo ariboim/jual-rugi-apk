@@ -6,8 +6,6 @@ import { MayarProductConfig, MonetizationPackage } from '../types';
 export const MAYAR_SUNDUL_URL = 'https://indo-digital.myr.id/plink/sundul-iklan';
 export const MAYAR_BU_PRIORITAS_URL = 'https://indo-digital.myr.id/plink/link-pembayaran-bu-prioritas';
 export const WA_ADMIN_PHONE = '6289673686625';
-export const ADMIN_USERNAME = 'admin';
-export const ADMIN_PASSWORD = 'admin123';
 
 /**
  * Konfigurasi Resmi Produk Monetisasi JualRugi.my.id dengan Payment Gateway Mayar.id

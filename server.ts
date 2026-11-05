@@ -235,6 +235,37 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     }
   });
 
+  // Endpoint: Otentikasi Admin Terproteksi (Server-Side)
+  app.post('/api/admin/login', (req, res) => {
+    try {
+      const { username, password } = req.body || {};
+      const expectedUsername = process.env.ADMIN_USERNAME || 'admin';
+      const expectedPassword = process.env.ADMIN_PASSWORD || 'admin123';
+
+      if (
+        typeof username === 'string' &&
+        typeof password === 'string' &&
+        username.trim() === expectedUsername &&
+        password === expectedPassword
+      ) {
+        return res.status(200).json({
+          success: true,
+          message: 'Autentikasi admin berhasil.',
+        });
+      }
+
+      return res.status(401).json({
+        success: false,
+        message: 'Username atau password yang Anda masukkan salah. Silakan coba lagi.',
+      });
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        message: 'Terjadi kesalahan sistem saat memproses login.',
+      });
+    }
+  });
+
   // In-memory data store for idempotency & user quotas
   const processedMayarTransactions = new Set<string>();
   const userQuotas = new Map<string, { quota: number; freeListingUsed: boolean; transactions: any[] }>();
