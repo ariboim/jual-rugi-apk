@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { Flame } from 'lucide-react';
+import React from 'react';
 
 interface BrandLogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -10,12 +9,11 @@ interface BrandLogoProps {
 
 /**
  * BrandLogo Component
- * Menyajikan logo resmi JualRugi.my.id secara tajam & responsif.
- * Dilengkapi proteksi failover otomatis:
- * 1. Mencoba memuat /logo_transparent.png (di root static)
- * 2. Mencoba memuat /assets/aistudio/logo_transparent.png
- * 3. Jika file gambar gagal/hilang, otomatis menampilkan SVG Logo vektor + styled typography
- *    sehingga tidak pernah ada broken image icon di layar pengguna/mobile browser.
+ * Menyajikan identitas visual resmi JualRugi.my.id dalam bentuk vektor inline SVG murni & tipografi presisi.
+ * Keunggulan utama:
+ * 1. 100% Bebas dari risiko broken image icon ([x] icon) karena tidak bergantung pada request file eksternal/PNG.
+ * 2. Tampil tajam (ultra-crisp) di semua resolusi layar (Retina, OLED smartphone, desktop 4K).
+ * 3. Ringan, 0 ms loading time, dan bekerja mulus saat offline (PWA) maupun saat di-deploy ke Cloudflare/GitHub.
  */
 export const BrandLogo: React.FC<BrandLogoProps> = ({
   size = 'md',
@@ -23,19 +21,16 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   onClick,
   className = '',
 }) => {
-  const [imageFailed, setImageFailed] = useState(false);
-  const [triedFallback, setTriedFallback] = useState(false);
-
-  const heightClasses = {
-    sm: 'h-6 sm:h-7',
-    md: 'h-8 sm:h-9.5 md:h-10',
-    lg: 'h-10 sm:h-12',
+  const iconSizes = {
+    sm: 'w-7 h-7 sm:w-8 sm:h-8',
+    md: 'w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10',
+    lg: 'w-10 h-10 sm:w-12 sm:h-12',
   }[size];
 
-  const textSizeClasses = {
-    sm: 'text-sm font-black',
-    md: 'text-lg sm:text-xl font-black',
-    lg: 'text-2xl font-black',
+  const textSizes = {
+    sm: 'text-base sm:text-lg',
+    md: 'text-xl sm:text-2xl',
+    lg: 'text-2xl sm:text-3xl',
   }[size];
 
   return (
@@ -53,52 +48,59 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       } ${className}`}
       title="JualRugi.my.id - Pusat Bursa Barang Bekas BU & Distress Sale"
     >
-      {!imageFailed ? (
-        <img
-          src={triedFallback ? '/assets/aistudio/logo_transparent.png' : '/logo_transparent.png'}
-          alt="JualRugi.my.id"
-          className={`${heightClasses} w-auto object-contain select-none`}
-          onError={() => {
-            if (!triedFallback) {
-              setTriedFallback(true);
-            } else {
-              setImageFailed(true);
-            }
-          }}
-        />
-      ) : (
-        <div className="flex items-center gap-2">
-          {/* Internal Branded SVG Icon */}
-          <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-sky-600 via-sky-500 to-amber-500 flex items-center justify-center text-white shadow-sm shrink-0">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-5 h-5 text-white"
-            >
-              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-              <path d="M3 6h18" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
-            </svg>
-            <span className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-red-600 text-white shadow-xs">
-              <Flame className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
-            </span>
-          </div>
+      {/* Official Vector Shopping Cart + Flame Icon (100% Zero-Failure, Instant Render, No Broken Image Ever) */}
+      <div className={`relative ${iconSizes} shrink-0 flex items-center justify-center`}>
+        <svg
+          viewBox="0 0 48 48"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="w-full h-full drop-shadow-xs"
+        >
+          <defs>
+            <linearGradient id="jrCartGrad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#ef4444" />
+              <stop offset="0.5" stopColor="#f97316" />
+              <stop offset="1" stopColor="#ea580c" />
+            </linearGradient>
+            <linearGradient id="jrFlameGrad" x1="22" y1="8" x2="32" y2="26" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#fde047" />
+              <stop offset="0.6" stopColor="#f97316" />
+              <stop offset="1" stopColor="#dc2626" />
+            </linearGradient>
+          </defs>
 
-          {/* Branded Typography */}
-          <div className="flex items-baseline">
-            <span className={`text-slate-900 tracking-tight ${textSizeClasses}`}>Jual</span>
-            <span className={`text-sky-600 tracking-tight ${textSizeClasses}`}>Rugi</span>
-            <span className="text-[10.5px] sm:text-xs font-bold text-slate-500 ml-0.5">.my.id</span>
-          </div>
-        </div>
-      )}
+          {/* Cart handle & basket lines */}
+          <path
+            d="M6 10h6l4.6 19.5a3 3 0 0 0 2.9 2.3h18.8a3 3 0 0 0 2.9-2.2L44 16H14.5"
+            stroke="url(#jrCartGrad)"
+            strokeWidth="3.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Cart wheels */}
+          <circle cx="20" cy="38" r="3.2" fill="#ef4444" />
+          <circle cx="34" cy="38" r="3.2" fill="#ea580c" />
+
+          {/* Distress flame symbol rising from basket */}
+          <path
+            d="M26 12.5c.6 2.3 2.2 3.3 3.1 4.7 1.4 2.1.8 4.3-.7 5.2-1.5 1-3.4.5-4-.9-.2-.5-.2-1.1.2-1.7-1.4.9-2.1 2.5-1.7 4 .5 2.1 2.5 3.4 4.6 3.1 2.4-.3 4.1-2.3 3.8-4.8-.2-1.7-1.4-3-2.4-4.3-.8-1-1.1-2.1-1-3.5-.7.6-1.3 1.6-1.9 3.2Z"
+            fill="url(#jrFlameGrad)"
+          />
+        </svg>
+      </div>
+
+      {/* Typography: jual (black) + rugi (red) + .my.id (gray) */}
+      <div className="flex items-baseline leading-none">
+        <span className={`font-black text-slate-900 tracking-tight ${textSizes}`}>jual</span>
+        <span className={`font-black text-red-600 tracking-tight ${textSizes}`}>rugi</span>
+        <span className="text-[10px] sm:text-[11.5px] font-bold text-slate-500 tracking-tight ml-0.5">
+          .my.id
+        </span>
+      </div>
 
       {showBadge && (
-        <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-sky-50 text-sky-700 border border-sky-200 font-extrabold uppercase tracking-wider hidden md:inline-block">
+        <span className="text-[9.5px] px-1.5 py-0.5 rounded-sm bg-red-50 text-red-700 border border-red-200 font-extrabold uppercase tracking-wider hidden md:inline-block">
           Distress Sale
         </span>
       )}

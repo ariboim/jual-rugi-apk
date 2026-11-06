@@ -283,9 +283,10 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       const targetTitle = listingTitle || 'Produk Butuh Uang JualRugi';
       const emailSubject = subject || 'Iklan Tayang';
       const cleanListingId = (listingId || 'bu-demo').trim();
-      const adLink = `https://jualrugi.my.id/?deal=${encodeURIComponent(cleanListingId)}`;
+      const directAdLink = `https://jualrugi.my.id/iklan/${cleanListingId}`;
+      const adLink = directAdLink;
 
-      const textContent = `Selamat, iklan Anda telah tayang!\nSilakan cek iklan Anda melalui link berikut: ${adLink}`;
+      const textContent = `Selamat, iklan Anda telah tayang!\nSilakan cek iklan Anda melalui link langsung berikut: ${directAdLink}`;
 
       const htmlContent = `
 <!DOCTYPE html>
@@ -319,12 +320,12 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     <p>Calon pembeli dapat langsung menemukan produk Anda dan menghubungi Anda via Chat COD tatap muka yang aman.</p>
 
     <div class="cta-container">
-      <a href="${adLink}" class="btn-cta" target="_blank" rel="noopener noreferrer">
+      <a href="${directAdLink}" class="btn-cta" target="_blank" rel="noopener noreferrer" data-track="false" data-msys-linktracking="0" sh-no-track="true">
         👀 Cek Iklan Anda Sekarang
       </a>
       <div class="link-box">
-        Silakan cek iklan Anda melalui link berikut:<br />
-        <a href="${adLink}" style="color: #0284c7; font-weight: bold;">${adLink}</a>
+        Atau buka link langsung iklan Anda di browser:<br />
+        <a href="${directAdLink}" style="color: #0284c7; font-weight: bold; word-break: break-all;" data-track="false" data-msys-linktracking="0">${directAdLink}</a>
       </div>
     </div>
 

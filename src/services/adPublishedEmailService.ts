@@ -15,20 +15,18 @@ import {
 } from './welcomeEmail';
 
 // =============================================================================
-// [1. KONFIGURASI URL IKLAN DINAMIS]
-// Format standar 404-proof: https://jualrugi.my.id/?deal={id_iklan}
-// URL root dengan parameter ?deal= dijamin 100% tidak pernah mengalami 404
-// di email client (Gmail, Yahoo, Mail) maupun di Cloudflare CDN / static hosting.
+// [1. KONFIGURASI URL IKLAN LANGSUNG]
+// Format resmi: https://jualrugi.my.id/iklan/{id_iklan}
 // =============================================================================
-export const AD_BASE_URL = 'https://jualrugi.my.id';
+export const AD_BASE_URL = 'https://jualrugi.my.id/iklan';
 
 /**
- * Menghasilkan link dinamis iklan berdasarkan ID listing
+ * Menghasilkan link langsung iklan berdasarkan ID listing
  * @param listingId ID unik dari iklan yang tayang
  */
 export function getDynamicAdLink(listingId: string): string {
   const cleanId = (listingId || 'demo').trim();
-  return `https://jualrugi.my.id/?deal=${encodeURIComponent(cleanId)}`;
+  return `${AD_BASE_URL}/${cleanId}`;
 }
 
 // =============================================================================
@@ -106,12 +104,12 @@ export function generateAdPublishedEmailContent(listingId: string, listingTitle?
     <p>Calon pembeli dapat langsung menemukan produk Anda dan menghubungi Anda via Chat COD tatap muka yang aman.</p>
 
     <div class="cta-container">
-      <a href="${adLink}" class="btn-cta" target="_blank" rel="noopener noreferrer">
+      <a href="${adLink}" class="btn-cta" target="_blank" rel="noopener noreferrer" data-track="false" data-msys-linktracking="0" sh-no-track="true">
         👀 Cek Iklan Anda Sekarang
       </a>
       <div class="link-box">
-        Silakan cek iklan Anda melalui link berikut:<br />
-        <a href="${adLink}" style="color: #0284c7; font-weight: bold;">${adLink}</a>
+        Atau buka link langsung iklan Anda di browser:<br />
+        <a href="${adLink}" style="color: #0284c7; font-weight: bold; word-break: break-all;" data-track="false" data-msys-linktracking="0">${adLink}</a>
       </div>
     </div>
 
@@ -321,12 +319,12 @@ export async function triggerMonetizationActivatedEmail(
       Status paket <strong>${packageName}</strong> telah resmi diaktifkan oleh Admin JualRugi setelah verifikasi bukti pembayaran Mayar.
     </p>
     <div style="text-align:center;margin:24px 0;">
-      <a href="${adLink}" style="display:inline-block;background:#0284c7;color:#ffffff;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:10px;text-decoration:none;">
+      <a href="${adLink}" style="display:inline-block;background:#0284c7;color:#ffffff;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:10px;text-decoration:none;" data-track="false" data-msys-linktracking="0" sh-no-track="true">
         Cek Iklan Anda Sekarang
       </a>
       <div style="margin-top:14px;font-size:12px;color:#64748b;word-break:break-all;">
-        Silakan cek iklan Anda melalui: <br/>
-        <a href="${adLink}" style="color:#0284c7;font-weight:bold;">${adLink}</a>
+        Silakan cek iklan Anda melalui link langsung: <br/>
+        <a href="${adLink}" style="color:#0284c7;font-weight:bold;" data-track="false" data-msys-linktracking="0">${adLink}</a>
       </div>
     </div>
     <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center;">
