@@ -23,6 +23,8 @@ import {
   ExternalLink,
   Copy,
   Check,
+  ArrowRight,
+  Tag,
 } from 'lucide-react';
 
 import { Category, CATEGORIES, Listing, UserProfile, MonetizationPackage } from './types';
@@ -245,9 +247,36 @@ export default function App() {
           setIsAdminModalOpen(true);
         }
 
-        const dealId = params.get('deal') || window.location.hash.replace(/^#deal-/, '');
+        // Resolusi ID Iklan: mendukung ?deal=, ?ad=, ?id=, ?iklan=, #deal-, serta path /iklan/:id
+        let dealId = params.get('deal') || params.get('ad') || params.get('id') || params.get('iklan') || '';
+        if (!dealId && window.location.hash.startsWith('#deal-')) {
+          dealId = window.location.hash.replace(/^#deal-/, '');
+        }
+        if (!dealId) {
+          const matchPath = window.location.pathname.match(/\/iklan\/([^\/\?#]+)/i);
+          if (matchPath && matchPath[1]) {
+            dealId = decodeURIComponent(matchPath[1]);
+          }
+        }
+
         if (dealId) {
-          const match = listings.find((item) => item.id === dealId);
+          const cleanId = dealId.trim().toLowerCase();
+          let match = listings.find((item) => item.id.toLowerCase() === cleanId);
+          if (!match) {
+            try {
+              const raw = localStorage.getItem('jualrugi_listings');
+              if (raw) {
+                const parsed: Listing[] = JSON.parse(raw);
+                match = parsed.find((item) => item.id.toLowerCase() === cleanId);
+              }
+            } catch (e) {
+              console.error(e);
+            }
+          }
+          if (!match) {
+            match = INITIAL_LISTINGS.find((item) => item.id.toLowerCase() === cleanId) ||
+                    DAILY_SOLD_SEEDED_LISTINGS.find((item) => item.id.toLowerCase() === cleanId);
+          }
           if (match) {
             setSelectedListing(match);
           }
@@ -1405,11 +1434,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Floating System Toast */}
+      {/* Floating System Toast (Aman di atas BottomNav tanpa overflow) */}
       {toastMessage && (
-        <div className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-50 bg-sky-600 text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold flex items-center gap-2 animate-fade-in border border-sky-400">
+        <div className="fixed bottom-24 right-4 sm:bottom-6 sm:right-6 z-50 bg-sky-600 text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold flex items-center gap-2 animate-fade-in border border-sky-400 max-w-[calc(100vw-2rem)]">
           <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
-          <span>{toastMessage}</span>
+          <span className="truncate">{toastMessage}</span>
         </div>
       )}
 
@@ -1417,7 +1446,66 @@ export default function App() {
       <main className="grow">
         {/* TAB: BERANDA (FEED) */}
         {activeTab === 'home' && (
-          <div className="max-w-7xl mx-auto px-4 py-5 space-y-4 sm:space-y-5 pb-24">
+          <div className="max-w-7xl mx-auto px-4 py-4 sm:py-5 space-y-4 sm:space-y-5 pb-24 overflow-x-hidden">
+            {/* Promo Banner Responsif Tepat di Bawah Header & Sebelum Kategori Pilihan */}
+            <div className="w-full overflow-hidden rounded-2xl sm:rounded-3xl border border-sky-100 shadow-sm bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 select-none">
+              <div
+                onClick={handleNavigateSmartphoneCategory}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    handleNavigateSmartphoneCategory();
+                  }
+                }}
+                className="group relative w-full block cursor-pointer transition active:scale-[0.99] focus:outline-none"
+                title="Lihat Promo Smartphone & Gadget Harga Butuh Uang"
+              >
+                {/* Banner Badge */}
+                <div className="absolute top-2.5 left-3 sm:top-3 sm:left-4 z-20 flex items-center gap-1.5 pointer-events-none">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900/85 backdrop-blur-md text-[10px] sm:text-xs font-black text-amber-300 border border-white/20 shadow-xs uppercase tracking-wider">
+                    <Flame className="w-3 h-3 text-amber-400 fill-amber-400 animate-pulse" />
+                    Promo Spesial BU
+                  </span>
+                  <span className="hidden xs:inline-block px-2 py-0.5 rounded-full bg-white/90 backdrop-blur-md text-[9px] font-extrabold text-slate-800 border border-slate-200 shadow-2xs">
+                    Diskon s/d 45%
+                  </span>
+                </div>
+
+                {/* Banner Graphic Asset with clean error fallback */}
+                <div className="relative w-full aspect-[3.2/1] sm:aspect-[3.8/1] md:aspect-[4.2/1] overflow-hidden bg-slate-900">
+                  <img
+                    src="/banner-hp-jualrugi.png"
+                    alt="Handphone Impresif, Harga Gila-Gilaan! - JualRugi.my.id"
+                    className="w-full h-full object-cover object-center group-hover:scale-[1.015] transition-transform duration-500 ease-out"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (target.src.indexOf('/assets/aistudio/banner-hp-jualrugi.png') === -1) {
+                        target.src = '/assets/aistudio/banner-hp-jualrugi.png';
+                      }
+                    }}
+                  />
+                  {/* Floating CTA button on desktop/tablet */}
+                  <div className="absolute bottom-2.5 right-3 sm:bottom-3 sm:right-4 z-20 hidden xs:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-950/85 hover:bg-black text-white text-[11px] sm:text-xs font-black shadow-lg backdrop-blur-sm border border-white/20 group-hover:border-amber-400 group-hover:text-amber-300 transition-all pointer-events-none">
+                    <span>Lihat Promo Gadget</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </div>
+
+                {/* Mobile Subtitle Tap Bar */}
+                <div className="xs:hidden bg-gradient-to-r from-red-700 via-orange-600 to-amber-600 px-3 py-1.5 flex items-center justify-between text-white text-[10px] font-bold border-t border-white/20">
+                  <span className="flex items-center gap-1 truncate">
+                    <Tag className="w-3 h-3 text-amber-300 shrink-0" />
+                    <span>Diskon sadis HP & Gadget BU - 100% COD</span>
+                  </span>
+                  <span className="shrink-0 flex items-center gap-0.5 text-amber-200 font-extrabold">
+                    <span>Buka</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* Top Category Filter for Rapid Feed Navigation */}
             <CategoryFilter
               selectedCategory={selectedCategory}

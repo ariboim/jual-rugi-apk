@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { sendWelcomeEmailAutomation } from '../services/welcomeEmail';
+import { BrandLogo } from './BrandLogo';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -192,11 +193,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Modal Header */}
         <div className="text-center mb-5">
           <div className="inline-flex items-center justify-center p-2 rounded-2xl bg-sky-50 mb-2 border border-sky-100">
-            <img
-              src="/assets/aistudio/logo_transparent.png"
-              alt="JualRugi.my.id"
-              className="h-8 w-auto object-contain"
-            />
+            <BrandLogo size="sm" />
           </div>
           <h2 className="text-lg sm:text-xl font-black text-sky-950">
             {mode === 'register' ? 'Daftar Akun JualRugi.my.id' : 'Masuk ke Akun Anda'}

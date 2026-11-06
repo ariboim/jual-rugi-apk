@@ -16,18 +16,19 @@ import {
 
 // =============================================================================
 // [1. KONFIGURASI URL IKLAN DINAMIS]
-// Sesuaikan baseUrl di bawah ini dengan konfigurasi domain production Anda.
-// Format standar: https://jualrugi.my.id/iklan/{id_iklan}
+// Format standar 404-proof: https://jualrugi.my.id/?deal={id_iklan}
+// URL root dengan parameter ?deal= dijamin 100% tidak pernah mengalami 404
+// di email client (Gmail, Yahoo, Mail) maupun di Cloudflare CDN / static hosting.
 // =============================================================================
-export const AD_BASE_URL = 'https://jualrugi.my.id/iklan';
+export const AD_BASE_URL = 'https://jualrugi.my.id';
 
 /**
  * Menghasilkan link dinamis iklan berdasarkan ID listing
  * @param listingId ID unik dari iklan yang tayang
  */
 export function getDynamicAdLink(listingId: string): string {
-  // Contoh hasil: https://jualrugi.my.id/iklan/ad-1741234567890
-  return `${AD_BASE_URL}/${listingId}`;
+  const cleanId = (listingId || 'demo').trim();
+  return `https://jualrugi.my.id/?deal=${encodeURIComponent(cleanId)}`;
 }
 
 // =============================================================================

@@ -3,6 +3,8 @@ import { Flame, ShieldCheck, RefreshCw, LogOut, LogIn } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { UserProfile } from '../types';
 
+import { BrandLogo } from './BrandLogo';
+
 interface NavbarProps {
   currentUser: UserProfile;
   onSwitchUser: () => void;
@@ -58,18 +60,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Main Top Header */}
       <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
-        {/* Brand - Transparent Official Logo without any frame */}
+        {/* Brand - Transparent Official Logo with robust fallback */}
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-2 select-none cursor-pointer">
-            <img
-              src="/assets/aistudio/logo_transparent.png"
-              alt="JualRugi.my.id"
-              className="h-8 sm:h-9.5 md:h-10 w-auto object-contain select-none"
-            />
-            <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-sky-50 text-sky-700 border border-sky-200 font-extrabold uppercase tracking-wider hidden md:inline-block">
-              Distress Sale
-            </span>
-          </div>
+          <BrandLogo size="md" showBadge={true} />
         </div>
 
         {/* Right Action Icons: PWA Install + User Switcher + Logout/Login */}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, Share2, PlusSquare, X, CheckCircle, Smartphone, ExternalLink } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { BrandLogo } from './BrandLogo';
 
 // Direct GitHub Release APK Download URL
 export const APK_DOWNLOAD_URL = "https://github.com/ariboim/jual-rugi-apk/releases/latest/download/app-debug.apk";
@@ -100,11 +101,7 @@ export const PWAInstallButton: React.FC = () => {
           <div className="w-full max-w-sm rounded-2xl bg-white border border-sky-100 p-5 shadow-2xl text-slate-800">
             <div className="flex items-center justify-between pb-3 border-b border-sky-100">
               <div className="flex items-center gap-2">
-                <img
-                  src="/assets/aistudio/logo_transparent.png"
-                  alt="JualRugi.my.id"
-                  className="h-7 w-auto object-contain"
-                />
+                <BrandLogo size="sm" />
                 <div>
                   <h3 className="text-sm font-bold text-sky-950">Install di iPhone / iPad</h3>
                   <p className="text-[11px] text-slate-500">Pasang icon web ke Layar Utama</p>

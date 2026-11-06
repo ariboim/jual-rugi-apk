@@ -282,7 +282,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       const targetEmail = (recipientEmail || 'bca.ccpl@gmail.com').trim();
       const targetTitle = listingTitle || 'Produk Butuh Uang JualRugi';
       const emailSubject = subject || 'Iklan Tayang';
-      const adLink = `https://jualrugi.my.id/iklan/${listingId || 'bu-demo'}`;
+      const cleanListingId = (listingId || 'bu-demo').trim();
+      const adLink = `https://jualrugi.my.id/?deal=${encodeURIComponent(cleanListingId)}`;
 
       const textContent = `Selamat, iklan Anda telah tayang!\nSilakan cek iklan Anda melalui link berikut: ${adLink}`;
 
