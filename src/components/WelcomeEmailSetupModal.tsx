@@ -64,7 +64,7 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
     provider?: string;
   } | null>(null);
 
-  const directPostUrl = `${window.location.origin}/?action=post`;
+  const directPostUrl = `${window.location.origin}/#pasangiklan`;
 
   const handleCopyDirectLink = () => {
     navigator.clipboard.writeText(directPostUrl);

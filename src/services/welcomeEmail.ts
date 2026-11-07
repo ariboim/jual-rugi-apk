@@ -151,12 +151,12 @@ export function getWelcomeEmailHtml(name: string, email: string): string {
     <p>🎁 <strong>Bonus Pendaftaran:</strong> Anda mendapatkan <strong>1 Slot Kuota Pasang Iklan Gratis</strong> untuk mulai memasang iklan barang butuh uang hari ini!</p>
 
     <div style="text-align: center; margin: 24px 0 12px;">
-      <a href="https://jualrugi.my.id/?action=post" class="button" style="display: inline-block; background: #0284c7; color: #ffffff !important; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(2, 132, 199, 0.3);" data-track="false" data-msys-linktracking="0" sh-no-track="true">
+      <a href="https://jualrugi.my.id/#pasangiklan" class="button" style="display: inline-block; background: #0284c7; color: #ffffff !important; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(2, 132, 199, 0.3);" data-track="false" data-msys-linktracking="0" sh-no-track="true">
         🚀 Pasang Iklan Sekarang (Gunakan Kuota Gratis)
       </a>
     </div>
     <p style="text-align: center; font-size: 12px; color: #64748b; margin: 6px 0 20px;">
-      Direct Link Pasang Iklan: <a href="https://jualrugi.my.id/?action=post" style="color: #0284c7; font-weight: 600;" data-track="false" data-msys-linktracking="0">https://jualrugi.my.id/?action=post</a>
+      Direct Link Pasang Iklan: <a href="https://jualrugi.my.id/#pasangiklan" style="color: #0284c7; font-weight: 600;" data-track="false" data-msys-linktracking="0">https://jualrugi.my.id/#pasangiklan</a>
     </p>
 
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0 20px;" />

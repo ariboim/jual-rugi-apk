@@ -223,14 +223,19 @@ export default function App() {
           setSelectedCategory('Smartphone & Gadget');
         }
 
-        // Check direct link ke form pasang iklan (?action=post, ?tab=post, ?pasang-iklan=true, #pasang-iklan, /pasang-iklan)
+        // Check direct link ke form pasang iklan (#pasangiklan, #pasang-iklan, ?action=post, ?tab=post, /pasang-iklan)
+        const currentHash = (window.location.hash || '').toLowerCase();
         const isPostAction =
+          currentHash === '#pasangiklan' ||
+          currentHash === '#pasang-iklan' ||
+          currentHash === '#post' ||
+          currentHash.includes('pasangiklan') ||
           params.get('action') === 'post' ||
           params.get('tab') === 'post' ||
           params.has('pasang-iklan') ||
-          window.location.hash === '#pasang-iklan' ||
-          window.location.hash === '#post' ||
+          params.has('pasangiklan') ||
           path.includes('/pasang-iklan') ||
+          path.includes('/pasangiklan') ||
           path.includes('/post');
 
         if (isPostAction) {
@@ -289,7 +294,11 @@ export default function App() {
 
     handleCheckDeepLink();
     window.addEventListener('popstate', handleCheckDeepLink);
-    return () => window.removeEventListener('popstate', handleCheckDeepLink);
+    window.addEventListener('hashchange', handleCheckDeepLink);
+    return () => {
+      window.removeEventListener('popstate', handleCheckDeepLink);
+      window.removeEventListener('hashchange', handleCheckDeepLink);
+    };
   }, [listings]);
 
   const handleOpenListing = (listing: Listing) => {
