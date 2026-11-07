@@ -178,19 +178,54 @@ export async function sendWelcomeEmailAutomation(
 ): Promise<WelcomeEmailResponse> {
   const brevoConfig = getBrevoConfig();
 
-  const activeBrevoKey =
-    brevoConfig.apiKey && brevoConfig.apiKey.length > 20
-      ? brevoConfig.apiKey
-      : DEFAULT_BREVO_API_KEY;
-
   const recipientEmail = payload.email.trim();
   const recipientName = payload.name.trim() || 'Member JualRugi';
   const senderEmail = brevoConfig.senderEmail || DEFAULT_BREVO_SENDER_EMAIL;
   const senderName = brevoConfig.senderName || DEFAULT_BREVO_SENDER_NAME;
 
-  // 1. OPSI UTAMA: Panggil Brevo API langsung dari Client (Universal: bekerja di Vercel, APK, Web via CORS)
+  console.log(`[Welcome Email Service] Memulai pengiriman welcome email untuk ${recipientEmail}...`);
+
+  // 1. OPSI UTAMA: Panggil Server Dispatcher / Cloudflare Pages Function (/api/send-welcome-email)
+  try {
+    console.log('[Welcome Email Service] Mengirim request ke endpoint /api/send-welcome-email...');
+    const res = await fetch('/api/send-welcome-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...payload,
+        email: recipientEmail,
+        name: recipientName,
+        senderEmail,
+        senderName,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      console.log('✅ [Welcome Email Service] Berhasil dikirim via server/Cloudflare Pages:', data);
+      return data;
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      console.warn(`⚠️ [Welcome Email Service] Server / Cloudflare Pages merespons status ${res.status}:`, errData);
+      if (errData && errData.error) {
+        console.error('❌ [Welcome Email Error Detail]:', errData.error, errData.debugInfo || '');
+      }
+    }
+  } catch (serverErr) {
+    console.warn('⚠️ [Welcome Email Service] Endpoint /api/send-welcome-email unreachable:', serverErr);
+  }
+
+  // 2. OPSI CADANGAN: Direct Brevo API Call jika ada client key valid
+  const activeBrevoKey =
+    brevoConfig.apiKey && brevoConfig.apiKey.length > 20
+      ? brevoConfig.apiKey
+      : DEFAULT_BREVO_API_KEY;
+
   if (activeBrevoKey && activeBrevoKey.startsWith('xkeysib-') && recipientEmail.includes('@')) {
     try {
+      console.log('[Welcome Email Service] Mencoba direct call ke https://api.brevo.com/v3/smtp/email...');
       const emailHtml = getWelcomeEmailHtml(recipientName, recipientEmail);
       const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
@@ -211,7 +246,7 @@ export async function sendWelcomeEmailAutomation(
 
       if (res.ok) {
         const data = await res.json();
-        console.log('✅ Brevo direct API success:', data);
+        console.log('✅ [Welcome Email Service] Berhasil via direct Brevo API:', data);
         return {
           success: true,
           provider: 'brevo',
@@ -220,44 +255,18 @@ export async function sendWelcomeEmailAutomation(
           brevoMessageId: data.messageId,
         };
       } else {
-        const errData = await res.json();
-        console.warn('Brevo direct API response error:', errData);
+        const errData = await res.json().catch(() => ({}));
+        console.error('❌ [Welcome Email Service] Brevo direct API error:', res.status, errData);
       }
     } catch (brevoErr) {
-      console.warn('Brevo direct call error, fallback to server dispatcher:', brevoErr);
+      console.error('❌ [Welcome Email Service] Brevo direct exception:', brevoErr);
     }
-  }
-
-  // 2. OPSI KEDUA: Panggil Server Dispatcher (/api/send-welcome-email) jika server backend aktif
-  try {
-    const res = await fetch('/api/send-welcome-email', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ...payload,
-        email: recipientEmail,
-        name: recipientName,
-        brevoApiKey: activeBrevoKey,
-        senderEmail,
-        senderName,
-      }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      console.log('✅ Welcome email dispatched via server:', data);
-      return data;
-    }
-  } catch (serverErr) {
-    console.warn('Server send-welcome-email error:', serverErr);
   }
 
   return {
     success: true,
     provider: 'in_app',
-    message: `Pendaftaran ${recipientName} berhasil & welcome email disiapkan untuk ${recipientEmail}.`,
+    message: `Pendaftaran ${recipientName} berhasil tercatat untuk ${recipientEmail}.`,
     emailSentTo: recipientEmail,
   };
 }

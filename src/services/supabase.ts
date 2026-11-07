@@ -223,6 +223,31 @@ export async function fetchListingsFromSupabase(): Promise<Listing[] | null> {
 }
 
 /**
+ * Mengambil satu iklan spesifik berdasarkan ID dari Supabase
+ */
+export async function fetchListingByIdFromSupabase(listingId: string): Promise<Listing | null> {
+  const client = getSupabaseClient();
+  if (!client || !listingId) return null;
+
+  try {
+    const { data, error } = await client
+      .from('listings')
+      .select('*')
+      .eq('id', listingId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return mapRowToListing(data);
+  } catch (err) {
+    console.warn('Gagal fetch single listing dari Supabase:', err);
+    return null;
+  }
+}
+
+/**
  * Menyimpan iklan baru ke tabel 'listings' di Supabase
  */
 export async function saveListingToSupabase(

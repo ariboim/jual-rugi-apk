@@ -283,10 +283,10 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       const targetTitle = listingTitle || 'Produk Butuh Uang JualRugi';
       const emailSubject = subject || 'Iklan Tayang';
       const cleanListingId = (listingId || 'bu-demo').trim();
-      const directAdLink = `https://jualrugi.my.id/iklan/${cleanListingId}`;
+      const directAdLink = `https://jualrugi.my.id/?id=${encodeURIComponent(cleanListingId)}`;
       const adLink = directAdLink;
 
-      const textContent = `Selamat, iklan Anda telah tayang!\nSilakan cek iklan Anda melalui link langsung berikut: ${directAdLink}`;
+      const textContent = `Selamat, iklan Anda telah tayang!\n\nJudul: "${targetTitle}"\nSilakan cek iklan Anda melalui link berikut: ${directAdLink}`;
 
       const htmlContent = `
 <!DOCTYPE html>
@@ -320,12 +320,12 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     <p>Calon pembeli dapat langsung menemukan produk Anda dan menghubungi Anda via Chat COD tatap muka yang aman.</p>
 
     <div class="cta-container">
-      <a href="${directAdLink}" class="btn-cta" target="_blank" rel="noopener noreferrer" data-track="false" data-msys-linktracking="0" sh-no-track="true">
+      <a href="${directAdLink}" class="btn-cta" target="_blank" rel="noopener noreferrer">
         👀 Cek Iklan Anda Sekarang
       </a>
       <div class="link-box">
-        Atau buka link langsung iklan Anda di browser:<br />
-        <a href="${directAdLink}" style="color: #0284c7; font-weight: bold; word-break: break-all;" data-track="false" data-msys-linktracking="0">${directAdLink}</a>
+        Silakan cek iklan Anda melalui link berikut:<br />
+        <a href="${directAdLink}" style="color: #0284c7; font-weight: bold; word-break: break-all;">${directAdLink}</a>
       </div>
     </div>
 
@@ -368,7 +368,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
           });
 
           const brevoData = await brevoRes.json().catch(() => ({}));
-          console.log(`[Brevo API Dispatch "Iklan Tayang"]: Status ${brevoRes.status} to ${targetEmail} (MessageId: ${brevoData.messageId || 'ok'})`);
+          console.log(`[Brevo API Dispatch "Iklan Tayang"]: Status ${brevoRes.status} to ${targetEmail}`, brevoData);
 
           if (brevoRes.ok) {
             return res.status(200).json({
@@ -381,10 +381,27 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
               provider: 'brevo',
               messageId: brevoData.messageId,
             });
+          } else {
+            console.error(`[Brevo Error]: Status ${brevoRes.status}`, brevoData);
+            return res.status(brevoRes.status).json({
+              success: false,
+              error: `Brevo API menolak pengiriman (Status ${brevoRes.status}): ${brevoData.message || 'Terjadi kesalahan pada akun Brevo.'}`,
+              details: brevoData,
+            });
           }
         } catch (dispatchErr: any) {
-          console.warn('[Brevo Dispatch Error]:', dispatchErr);
+          console.error('[Brevo Dispatch Exception]:', dispatchErr);
+          return res.status(500).json({
+            success: false,
+            error: `Gagal menghubungi server Brevo API: ${dispatchErr.message}`,
+          });
         }
+      } else {
+        console.warn('[Brevo API Key Missing]: BREVO_API_KEY tidak ditemukan atau format bukan xkeysib-...');
+        return res.status(500).json({
+          success: false,
+          error: 'BREVO_API_KEY belum dikonfigurasi di Environment Variables (harus berawalan xkeysib-...).',
+        });
       }
 
       console.log(`[Simulation "Iklan Tayang" Email]: to ${targetEmail} | Subject: "${emailSubject}" | Link: ${adLink}`);

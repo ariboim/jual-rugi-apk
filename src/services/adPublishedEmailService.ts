@@ -16,9 +16,9 @@ import {
 
 // =============================================================================
 // [1. KONFIGURASI URL IKLAN LANGSUNG]
-// Format resmi: https://jualrugi.my.id/iklan/{id_iklan}
+// Format resmi: https://jualrugi.my.id/?id={id_iklan} (juga mendukung ?deal={id})
 // =============================================================================
-export const AD_BASE_URL = 'https://jualrugi.my.id/iklan';
+export const AD_BASE_URL = 'https://jualrugi.my.id';
 
 /**
  * Menghasilkan link langsung iklan berdasarkan ID listing
@@ -26,7 +26,7 @@ export const AD_BASE_URL = 'https://jualrugi.my.id/iklan';
  */
 export function getDynamicAdLink(listingId: string): string {
   const cleanId = (listingId || 'demo').trim();
-  return `${AD_BASE_URL}/${cleanId}`;
+  return `${AD_BASE_URL}/?id=${encodeURIComponent(cleanId)}`;
 }
 
 // =============================================================================
@@ -62,13 +62,13 @@ export interface AdPublishedEmailResponse {
  * Subject: "Iklan Tayang"
  * Body:
  * "Selamat, iklan Anda telah tayang!
- * Silakan cek iklan Anda melalui link berikut: [Link Dinamis Iklan, contoh: https://jualrugi.my.id/iklan/{id_iklan}]"
+ * Silakan cek iklan Anda melalui link berikut: https://jualrugi.my.id/?id={id_iklan}"
  */
 export function generateAdPublishedEmailContent(listingId: string, listingTitle?: string) {
   const adLink = getDynamicAdLink(listingId);
 
   // Body Teks Murni (Plain Text)
-  const textContent = `Selamat, iklan Anda telah tayang!\nSilakan cek iklan Anda melalui link berikut: ${adLink}`;
+  const textContent = `Selamat, iklan Anda telah tayang!\n\nJudul: "${listingTitle || 'Produk JualRugi'}"\nSilakan cek iklan Anda melalui link berikut:\n${adLink}`;
 
   // Body HTML Responsif & Modern
   const htmlContent = `
@@ -104,12 +104,12 @@ export function generateAdPublishedEmailContent(listingId: string, listingTitle?
     <p>Calon pembeli dapat langsung menemukan produk Anda dan menghubungi Anda via Chat COD tatap muka yang aman.</p>
 
     <div class="cta-container">
-      <a href="${adLink}" class="btn-cta" target="_blank" rel="noopener noreferrer" data-track="false" data-msys-linktracking="0" sh-no-track="true">
+      <a href="${adLink}" class="btn-cta" target="_blank" rel="noopener noreferrer">
         👀 Cek Iklan Anda Sekarang
       </a>
       <div class="link-box">
-        Atau buka link langsung iklan Anda di browser:<br />
-        <a href="${adLink}" style="color: #0284c7; font-weight: bold; word-break: break-all;" data-track="false" data-msys-linktracking="0">${adLink}</a>
+        Silakan cek iklan Anda melalui link berikut:<br />
+        <a href="${adLink}" style="color: #0284c7; font-weight: bold; word-break: break-all;">${adLink}</a>
       </div>
     </div>
 
@@ -195,7 +195,7 @@ export async function triggerAdPublishedEmail(
 
     if (serverRes.ok) {
       const serverData = await serverRes.json();
-      console.log('✅ Email "Iklan Tayang" berhasil dikirim via server proxy:', serverData);
+      console.log('✅ [Ad Published Email] Berhasil dikirim via server/Cloudflare Pages:', serverData);
       return {
         success: true,
         message: serverData.message || `Email notifikasi "Iklan Tayang" berhasil dikirim ke ${recipientEmail}`,
@@ -205,9 +205,15 @@ export async function triggerAdPublishedEmail(
         provider: serverData.provider || 'brevo',
         messageId: serverData.messageId,
       };
+    } else {
+      const errData = await serverRes.json().catch(() => ({}));
+      console.warn(`⚠️ [Ad Published Email] Server / Cloudflare Pages merespons status ${serverRes.status}:`, errData);
+      if (errData && errData.error) {
+        console.error('❌ [Ad Published Email Error Detail]:', errData.error, errData.debugInfo || '');
+      }
     }
   } catch (serverErr) {
-    console.warn('Server proxy email unreachable, mencoba direct dispatch:', serverErr);
+    console.warn('⚠️ [Ad Published Email] Server proxy email unreachable, mencoba direct dispatch:', serverErr);
   }
 
   // 2. Eksekusi fallback pengiriman direct client via Brevo Transactional Email API
@@ -287,7 +293,7 @@ export interface MonetizationEmailPayload {
 /**
  * Mengirimkan Email Notifikasi saat Admin Mengaktifkan Paket Sundul / BU Prioritas
  * Sesuai format wajib:
- * "Selamat, iklan [sundul/prioritas] Anda sudah aktif! Silakan cek iklan Anda melalui: https://jualrugi.my.id/iklan/{id_iklan}"
+ * "Selamat, iklan [sundul/prioritas] Anda sudah aktif! Silakan cek iklan Anda melalui: https://jualrugi.my.id/?id={id_iklan}"
  */
 export async function triggerMonetizationActivatedEmail(
   payload: MonetizationEmailPayload
@@ -297,7 +303,7 @@ export async function triggerMonetizationActivatedEmail(
   const packageLabel = packageType === 'sundul' ? 'sundul' : 'prioritas';
   const packageName = packageType === 'sundul' ? 'Sundul Iklan (#1 Feed)' : 'BU Prioritas (Highlight Emas)';
 
-  const textContent = `Selamat, iklan ${packageLabel} Anda sudah aktif!\nSilakan cek iklan Anda melalui: ${adLink}`;
+  const textContent = `Selamat, iklan ${packageLabel} Anda sudah aktif!\n\nProduk: "${listingTitle}"\nSilakan cek iklan Anda melalui: ${adLink}`;
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -319,12 +325,12 @@ export async function triggerMonetizationActivatedEmail(
       Status paket <strong>${packageName}</strong> telah resmi diaktifkan oleh Admin JualRugi setelah verifikasi bukti pembayaran Mayar.
     </p>
     <div style="text-align:center;margin:24px 0;">
-      <a href="${adLink}" style="display:inline-block;background:#0284c7;color:#ffffff;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:10px;text-decoration:none;" data-track="false" data-msys-linktracking="0" sh-no-track="true">
+      <a href="${adLink}" style="display:inline-block;background:#0284c7;color:#ffffff;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:10px;text-decoration:none;" target="_blank" rel="noopener noreferrer">
         Cek Iklan Anda Sekarang
       </a>
       <div style="margin-top:14px;font-size:12px;color:#64748b;word-break:break-all;">
         Silakan cek iklan Anda melalui link langsung: <br/>
-        <a href="${adLink}" style="color:#0284c7;font-weight:bold;" data-track="false" data-msys-linktracking="0">${adLink}</a>
+        <a href="${adLink}" style="color:#0284c7;font-weight:bold;">${adLink}</a>
       </div>
     </div>
     <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center;">

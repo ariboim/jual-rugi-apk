@@ -64,6 +64,7 @@ import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { ADMIN_TEST_PRESETS, AdminTestPreset } from './data/adminTestPresets';
 import {
   fetchListingsFromSupabase,
+  fetchListingByIdFromSupabase,
   saveListingToSupabase,
   updateListingInSupabase,
   deleteListingFromSupabase,
@@ -245,18 +246,25 @@ export default function App() {
         // Check direct link ke dashboard admin (?admin=true, #admin, /admin)
         const isAdminAction =
           params.get('admin') === 'true' ||
-          params.has('admin') ||
+          params.get('mode') === 'admin' ||
           window.location.hash === '#admin' ||
-          path.includes('/admin');
+          path === '/admin' ||
+          path.startsWith('/admin/');
 
         if (isAdminAction) {
           setIsAdminModalOpen(true);
         }
 
-        // Resolusi ID Iklan: mendukung ?deal=, ?ad=, ?id=, ?iklan=, #deal-, serta path /iklan/:id
-        let dealId = params.get('deal') || params.get('ad') || params.get('id') || params.get('iklan') || '';
-        if (!dealId && window.location.hash.startsWith('#deal-')) {
-          dealId = window.location.hash.replace(/^#deal-/, '');
+        // Resolusi ID Iklan: mendukung ?id=, ?deal=, ?ad=, ?iklan=, #deal-, #iklan-, #ad-, serta path /iklan/:id
+        let dealId = params.get('id') || params.get('deal') || params.get('ad') || params.get('iklan') || '';
+        if (!dealId && window.location.hash) {
+          if (window.location.hash.startsWith('#deal-')) {
+            dealId = window.location.hash.replace(/^#deal-/, '');
+          } else if (window.location.hash.startsWith('#iklan-')) {
+            dealId = window.location.hash.replace(/^#iklan-/, '');
+          } else if (window.location.hash.startsWith('#ad-')) {
+            dealId = window.location.hash.replace(/^#/, '');
+          }
         }
         if (!dealId) {
           const matchPath = window.location.pathname.match(/\/iklan\/([^\/\?#]+)/i);
@@ -285,6 +293,17 @@ export default function App() {
           }
           if (match) {
             setSelectedListing(match);
+          } else if (isSupabaseConfigured()) {
+            // Ambil langsung dari database Supabase jika belum termuat di memori browser
+            fetchListingByIdFromSupabase(dealId.trim()).then((remoteListing) => {
+              if (remoteListing) {
+                setSelectedListing(remoteListing);
+                setListings((prev) => {
+                  if (prev.some((p) => p.id === remoteListing.id)) return prev;
+                  return [remoteListing, ...prev];
+                });
+              }
+            });
           }
         }
       } catch (err) {
@@ -469,11 +488,13 @@ export default function App() {
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
+      const pathname = window.location.pathname.toLowerCase();
       return (
         params.get('admin') === 'true' ||
-        params.has('admin') ||
+        params.get('mode') === 'admin' ||
         window.location.hash === '#admin' ||
-        window.location.pathname.toLowerCase().includes('/admin')
+        pathname === '/admin' ||
+        pathname.startsWith('/admin/')
       );
     } catch {
       return false;
