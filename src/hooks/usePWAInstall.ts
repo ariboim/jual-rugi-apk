@@ -11,12 +11,38 @@ export function usePWAInstall() {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    // Detect standalone mode (already installed)
-    const isStandalone =
-      typeof window !== 'undefined' &&
-      (window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as unknown as { standalone?: boolean }).standalone === true);
-    setIsInstalled(Boolean(isStandalone));
+    // Robust detection of standalone mode (installed PWA, WebAPK, or standalone app)
+    const checkStandalone = (): boolean => {
+      if (typeof window === 'undefined') return false;
+
+      const isStandaloneMedia =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: minimal-ui)').matches ||
+        window.matchMedia('(display-mode: fullscreen)').matches;
+
+      const isIOSStandalone =
+        (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+
+      const isReferrerApp =
+        typeof document !== 'undefined' &&
+        document.referrer &&
+        document.referrer.startsWith('android-app://');
+
+      const isSearchPWA =
+        window.location.search.includes('source=pwa') ||
+        window.location.search.includes('source=apk') ||
+        sessionStorage.getItem('jr_is_pwa') === 'true';
+
+      if (isSearchPWA) {
+        try {
+          sessionStorage.setItem('jr_is_pwa', 'true');
+        } catch (_) {}
+      }
+
+      return Boolean(isStandaloneMedia || isIOSStandalone || isReferrerApp || isSearchPWA);
+    };
+
+    setIsInstalled(checkStandalone());
 
     // Detect iOS devices
     if (typeof window !== 'undefined') {
@@ -33,6 +59,9 @@ export function usePWAInstall() {
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
+      try {
+        sessionStorage.setItem('jr_is_pwa', 'true');
+      } catch (_) {}
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -51,6 +80,9 @@ export function usePWAInstall() {
     if (outcome === 'accepted') {
       setIsInstalled(true);
       setDeferredPrompt(null);
+      try {
+        sessionStorage.setItem('jr_is_pwa', 'true');
+      } catch (_) {}
       return true;
     }
     return false;

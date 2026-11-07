@@ -1,5 +1,5 @@
 {
-  "id": "/",
+  "id": "/?source=pwa",
   "name": "JualRugi.my.id - Pasar Butuh Uang (BU) COD",
   "short_name": "JualRugi.my.id",
   "description": "Pasar Jual Cepat & Butuh Uang (BU) Diskon Ekstrim - Transaksi Aman COD Tatap Muka dengan Verifikasi Multimodal",
@@ -7,7 +7,7 @@
   "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "categories": [
     "shopping",

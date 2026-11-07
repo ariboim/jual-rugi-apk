@@ -1,5 +1,5 @@
-// Service Worker JualRugi.my.id (Network-First Cache Buster v6)
-const CACHE_NAME = 'jualrugi-v6-brand-logo';
+// Service Worker JualRugi.my.id (Network-First Cache Buster v7)
+const CACHE_NAME = 'jualrugi-v7-pwa-fix';
 
 const PRECACHE_ASSETS = [
   '/manifest.json',
@@ -15,6 +15,12 @@ const PRECACHE_ASSETS = [
   '/image_3.png',
   '/banner-hp-jualrugi.png'
 ];
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 
 // 1. Install Event: Skip waiting segera agar update langsung aktif
 self.addEventListener('install', (event) => {
