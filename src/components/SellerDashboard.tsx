@@ -358,7 +358,6 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         </div>
         <a
           href={APK_DOWNLOAD_URL}
-          download="app-debug.apk"
           target="_blank"
           rel="noopener noreferrer"
           className="w-full sm:w-auto shrink-0 px-4 py-2.5 rounded-xl bg-white hover:bg-sky-50 text-sky-900 font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"

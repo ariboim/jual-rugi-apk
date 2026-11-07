@@ -13,11 +13,11 @@ import {
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { BrandLogo } from './BrandLogo';
 
-// Direct GitHub Release APK Download URL
+// Official Android APK Download URL (Google Drive)
 export const APK_DOWNLOAD_URL =
-  'https://github.com/ariboim/jual-rugi-apk/releases/latest/download/app-debug.apk';
+  'https://drive.google.com/file/d/19bjppKlFRS3IHtodooc0kshSfyb38hIW/view?usp=drivesdk';
 export const APK_REDIRECT_URL =
-  'https://www.google.com/url?sa=E&q=https%3A%2F%2Fgithub.com%2Fariboim%2Fjual-rugi-apk%2Freleases%2Flatest%2Fdownload%2Fapp-debug.apk';
+  'https://drive.google.com/file/d/19bjppKlFRS3IHtodooc0kshSfyb38hIW/view?usp=drivesdk';
 
 export const PWAInstallButton: React.FC = () => {
   const { isInstalled, isIOS } = usePWAInstall();
@@ -46,7 +46,6 @@ export const PWAInstallButton: React.FC = () => {
         <a
           href={APK_DOWNLOAD_URL}
           onClick={handleDownloadClick}
-          download="app-debug.apk"
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Download & Install File APK Real JualRugi"
@@ -89,11 +88,11 @@ export const PWAInstallButton: React.FC = () => {
             <h4 className="font-bold text-sm text-sky-300 flex items-center gap-1.5">
               <span>Mengunduh File APK Asli (Real App)</span>
               <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-sky-800 text-sky-200">
-                app-debug.apk
+                Google Drive
               </span>
             </h4>
             <p className="mt-1 text-slate-300 leading-relaxed">
-              File <strong>app-debug.apk</strong> sedang diunduh. Setelah selesai, ketuk file di bilah notifikasi HP Anda lalu pilih <strong>Install</strong>.
+              Membuka Google Drive untuk mengunduh file APK. Setelah unduhan selesai di HP Anda, buka file tersebut lalu pilih <strong>Install</strong>.
             </p>
             <p className="mt-1 text-amber-300 font-semibold text-[11px]">
               ⭐ Ikon di layar HP dijamin 100% bersih murni tanpa ada logo browser Chrome!
@@ -165,7 +164,7 @@ export const PWAInstallButton: React.FC = () => {
                       1
                     </span>
                     <p className="text-[11.5px] leading-snug">
-                      Ketuk tombol <strong>"Download File APK Sekarang"</strong> di bawah. File <code>app-debug.apk</code> akan mulai terunduh ke HP Anda.
+                      Ketuk tombol <strong>"Download File APK Sekarang"</strong> di bawah untuk membuka file di Google Drive.
                     </p>
                   </div>
 
@@ -174,7 +173,7 @@ export const PWAInstallButton: React.FC = () => {
                       2
                     </span>
                     <p className="text-[11.5px] leading-snug">
-                      Tarik bilah notifikasi HP Anda ke bawah, ketuk file <strong>app-debug.apk</strong> yang telah selesai diunduh.
+                      Di halaman Google Drive, ketuk tombol <strong>Unduh / Download</strong>, lalu buka file APK yang telah selesai diunduh.
                     </p>
                   </div>
 
@@ -207,7 +206,6 @@ export const PWAInstallButton: React.FC = () => {
             <div className="mt-5 pt-3 border-t border-sky-100 flex items-center gap-2">
               <a
                 href={APK_DOWNLOAD_URL}
-                download="app-debug.apk"
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => {
