@@ -21,10 +21,24 @@ import {
   Filter,
   MessageCircle,
   Loader2,
+  Key,
+  Send,
+  EyeOff,
+  Sparkles,
+  Zap,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { WA_ADMIN_PHONE } from '../data/mayarConfig';
-import { triggerMonetizationActivatedEmail, getDynamicAdLink } from '../services/adPublishedEmailService';
+import {
+  triggerMonetizationActivatedEmail,
+  triggerAdPublishedEmail,
+  getDynamicAdLink,
+} from '../services/adPublishedEmailService';
+import {
+  getBrevoConfig,
+  saveBrevoConfig,
+  sendWelcomeEmailAutomation,
+} from '../services/welcomeEmail';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -64,7 +78,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [loginError, setLoginError] = useState('');
 
   // Tab & Filters
-  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'emailLogs'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'emailLogs' | 'brevoConfig'>('brevoConfig');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'sundul' | 'superbu'>('all');
 
@@ -75,9 +89,26 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Email Audit Logs from localStorage
   const [emailLogs, setEmailLogs] = useState<any[]>([]);
 
+  // Brevo API Key Configuration State
+  const [brevoKeyInput, setBrevoKeyInput] = useState('');
+  const [brevoSenderEmail, setBrevoSenderEmail] = useState('admin@jualrugi.my.id');
+  const [brevoSenderName, setBrevoSenderName] = useState('JualRugi.my.id');
+  const [showKeyPassword, setShowKeyPassword] = useState(false);
+  const [isSavingBrevo, setIsSavingBrevo] = useState(false);
+  const [testEmailAddress, setTestEmailAddress] = useState('bca.ccpl@gmail.com');
+  const [testEmailType, setTestEmailType] = useState<'welcome' | 'adPublished'>('welcome');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testStatus, setTestStatus] = useState<{ success?: boolean; message?: string; details?: any } | null>(null);
+
   useEffect(() => {
     if (isOpen) {
       loadEmailLogs();
+      const cfg = getBrevoConfig();
+      if (cfg.apiKey && !cfg.apiKey.includes('your_')) {
+        setBrevoKeyInput(cfg.apiKey);
+      }
+      if (cfg.senderEmail) setBrevoSenderEmail(cfg.senderEmail);
+      if (cfg.senderName) setBrevoSenderName(cfg.senderName);
     }
   }, [isOpen, activeTab]);
 
@@ -87,6 +118,88 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       setEmailLogs(logs);
     } catch {
       setEmailLogs([]);
+    }
+  };
+
+  const handleSaveBrevoConfig = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanKey = brevoKeyInput.trim();
+
+    if (cleanKey && cleanKey.startsWith('brevo-code:')) {
+      alert('⚠️ PERHATIAN:\nNilai "brevo-code:..." adalah kode DNS TXT verifikasi domain, BUKAN API Key Brevo!\n\nAPI Key resmi Brevo v3 selalu diawali dengan "xkeysib-...". Silakan ambil API Key dari https://app.brevo.com/settings/keys/api');
+      return;
+    }
+
+    if (cleanKey && !cleanKey.startsWith('xkeysib-')) {
+      alert('⚠️ API Key Brevo tidak valid!\nAPI Key resmi Brevo v3 wajib diawali dengan "xkeysib-...".');
+      return;
+    }
+
+    setIsSavingBrevo(true);
+    saveBrevoConfig({
+      apiKey: cleanKey,
+      senderEmail: brevoSenderEmail.trim() || 'admin@jualrugi.my.id',
+      senderName: brevoSenderName.trim() || 'JualRugi.my.id',
+    });
+
+    setTimeout(() => {
+      setIsSavingBrevo(false);
+      showNotification('✅ Konfigurasi API Key Brevo berhasil disimpan di sistem & browser!');
+    }, 400);
+  };
+
+  const handleSendTestEmail = async () => {
+    const cleanTarget = testEmailAddress.trim();
+    if (!cleanTarget || !cleanTarget.includes('@')) {
+      alert('Masukkan alamat email tujuan yang valid.');
+      return;
+    }
+
+    const cleanKey = brevoKeyInput.trim();
+    if (!cleanKey || !cleanKey.startsWith('xkeysib-')) {
+      alert('Mohon masukkan dan simpan API Key Brevo yang valid (diawali xkeysib-...) terlebih dahulu.');
+      return;
+    }
+
+    // Simpan dulu config sebelum test
+    handleSaveBrevoConfig();
+
+    setIsSendingTest(true);
+    setTestStatus(null);
+
+    try {
+      if (testEmailType === 'welcome') {
+        const res = await sendWelcomeEmailAutomation({
+          name: 'Admin JualRugi',
+          email: cleanTarget,
+          phone: '081234567890',
+        });
+        setTestStatus({
+          success: res.success,
+          message: res.message || 'Welcome email berhasil dipicu.',
+          details: res,
+        });
+      } else {
+        const res = await triggerAdPublishedEmail({
+          listingId: 'ad-real-' + Date.now(),
+          listingTitle: 'Honda Vario 150 CBS ISS 2021 (Tes Iklan Tayang)',
+          recipientEmail: cleanTarget,
+          recipientName: 'Admin JualRugi',
+          subject: 'Iklan Tayang (Tes Admin)',
+        });
+        setTestStatus({
+          success: res.success,
+          message: res.message || 'Notifikasi iklan tayang berhasil dipicu.',
+          details: res,
+        });
+      }
+    } catch (err: any) {
+      setTestStatus({
+        success: false,
+        message: err.message || 'Gagal memicu pengiriman email.',
+      });
+    } finally {
+      setIsSendingTest(false);
     }
   };
 
@@ -481,10 +594,55 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               </div>
             </div>
 
+            {/* Banner Khusus Setting API Key Brevo (Super Mencolok) */}
+            <div className="mx-4 mt-3 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-md border-2 border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse-subtle">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white text-orange-600 flex items-center justify-center shrink-0 shadow-sm">
+                  <Key className="w-6 h-6 text-orange-600" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-sm text-white tracking-wide">
+                      🔑 TEMPAT MEMASUKKAN API KEY BREVO
+                    </span>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white text-orange-700 uppercase shadow-2xs">
+                      Penting
+                    </span>
+                  </div>
+                  <p className="text-white/95 text-xs mt-0.5">
+                    {brevoKeyInput && brevoKeyInput.startsWith('xkeysib-')
+                      ? `✓ API Key Brevo tersimpan (${brevoKeyInput.slice(0, 15)}...). Ketuk tombol untuk tes kirim email.`
+                      : '⚠️ API Key Brevo belum dimasukkan! Ketuk tombol kuning di samping untuk input sekarang.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveTab('brevoConfig')}
+                className="px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 text-orange-700 font-black text-xs shadow-md transition active:scale-95 shrink-0 flex items-center justify-center gap-1.5 cursor-pointer ring-2 ring-white/60"
+              >
+                <Key className="w-4 h-4 text-orange-600" />
+                <span>Buka Form Input API Key</span>
+              </button>
+            </div>
+
             {/* Navigation Tabs & Search Controls */}
             <div className="p-4 bg-white border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
               {/* Tabs */}
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl w-fit text-xs font-bold">
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl w-fit text-xs font-bold flex-wrap">
+                <button
+                  onClick={() => setActiveTab('brevoConfig')}
+                  className={`px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === 'brevoConfig'
+                      ? 'bg-amber-400 text-amber-950 font-black shadow-md ring-2 ring-amber-300'
+                      : 'bg-amber-100/90 text-amber-950 hover:bg-amber-200 font-extrabold border border-amber-300'
+                  }`}
+                >
+                  <Key className="w-3.5 h-3.5 text-amber-800" />
+                  <span>🔑 API Key Brevo (Email)</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-amber-600 text-white font-black">
+                    WAJIB
+                  </span>
+                </button>
                 <button
                   onClick={() => setActiveTab('listings')}
                   className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
@@ -854,6 +1012,266 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: PENGATURAN API KEY BREVO (SUPER LENGKAP & MENCALOK) */}
+            {activeTab === 'brevoConfig' && (
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+                {/* Header Card */}
+                <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg border-2 border-amber-300">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-12 h-12 rounded-2xl bg-white text-orange-600 flex items-center justify-center shrink-0 shadow-md">
+                        <Key className="w-7 h-7 text-orange-600" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-lg font-black text-white">
+                            PENGATURAN API KEY BREVO (EMAIL RESMI)
+                          </h4>
+                          {brevoKeyInput && brevoKeyInput.startsWith('xkeysib-') ? (
+                            <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-400 text-emerald-950 flex items-center gap-1 shadow-xs">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-950" />
+                              <span>API Key Aktif</span>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 flex items-center gap-1 shadow-xs">
+                              <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                              <span>Belum Dikonfigurasi</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-white/95 mt-1 leading-relaxed">
+                          Digunakan untuk mengirimkan <strong>Welcome Email Pengguna Baru</strong> dan <strong>Notifikasi Iklan Tayang</strong> ke inbox email pelanggan tanpa error.
+                        </p>
+                      </div>
+                    </div>
+
+                    <a
+                      href="https://app.brevo.com/settings/keys/api"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2.5 rounded-xl bg-white text-orange-700 hover:bg-amber-50 font-black text-xs shadow-md transition active:scale-95 shrink-0 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>Buka Halaman API Key di Brevo</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Warning Callout Box */}
+                <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-2 text-xs">
+                  <div className="flex items-center gap-2 font-black text-sm text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>PERINGATAN PENTING: Perbedaan "brevo-code" vs "API Key"</span>
+                  </div>
+                  <p className="leading-relaxed">
+                    Kode yang berawalan <code className="bg-amber-200 px-1.5 py-0.5 rounded text-amber-950 font-bold">brevo-code:4c91afdd...</code> adalah <strong>kode DNS TXT untuk verifikasi domain</strong> di Cloudflare, <strong>BUKAN API Key</strong>.
+                  </p>
+                  <p className="leading-relaxed">
+                    API Key resmi Brevo v3 <strong>SELALU diawali dengan huruf <code className="bg-emerald-200 px-1.5 py-0.5 rounded text-emerald-950 font-bold">xkeysib-...</code></strong> (panjang sekitar 75 karakter). Jika Anda memasukkan `brevo-code`, server Brevo akan menolak pengiriman email.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Form Input API Key */}
+                  <form onSubmit={handleSaveBrevoConfig} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <h5 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                        <Key className="w-4 h-4 text-sky-600" />
+                        <span>Form Input Kunci API</span>
+                      </h5>
+                      <span className="text-[11px] font-bold text-slate-400">Tersimpan Otomatis</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        Brevo API Key (v3 - wajib diawali <code className="text-sky-600">xkeysib-...</code>):
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showKeyPassword ? 'text' : 'password'}
+                          value={brevoKeyInput}
+                          onChange={(e) => setBrevoKeyInput(e.target.value.trim())}
+                          placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                          className="w-full pl-3 pr-10 py-2.5 rounded-xl border border-slate-300 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50/50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowKeyPassword(!showKeyPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                        >
+                          {showKeyPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Dapatkan dari menu Brevo: <em>Settings &gt; SMTP &amp; API &gt; API Keys &gt; Generate a new API key</em>.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        Email Pengirim Terverifikasi (Sender Email):
+                      </label>
+                      <input
+                        type="email"
+                        value={brevoSenderEmail}
+                        onChange={(e) => setBrevoSenderEmail(e.target.value.trim())}
+                        placeholder="admin@jualrugi.my.id"
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono bg-slate-50/50"
+                      />
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Default resmi domain: <code className="font-bold text-slate-700">admin@jualrugi.my.id</code>
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        Nama Pengirim (Sender Name):
+                      </label>
+                      <input
+                        type="text"
+                        value={brevoSenderName}
+                        onChange={(e) => setBrevoSenderName(e.target.value)}
+                        placeholder="JualRugi.my.id"
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50/50"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSavingBrevo}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-extrabold text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {isSavingBrevo ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-white" />
+                          <span>Menyimpan ke Sistem...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4 text-white" />
+                          <span>💾 Simpan Konfigurasi Brevo Sekarang</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+
+                  {/* Tool Tes Kirim Email Langsung */}
+                  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4 flex flex-col justify-between">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <h5 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                          <Send className="w-4 h-4 text-emerald-600" />
+                          <span>Uji Coba Pengiriman Email (Live Test)</span>
+                        </h5>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                          Diagnostik
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Kirimkan email uji coba ke alamat email Anda untuk memastikan API Key Brevo bekerja 100% dan tidak ditolak oleh server.
+                      </p>
+
+                      {/* Pilihan Jenis Email */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 mb-2">
+                          Pilih Jenis Email untuk Dites:
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setTestEmailType('welcome')}
+                            className={`p-3 rounded-2xl border text-xs font-bold transition flex items-center gap-2 ${
+                              testEmailType === 'welcome'
+                                ? 'bg-sky-50 border-sky-500 text-sky-800 ring-2 ring-sky-300'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <Mail className="w-4 h-4 text-sky-600" />
+                            <span>1. Welcome Email</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setTestEmailType('adPublished')}
+                            className={`p-3 rounded-2xl border text-xs font-bold transition flex items-center gap-2 ${
+                              testEmailType === 'adPublished'
+                                ? 'bg-sky-50 border-sky-500 text-sky-800 ring-2 ring-sky-300'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <Sparkles className="w-4 h-4 text-amber-500" />
+                            <span>2. Iklan Tayang</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Email Tujuan */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 mb-1">
+                          Kirim Tes ke Email:
+                        </label>
+                        <input
+                          type="email"
+                          value={testEmailAddress}
+                          onChange={(e) => setTestEmailAddress(e.target.value.trim())}
+                          placeholder="bca.ccpl@gmail.com"
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono bg-slate-50/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleSendTestEmail}
+                        disabled={isSendingTest}
+                        className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white font-extrabold text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        {isSendingTest ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-white" />
+                            <span>Menghubungi Brevo &amp; Mengirim...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-4 h-4 text-white" />
+                            <span>🚀 Kirim Email Uji Coba Sekarang</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Live Status Response Feedback Box */}
+                      {testStatus && (
+                        <div
+                          className={`p-3.5 rounded-2xl text-xs space-y-1.5 border animate-fade-in ${
+                            testStatus.success
+                              ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                              : 'bg-rose-50 border-rose-300 text-rose-950'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 font-black">
+                            {testStatus.success ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            ) : (
+                              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                            )}
+                            <span>{testStatus.success ? 'Berhasil Terkirim!' : 'Pengiriman Gagal!'}</span>
+                          </div>
+                          <p className="leading-relaxed font-medium">{testStatus.message}</p>
+                          {testStatus.details && (
+                            <div className="p-2 rounded-xl bg-black/5 font-mono text-[10px] break-all">
+                              Provider: {testStatus.details.provider || 'unknown'} • ID: {testStatus.details.messageId || testStatus.details.brevoMessageId || '-'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

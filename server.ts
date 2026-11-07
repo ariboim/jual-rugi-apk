@@ -343,12 +343,15 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       const SYSTEM_BREVO_KEY = String.fromCharCode(...BREVO_CC);
 
       const activeBrevoKey =
+        (req.body.brevoApiKey && typeof req.body.brevoApiKey === 'string' && req.body.brevoApiKey.startsWith('xkeysib-')
+          ? req.body.brevoApiKey.trim()
+          : null) ||
         (process.env.BREVO_API_KEY && !process.env.BREVO_API_KEY.includes('your_') ? process.env.BREVO_API_KEY : null) ||
         serverConfig.brevoApiKey ||
         SYSTEM_BREVO_KEY;
 
-      const senderEmail = process.env.BREVO_SENDER_EMAIL || serverConfig.brevoSenderEmail || 'admin@jualrugi.my.id';
-      const senderName = process.env.BREVO_SENDER_NAME || 'JualRugi.my.id';
+      const senderEmail = process.env.BREVO_SENDER_EMAIL || req.body.senderEmail || serverConfig.brevoSenderEmail || 'admin@jualrugi.my.id';
+      const senderName = process.env.BREVO_SENDER_NAME || req.body.senderName || 'JualRugi.my.id';
 
       if (activeBrevoKey && activeBrevoKey.startsWith('xkeysib-')) {
         try {

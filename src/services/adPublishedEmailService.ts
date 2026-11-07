@@ -190,6 +190,9 @@ export async function triggerAdPublishedEmail(
         sellingPrice: payload.sellingPrice,
         category: payload.category,
         subject: emailSubject,
+        brevoApiKey: apiKey && apiKey.startsWith('xkeysib-') ? apiKey : undefined,
+        senderEmail,
+        senderName,
       }),
     });
 

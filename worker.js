@@ -145,10 +145,13 @@ export default {
         const activeBrevoKey =
           (env.BREVO_API_KEY && env.BREVO_API_KEY.trim() && !env.BREVO_API_KEY.includes('your_')
             ? env.BREVO_API_KEY.trim()
+            : null) ||
+          (body.brevoApiKey && typeof body.brevoApiKey === 'string' && body.brevoApiKey.startsWith('xkeysib-')
+            ? body.brevoApiKey.trim()
             : null);
 
-        const senderEmail = env.BREVO_SENDER_EMAIL || 'admin@jualrugi.my.id';
-        const senderName = env.BREVO_SENDER_NAME || 'JualRugi.my.id';
+        const senderEmail = env.BREVO_SENDER_EMAIL || body.senderEmail || 'admin@jualrugi.my.id';
+        const senderName = env.BREVO_SENDER_NAME || body.senderName || 'JualRugi.my.id';
 
         console.log(`[CF Worker - Ad Published Email] Target: ${targetEmail} | Iklan: "${targetTitle}"`);
         console.log(`[CF Worker - Ad Published Email] Brevo Key Status: ${activeBrevoKey ? 'OK' : 'KOSONG / BELUM DISET'}`);

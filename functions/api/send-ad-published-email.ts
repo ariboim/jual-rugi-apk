@@ -55,14 +55,17 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       );
     }
 
-    // Ambil API Key dari Cloudflare Pages Environment Variables
+    // Ambil API Key dari Cloudflare Pages Environment Variables, atau fallback ke payload
     const activeBrevoKey =
       (env.BREVO_API_KEY && env.BREVO_API_KEY.trim() && !env.BREVO_API_KEY.includes('your_')
         ? env.BREVO_API_KEY.trim()
+        : null) ||
+      (body.brevoApiKey && typeof body.brevoApiKey === 'string' && body.brevoApiKey.startsWith('xkeysib-')
+        ? body.brevoApiKey.trim()
         : null);
 
-    const senderEmail = env.BREVO_SENDER_EMAIL || 'admin@jualrugi.my.id';
-    const senderName = env.BREVO_SENDER_NAME || 'JualRugi.my.id';
+    const senderEmail = env.BREVO_SENDER_EMAIL || body.senderEmail || 'admin@jualrugi.my.id';
+    const senderName = env.BREVO_SENDER_NAME || body.senderName || 'JualRugi.my.id';
 
     console.log(`[CF Pages - Ad Published Email] Mengirim ke: ${targetEmail} | Iklan: "${targetTitle}" (ID: ${cleanListingId})`);
     console.log(`[CF Pages - Ad Published Email] Status Brevo API Key: ${activeBrevoKey ? 'TERSEDIA (format: ' + activeBrevoKey.slice(0, 12) + '...)' : 'TIDAK DITEMUKAN / KOSONG'}`);
