@@ -15,9 +15,24 @@ export default {
         const indexRequest = new Request(new URL('/index.html', request.url), request);
         const indexResponse = await env.ASSETS.fetch(indexRequest);
         if (indexResponse.status === 200) {
-          return indexResponse;
+          const headers = new Headers(indexResponse.headers);
+          headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+          return new Response(indexResponse.body, {
+            status: 200,
+            headers,
+          });
         }
       }
+    }
+
+    // Never cache index.html or root to ensure fresh deployments are immediately seen
+    if (url.pathname === '/' || url.pathname === '/index.html') {
+      const headers = new Headers(response.headers);
+      headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return new Response(response.body, {
+        status: response.status,
+        headers,
+      });
     }
 
     return response;

@@ -50,16 +50,16 @@ export const PromoBannerModal: React.FC<PromoBannerModalProps> = ({
         }}
         className="relative w-full max-w-[340px] sm:max-w-[380px] aspect-[9/16] max-h-[92vh] sm:max-h-[88vh] rounded-3xl overflow-hidden shadow-2xl shadow-red-950/60 border border-white/20 select-none cursor-pointer group my-auto transition-transform active:scale-[0.99] bg-gradient-to-b from-red-600 via-orange-600 to-amber-600 flex flex-col justify-between"
       >
-        {/* Tombol Tutup Bersih (Interactive Close Button) di Pojok Kanan Atas */}
+        {/* Tombol Tutup Tunggal Bersih (Melapisi & Menggantikan Cetakan Tutup pada Poster Gambar) */}
         <button
           type="button"
           onClick={handleCloseClick}
-          aria-label="Tutup banner"
-          className="absolute top-3.5 right-3.5 z-40 px-3 py-1.5 rounded-full bg-black/70 hover:bg-black/90 text-white font-bold text-xs border border-white/30 shadow-lg backdrop-blur-xs transition cursor-pointer active:scale-95 flex items-center gap-1.5"
-          title="Tutup promo banner"
+          aria-label="Tutup banner promo"
+          className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 z-40 min-w-[105px] h-8.5 px-3 rounded-full bg-slate-950 text-white font-extrabold text-xs border border-white/50 shadow-2xl transition cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+          title="Tutup banner promo"
         >
           <span>Tutup</span>
-          <X className="w-3.5 h-3.5 stroke-[2.5]" />
+          <X className="w-3.5 h-3.5 stroke-[3]" />
         </button>
 
         {!imageError ? (

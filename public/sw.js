@@ -1,37 +1,39 @@
-// Service Worker Minimal untuk JualRugi.my.id PWA (Standar WebAPK Android & Chrome)
-const CACHE_NAME = 'jualrugi-cache-v2';
+// Service Worker JualRugi.my.id (Network-First Cache Buster v5)
+const CACHE_NAME = 'jualrugi-v5-live';
 
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
-  '/assets/aistudio/logo_transparent.png',
-  '/assets/aistudio/logo_icon_transparent.png',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/pwa-maskable-512x512.png',
   '/apple-touch-icon.png',
   '/favicon.png',
   '/favicon.ico',
-  '/icon.svg'
+  '/icon.svg',
+  '/image_3.png',
+  '/banner-hp-jualrugi.png'
 ];
 
-// 1. Install Event: Precache resource penting
+// 1. Install Event: Skip waiting segera agar update langsung aktif
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS);
-    }).then(() => self.skipWaiting())
+      return cache.addAll(PRECACHE_ASSETS).catch((err) => {
+        console.warn('[SW Precache Warning]:', err);
+      });
+    })
   );
 });
 
-// 2. Activate Event: Bersihkan cache lama & ambil alih klien langsung
+// 2. Activate Event: Hapus SEMUA cache versi lama dari memori HP pengguna
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
+            console.log('[SW Purge Old Cache]:', cache);
             return caches.delete(cache);
           }
         })
@@ -40,44 +42,47 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch Event: Network-first dengan Cache Fallback untuk menjamin data selalu mutakhir
+// 3. Fetch Event: Strict Network-First untuk Dokumen HTML (Menjamin kode web selalu mutakhir setelah git push)
 self.addEventListener('fetch', (event) => {
-  // Hanya tangani GET requests
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-
-  // Abaikan WebSocket atau browser extensions
   if (!url.protocol.startsWith('http')) return;
 
+  // Jika permintaan navigasi halaman (HTML/index), selalu ambil versi TERBARU dari server
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-cache' })
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // Hanya jika benar-benar offline tanpa sinyal internet, gunakan cache
+          return caches.match(event.request).then((cached) => cached || caches.match('/'));
+        })
+    );
+    return;
+  }
+
+  // Untuk asset statis lainnya: Network-First dengan Cache Fallback
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // Jika respons valid, simpan salinan ke cache
         if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return networkResponse;
       })
-      .catch(() => {
-        // Jika offline atau jaringan putus, ambil dari cache
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // Fallback ke halaman utama jika navigasi HTML
-          if (event.request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
-        });
-      })
+      .catch(() => caches.match(event.request))
   );
 });
 
-// 4. Notification Click Event: Fokuskan tab web atau buka halaman utama saat notifikasi diklik
+// 4. Notification Click Event
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
@@ -93,4 +98,3 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
-
