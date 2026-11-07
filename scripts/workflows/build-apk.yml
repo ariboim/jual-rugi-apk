@@ -126,8 +126,8 @@ jobs:
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
-                  android:label="JualRugi.my.id"
-                  android:roundIcon="@mipmap/ic_launcher"
+                  android:label="JualRugi"
+                  android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:theme="@style/Theme.JualRugi"
                   android:usesCleartextTraffic="true">
@@ -200,7 +200,7 @@ jobs:
               private SwipeRefreshLayout swipeRefresh;
               private ValueCallback<Uri[]> uploadMessage;
               private static final int FILE_CHOOSER_RESULT_CODE = 1001;
-              private static final String APP_URL = "https://jual-rugi-apk.vercel.app";
+              private static final String APP_URL = "https://jualrugi.my.id/?source=apk";
 
               @SuppressLint("SetJavaScriptEnabled")
               @Override
