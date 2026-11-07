@@ -346,13 +346,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2 justify-center sm:justify-start">
-              <h3 className="font-black text-sm text-white">Aplikasi Android JualRugi.my.id</h3>
+              <h3 className="font-black text-sm text-white">Aplikasi Resmi JualRugi.my.id</h3>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black">
-                APK Resmi
+                Update Otomatis
               </span>
             </div>
             <p className="text-xs text-sky-100 mt-0.5">
-              Pasang langsung di HP Android Anda. Buka instan tanpa browser, lancar kirim pesan & pasang iklan!
+              Pasang langsung di HP Anda melalui menu browser (Install Aplikasi) agar selalu sinkron dan tampilan 100% normal.
             </p>
           </div>
         </div>
@@ -364,7 +364,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           className="w-full sm:w-auto shrink-0 px-4 py-2.5 rounded-xl bg-white hover:bg-sky-50 text-sky-900 font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
         >
           <Download className="w-4 h-4 text-sky-600 animate-bounce" />
-          <span>Download & Install APK</span>
+          <span>Download File APK</span>
         </a>
       </div>
 
