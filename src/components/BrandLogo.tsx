@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface BrandLogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -9,11 +9,10 @@ interface BrandLogoProps {
 
 /**
  * BrandLogo Component
- * Menyajikan identitas visual resmi JualRugi.my.id dalam bentuk vektor inline SVG murni & tipografi presisi.
- * Keunggulan utama:
- * 1. 100% Bebas dari risiko broken image icon ([x] icon) karena tidak bergantung pada request file eksternal/PNG.
- * 2. Tampil tajam (ultra-crisp) di semua resolusi layar (Retina, OLED smartphone, desktop 4K).
- * 3. Ringan, 0 ms loading time, dan bekerja mulus saat offline (PWA) maupun saat di-deploy ke Cloudflare/GitHub.
+ * Menampilkan identitas visual resmi JualRugi.my.id:
+ * 1. Logo icon kantong belanja kuning dengan gagang merah & panah diskon merah tajam (distress sale BU).
+ * 2. 100% Bersih, transparan, tanpa frame / border kotak.
+ * 3. Menghindari broken image icon dengan fallback elegan ke SVG resmi.
  */
 export const BrandLogo: React.FC<BrandLogoProps> = ({
   size = 'md',
@@ -21,6 +20,8 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   onClick,
   className = '',
 }) => {
+  const [imageFailed, setImageFailed] = useState(false);
+
   const iconSizes = {
     sm: 'w-7 h-7 sm:w-8 sm:h-8',
     md: 'w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10',
@@ -48,53 +49,71 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       } ${className}`}
       title="JualRugi.my.id - Pusat Bursa Barang Bekas BU & Distress Sale"
     >
-      {/* Official Vector Shopping Cart + Flame Icon (100% Zero-Failure, Instant Render, No Broken Image Ever) */}
+      {/* Official Clean Transparent Brand Icon without frame or border */}
       <div className={`relative ${iconSizes} shrink-0 flex items-center justify-center`}>
-        <svg
-          viewBox="0 0 48 48"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="w-full h-full drop-shadow-xs"
-        >
-          <defs>
-            <linearGradient id="jrCartGrad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#ef4444" />
-              <stop offset="0.5" stopColor="#f97316" />
-              <stop offset="1" stopColor="#ea580c" />
-            </linearGradient>
-            <linearGradient id="jrFlameGrad" x1="22" y1="8" x2="32" y2="26" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#fde047" />
-              <stop offset="0.6" stopColor="#f97316" />
-              <stop offset="1" stopColor="#dc2626" />
-            </linearGradient>
-          </defs>
-
-          {/* Cart handle & basket lines */}
-          <path
-            d="M6 10h6l4.6 19.5a3 3 0 0 0 2.9 2.3h18.8a3 3 0 0 0 2.9-2.2L44 16H14.5"
-            stroke="url(#jrCartGrad)"
-            strokeWidth="3.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        {!imageFailed ? (
+          <img
+            src="/logo_icon.png"
+            alt="Logo JualRugi.my.id"
+            className="w-full h-full object-contain filter drop-shadow-xs transition-transform duration-200"
+            loading="eager"
+            decoding="async"
+            onError={() => setImageFailed(true)}
           />
-
-          {/* Cart wheels */}
-          <circle cx="20" cy="38" r="3.2" fill="#ef4444" />
-          <circle cx="34" cy="38" r="3.2" fill="#ea580c" />
-
-          {/* Distress flame symbol rising from basket */}
-          <path
-            d="M26 12.5c.6 2.3 2.2 3.3 3.1 4.7 1.4 2.1.8 4.3-.7 5.2-1.5 1-3.4.5-4-.9-.2-.5-.2-1.1.2-1.7-1.4.9-2.1 2.5-1.7 4 .5 2.1 2.5 3.4 4.6 3.1 2.4-.3 4.1-2.3 3.8-4.8-.2-1.7-1.4-3-2.4-4.3-.8-1-1.1-2.1-1-3.5-.7.6-1.3 1.6-1.9 3.2Z"
-            fill="url(#jrFlameGrad)"
-          />
-        </svg>
+        ) : (
+          /* High-Fidelity SVG Fallback matching the official artwork */
+          <svg
+            viewBox="0 0 100 100"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-full h-full object-contain"
+          >
+            {/* Bag Handle (Red) */}
+            <path
+              d="M45 28 C45 14, 65 14, 65 28 L65 32 L45 32 Z"
+              stroke="#e52328"
+              strokeWidth="5"
+              strokeLinecap="round"
+              fill="none"
+            />
+            {/* Shopping Bag (Yellow/Gold) */}
+            <polygon
+              points="34,22 86,22 80,68 37,56"
+              fill="#f7a81b"
+            />
+            {/* Handle holes */}
+            <circle cx="48" cy="27" r="3.5" fill="#ffffff" />
+            <circle cx="68" cy="27" r="3.5" fill="#ffffff" />
+            {/* Red plunging arrow */}
+            <path
+              d="M10 32 L20 32 L36 68 L60 48 L80 82"
+              stroke="#ffffff"
+              strokeWidth="9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <path
+              d="M10 32 L20 32 L36 68 L60 48 L80 82"
+              stroke="#e52328"
+              strokeWidth="5.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            {/* Arrowhead */}
+            <polygon points="76,86 94,84 84,72" fill="#e52328" />
+            {/* Red dot */}
+            <circle cx="43" cy="74" r="5" fill="#e52328" />
+          </svg>
+        )}
       </div>
 
-      {/* Typography: jual (black) + rugi (red) + .my.id (gray) */}
+      {/* Typography: jual (deep navy #0e1b38) + rugi (vibrant red #ee1c25) + .my.id (navy) */}
       <div className="flex items-baseline leading-none">
-        <span className={`font-black text-slate-900 tracking-tight ${textSizes}`}>jual</span>
-        <span className={`font-black text-red-600 tracking-tight ${textSizes}`}>rugi</span>
-        <span className="text-[10px] sm:text-[11.5px] font-bold text-slate-500 tracking-tight ml-0.5">
+        <span className={`font-black text-[#0e1b38] tracking-tight ${textSizes}`}>jual</span>
+        <span className={`font-black text-[#ee1c25] tracking-tight ${textSizes}`}>rugi</span>
+        <span className="text-[10px] sm:text-[11.5px] font-bold text-[#0e1b38]/75 tracking-tight ml-0.5">
           .my.id
         </span>
       </div>

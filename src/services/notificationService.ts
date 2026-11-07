@@ -57,7 +57,7 @@ export async function sendSystemPushNotification(
   const notificationOptions: any = {
     body,
     icon: '/pwa-192x192.png',
-    badge: '/assets/aistudio/logo_icon_transparent.png',
+    badge: '/logo_icon.png',
     tag: 'jualrugi-ad-moderation',
     data: {
       url: window.location.origin,
