@@ -5,6 +5,8 @@ interface BrandLogoProps {
   showBadge?: boolean;
   onClick?: () => void;
   className?: string;
+  variant?: 'light' | 'dark';
+  inverted?: boolean;
 }
 
 // 100% Embedded Official Transparent Brand Icon (Zero-Failure, 0ms Load Time, Guaranteed Never Broken in Browser or PWA)
@@ -24,7 +26,11 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   showBadge = false,
   onClick,
   className = '',
+  variant = 'light',
+  inverted = false,
 }) => {
+  const isDark = variant === 'dark' || inverted;
+
   const iconSizes = {
     sm: 'w-7 h-7 sm:w-8 sm:h-8',
     md: 'w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10',
@@ -63,17 +69,35 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         />
       </div>
 
-      {/* Typography: jual (deep navy #0e1b38) + rugi (vibrant red #ee1c25) + .my.id (navy) */}
+      {/* Typography: jual (white on dark / deep navy #0e1b38 on light) + rugi (vibrant red #ee1c25) + .my.id */}
       <div className="flex items-baseline leading-none">
-        <span className={`font-black text-[#0e1b38] tracking-tight ${textSizes}`}>jual</span>
-        <span className={`font-black text-[#ee1c25] tracking-tight ${textSizes}`}>rugi</span>
-        <span className="text-[10px] sm:text-[11.5px] font-bold text-[#0e1b38]/75 tracking-tight ml-0.5">
+        <span
+          className={`font-black tracking-tight ${textSizes} ${
+            isDark ? 'text-white drop-shadow-xs' : 'text-[#0e1b38]'
+          }`}
+        >
+          jual
+        </span>
+        <span className={`font-black text-[#ee1c25] tracking-tight ${textSizes} drop-shadow-xs`}>
+          rugi
+        </span>
+        <span
+          className={`text-[10px] sm:text-[11.5px] font-bold tracking-tight ml-0.5 ${
+            isDark ? 'text-sky-400' : 'text-[#0e1b38]/75'
+          }`}
+        >
           .my.id
         </span>
       </div>
 
       {showBadge && (
-        <span className="text-[9.5px] px-1.5 py-0.5 rounded-sm bg-red-50 text-red-700 border border-red-200 font-extrabold uppercase tracking-wider hidden md:inline-block">
+        <span
+          className={`text-[9.5px] px-1.5 py-0.5 rounded-sm font-extrabold uppercase tracking-wider hidden md:inline-block border ${
+            isDark
+              ? 'bg-rose-950/60 text-rose-300 border-rose-500/40'
+              : 'bg-red-50 text-red-700 border-red-200'
+          }`}
+        >
           Distress Sale
         </span>
       )}

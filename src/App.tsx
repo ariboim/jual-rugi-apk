@@ -61,6 +61,7 @@ import { PanduanPDFModal } from './components/PanduanPDFModal';
 import { LiveActivityTicker } from './components/LiveActivityTicker';
 import { WelcomeEmailSetupModal } from './components/WelcomeEmailSetupModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
+import { Footer } from './components/Footer';
 import { ADMIN_TEST_PRESETS, AdminTestPreset } from './data/adminTestPresets';
 import {
   fetchListingsFromSupabase,
@@ -134,10 +135,23 @@ export default function App() {
       let base: Listing[] = [];
       if (saved) {
         const parsed: Listing[] = JSON.parse(saved);
-        base = parsed.map((item) => ({
-          ...item,
-          title: item.title.replace(/\bThinQ AI\b/g, 'ThinQ'),
-        }));
+        base = parsed.map((item) => {
+          let updatedItem = {
+            ...item,
+            title: item.title.replace(/\bThinQ AI\b/g, 'ThinQ'),
+          };
+          if (item.id === 'bu-006' || item.imageUrl.includes('1584992236310-6edddc08acff')) {
+            const freshBu006 = INITIAL_LISTINGS.find((l) => l.id === 'bu-006');
+            if (freshBu006) {
+              updatedItem = {
+                ...updatedItem,
+                imageUrl: freshBu006.imageUrl,
+                photoAngles: freshBu006.photoAngles,
+              };
+            }
+          }
+          return updatedItem;
+        });
       } else {
         base = [...INITIAL_LISTINGS];
       }
@@ -1913,6 +1927,9 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Website Footer & Contact Section */}
+      <Footer />
 
       {/* Mobile Bottom Navigation */}
       <BottomNav
