@@ -4,13 +4,13 @@ import {
   Lock,
   Mail,
   User,
+  Phone,
   ArrowRight,
   ShieldAlert,
   AlertCircle,
-  Plus,
-  Check,
-  ChevronRight,
-  ExternalLink,
+  Eye,
+  EyeOff,
+  CheckCircle2,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { sendWelcomeEmailAutomation } from '../services/welcomeEmail';
@@ -24,30 +24,6 @@ interface AuthModalProps {
   onOpenWelcomeEmailSetup?: () => void;
 }
 
-/**
- * Google Official G Logo SVG
- */
-const GoogleLogo = () => (
-  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-    <path
-      fill="#4285F4"
-      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-    />
-    <path
-      fill="#34A853"
-      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-    />
-    <path
-      fill="#FBBC05"
-      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-    />
-    <path
-      fill="#EA4335"
-      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-    />
-  </svg>
-);
-
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
@@ -56,164 +32,226 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onOpenWelcomeEmailSetup,
 }) => {
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
-  const [name, setName] = useState('');
-  const [emailOrPhone, setEmailOrPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [agreedToDisclaimer, setAgreedToDisclaimer] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // State Dialog Pemilih Akun Google (Google Account Chooser)
-  const [isGooglePickerOpen, setIsGooglePickerOpen] = useState(false);
-  const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
-  const [customGmail, setCustomGmail] = useState('');
+  // Form Fields - Registrasi
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [agreedToDisclaimer, setAgreedToDisclaimer] = useState(false);
+
+  // Form Fields - Login
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  // Validation & UI State
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSwitchMode = (targetMode: 'login' | 'register') => {
     setMode(targetMode);
-    setErrorMessage(null);
+    setErrors({});
+    setGeneralError(null);
   };
 
-  // Buka Dialog Pemilih Akun Google
-  const handleOpenGooglePicker = () => {
-    setErrorMessage(null);
-    setIsGooglePickerOpen(true);
+  /**
+   * Filter WhatsApp hanya menerima digit angka
+   */
+  const handleWhatsAppInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const numericOnly = e.target.value.replace(/\D/g, '');
+    setWhatsapp(numericOnly);
+    if (errors.whatsapp) {
+      setErrors((prev) => ({ ...prev, whatsapp: '' }));
+    }
   };
 
-  // Pengguna memilih akun Google tertentu
-  const handleSelectGoogleAccount = async (selectedName: string, selectedEmail: string, avatarUrl: string) => {
-    setIsLoading(true);
-    setAgreedToDisclaimer(true); // Memilih akun Google secara otomatis menyetujui disclaimer
+  /**
+   * Validasi Front-End untuk Form Registrasi
+   */
+  const validateRegistration = (): boolean => {
+    const newErrors: Record<string, string> = {};
 
-    // ⚡ Trigger otomatisasi welcome email seketika berdasarkan alamat Gmail user via Brevo
-    try {
-      await sendWelcomeEmailAutomation({
-        name: selectedName,
-        email: selectedEmail,
-        phone: '0812-8888-9999',
-      });
-    } catch (emailErr) {
-      console.warn('Welcome email trigger error:', emailErr);
+    // 1. Validasi Nama Lengkap
+    if (!name.trim()) {
+      newErrors.name = 'Nama lengkap wajib diisi.';
+    } else if (name.trim().length < 3) {
+      newErrors.name = 'Nama lengkap minimal 3 karakter.';
     }
 
-    setIsLoading(false);
-    setIsGooglePickerOpen(false);
+    // 2. Validasi Email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim()) {
+      newErrors.email = 'Alamat email wajib diisi.';
+    } else if (!emailRegex.test(email.trim())) {
+      newErrors.email = 'Format email tidak valid (contoh: user@gmail.com).';
+    }
 
-    const googleUser: UserProfile = {
-      id: `google-${Date.now()}`,
-      name: selectedName,
-      role: 'buyer',
-      avatar: avatarUrl,
-      email: selectedEmail,
-      phone: '0812-8888-9999',
-      city: 'Jakarta Selatan',
-      freeListingUsed: false,
-      listingQuota: 1, // 1 free listing for new signup
-      activeListingCount: 0,
-      permissions: {
-        locationGranted: false,
-        cameraGalleryGranted: false,
-      },
-    };
+    // 3. Validasi Kata Sandi
+    if (!password) {
+      newErrors.password = 'Kata sandi wajib diisi.';
+    } else if (password.length < 6) {
+      newErrors.password = 'Kata sandi minimal 6 karakter.';
+    }
 
-    onLoginSuccess(googleUser);
-    onClose();
+    // 4. Validasi Nomor WhatsApp
+    if (!whatsapp.trim()) {
+      newErrors.whatsapp = 'Nomor WhatsApp wajib diisi.';
+    } else if (!/^(08|628)[0-9]{8,12}$/.test(whatsapp.trim())) {
+      newErrors.whatsapp = 'Format salah. Gunakan awalan 08 atau 628 (total 10-14 angka).';
+    }
+
+    // 5. Validasi Persetujuan Disclaimer
+    if (!agreedToDisclaimer) {
+      newErrors.disclaimer = 'Anda wajib menyetujui Syarat & Ketentuan serta Disclaimer Transaksi.';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  // Submit form pendaftaran manual (Email/WhatsApp)
+  /**
+   * Validasi Front-End untuk Form Login
+   */
+  const validateLogin = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!loginIdentifier.trim()) {
+      newErrors.loginIdentifier = 'Email atau Nomor WhatsApp wajib diisi.';
+    }
+
+    if (!loginPassword) {
+      newErrors.loginPassword = 'Kata sandi wajib diisi.';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  /**
+   * Submit Handler (Registrasi / Login)
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
+    setGeneralError(null);
 
-    if (!emailOrPhone.trim()) {
-      setErrorMessage('Mohon masukkan Email atau Nomor WhatsApp Anda.');
-      return;
-    }
+    if (mode === 'register') {
+      const isValid = validateRegistration();
+      if (!isValid) return;
 
-    if (mode === 'register' && !agreedToDisclaimer) {
-      setErrorMessage('Anda wajib mencentang persetujuan Syarat & Ketentuan serta Disclaimer Transaksi sebelum mendaftar.');
-      return;
-    }
+      setIsLoading(true);
 
-    const regName = name.trim() || 'Member JualRugi';
-    const regEmail = emailOrPhone.includes('@')
-      ? emailOrPhone.trim()
-      : `${regName.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`;
-    const regPhone = !emailOrPhone.includes('@') ? emailOrPhone.trim() : '0812-3344-5566';
+      const regName = name.trim();
+      const regEmail = email.trim().toLowerCase();
+      const regPhone = whatsapp.trim();
 
-    setIsLoading(true);
+      // Trigger Welcome Email Otomatis via Brevo API
+      try {
+        console.log('[Auth] Memicu Welcome Email untuk:', regEmail);
+        await sendWelcomeEmailAutomation({
+          name: regName,
+          email: regEmail,
+          phone: regPhone,
+        });
+      } catch (emailErr) {
+        console.warn('[Auth] Gagal mengirim welcome email:', emailErr);
+      }
 
-    // ⚡ Trigger otomatisasi welcome email seketika berdasarkan email pendaftar via Brevo
-    try {
-      console.log('⚡ Triggering welcome email for:', regEmail);
-      await sendWelcomeEmailAutomation({
+      setIsLoading(false);
+
+      const authenticatedUser: UserProfile = {
+        id: `user-${Date.now()}`,
         name: regName,
+        role: 'buyer',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
         email: regEmail,
         phone: regPhone,
-      });
-    } catch (emailErr) {
-      console.warn('Welcome email trigger error:', emailErr);
-    }
-
-    setIsLoading(false);
-    const authenticatedUser: UserProfile = {
-      id: `user-${Date.now()}`,
-      name: regName,
-      role: 'buyer',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-      email: regEmail,
-      phone: regPhone,
         city: 'Jakarta Selatan',
         freeListingUsed: false,
-        listingQuota: 1, // 1 free listing for new signup
+        listingQuota: 1, // Bonus 1 kuota gratis untuk pendaftar baru
         activeListingCount: 0,
         permissions: {
           locationGranted: false,
           cameraGalleryGranted: false,
         },
-    };
-    onLoginSuccess(authenticatedUser);
-    onClose();
+      };
+
+      onLoginSuccess(authenticatedUser);
+      onClose();
+    } else {
+      // Mode Login
+      const isValid = validateLogin();
+      if (!isValid) return;
+
+      setIsLoading(true);
+
+      const ident = loginIdentifier.trim();
+      const isEmail = ident.includes('@');
+
+      const loggedUser: UserProfile = {
+        id: `user-${Date.now()}`,
+        name: isEmail ? ident.split('@')[0] : 'Member JualRugi',
+        role: 'buyer',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+        email: isEmail ? ident : `${ident.replace(/\D/g, '')}@jualrugi.my.id`,
+        phone: !isEmail ? ident : '0812-3344-5566',
+        city: 'Jakarta Selatan',
+        freeListingUsed: false,
+        listingQuota: 1,
+        activeListingCount: 0,
+        permissions: {
+          locationGranted: false,
+          cameraGalleryGranted: false,
+        },
+      };
+
+      setIsLoading(false);
+      onLoginSuccess(loggedUser);
+      onClose();
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 overflow-y-auto animate-fade-in">
-      <div className="relative w-full max-w-md rounded-3xl bg-white border border-sky-100 shadow-2xl overflow-hidden my-auto p-5 sm:p-6 text-slate-800 max-h-[92vh] overflow-y-auto">
-        {/* Close Button */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-3.5 sm:p-4 overflow-y-auto animate-fade-in">
+      <div className="relative w-full max-w-md rounded-3xl bg-white border border-slate-100 shadow-2xl my-auto p-5 sm:p-6 text-slate-800 max-h-[94vh] overflow-y-auto">
+        {/* Tombol Tutup */}
         <button
           onClick={onClose}
           type="button"
-          className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition cursor-pointer"
-          title="Tutup"
+          className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition cursor-pointer"
+          title="Tutup Modal"
         >
           <X className="w-4 h-4" />
         </button>
 
         {/* Modal Header */}
-        <div className="text-center mb-5">
+        <div className="text-center mb-4">
           <div className="inline-flex items-center justify-center p-2 rounded-2xl bg-sky-50 mb-2 border border-sky-100">
             <BrandLogo size="sm" />
           </div>
-          <h2 className="text-lg sm:text-xl font-black text-sky-950">
-            {mode === 'register' ? 'Daftar Akun JualRugi.my.id' : 'Masuk ke Akun Anda'}
+          <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+            {mode === 'register' ? 'Daftar Akun Baru' : 'Masuk ke Akun Anda'}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             {mode === 'register'
-              ? 'Dapatkan akses promo harga gila & distress sale harian!'
-              : 'Pantau barang impian dan ajukan penawaran COD langsung ke penjual.'}
+              ? 'Lengkapi form di bawah untuk mulai pasang iklan & transaksi COD aman.'
+              : 'Silakan masukkan kredensial akun Anda yang terdaftar.'}
           </p>
         </div>
 
-        {/* Tabs: Daftar vs Masuk */}
-        <div className="grid grid-cols-2 p-1 bg-sky-50/80 rounded-2xl mb-4 border border-sky-100">
+        {/* Tab Pilihan: Daftar vs Masuk */}
+        <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-2xl mb-4 border border-slate-200/80">
           <button
             type="button"
             onClick={() => handleSwitchMode('register')}
-            className={`py-2 text-xs font-extrabold rounded-xl transition cursor-pointer ${
+            className={`py-2 text-xs font-black rounded-xl transition cursor-pointer ${
               mode === 'register'
                 ? 'bg-sky-500 text-white shadow-xs'
-                : 'text-slate-600 hover:text-sky-950'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Daftar Akun Baru
@@ -221,29 +259,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="button"
             onClick={() => handleSwitchMode('login')}
-            className={`py-2 text-xs font-extrabold rounded-xl transition cursor-pointer ${
+            className={`py-2 text-xs font-black rounded-xl transition cursor-pointer ${
               mode === 'login'
                 ? 'bg-sky-500 text-white shadow-xs'
-                : 'text-slate-600 hover:text-sky-950'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Masuk / Login
           </button>
         </div>
 
-        {/* Banner Otomatisasi Welcome Email Langsung */}
+        {/* Banner Info Kuota Iklan Gratis saat Registrasi */}
         {mode === 'register' && (
-          <div className="flex items-center justify-between p-2.5 rounded-2xl bg-gradient-to-r from-emerald-50 to-sky-50 border border-emerald-200/80 text-emerald-950 mb-3 shadow-2xs">
-            <div className="flex items-center gap-2 truncate">
-              <span className="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center shrink-0 text-xs">
-                ✉️
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 text-emerald-950 mb-4 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 text-sm shadow-xs">
+                🎁
               </span>
-              <div className="truncate">
-                <p className="text-[11px] font-black leading-tight truncate">
-                  Welcome Email Otomatis Aktif
+              <div>
+                <p className="text-xs font-black text-emerald-950 leading-tight">
+                  Bonus 1 Kuota Iklan Gratis
                 </p>
-                <p className="text-[9.5px] text-emerald-700 font-medium truncate">
-                  Email panduan transaksi aman langsung dikirim ke inbox pendaftar
+                <p className="text-[10px] text-emerald-700 font-medium">
+                  Welcome email &amp; link grup WhatsApp resmi dikirim otomatis ke email Anda
                 </p>
               </div>
             </div>
@@ -251,351 +289,347 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 type="button"
                 onClick={onOpenWelcomeEmailSetup}
-                className="shrink-0 text-[10px] font-black text-sky-700 hover:text-sky-900 bg-white px-2 py-1 rounded-lg border border-sky-200 transition cursor-pointer ml-1"
+                className="shrink-0 text-[10px] font-bold text-sky-700 hover:text-sky-900 bg-white px-2 py-1 rounded-lg border border-sky-200 transition cursor-pointer"
+                title="Status Brevo Email"
               >
-                Setup Zapier
+                Status
               </button>
             )}
           </div>
         )}
 
-        {/* ========================================================= */}
-        {/* Tombol Utama: Google Sign-In (Membuka Pilihan Akun Google) */}
-        {/* ========================================================= */}
-        <button
-          type="button"
-          onClick={handleOpenGooglePicker}
-          disabled={isLoading}
-          className="w-full py-3.5 px-4 rounded-2xl border-2 border-slate-200 hover:border-sky-400 bg-white hover:bg-sky-50/50 font-bold text-xs sm:text-sm text-slate-800 flex items-center justify-center gap-3 shadow-xs cursor-pointer active:scale-98 transition mb-3 group"
-        >
-          <GoogleLogo />
-          <span className="group-hover:text-sky-950">
-            {mode === 'register' ? 'Daftar dengan Akun Google' : 'Lanjutkan dengan Google'}
-          </span>
-        </button>
+        {/* Global Error Banner */}
+        {generalError && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold mb-4 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{generalError}</span>
+          </div>
+        )}
 
-        {/* Divider */}
-        <div className="flex items-center gap-3 my-3">
-          <div className="grow border-t border-slate-200" />
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            atau dengan form manual
-          </span>
-          <div className="grow border-t border-slate-200" />
-        </div>
-
-        {/* Standard Manual Form */}
-        <form onSubmit={handleSubmit} className="space-y-3.5">
-          {mode === 'register' && (
+        {/* ======================================================== */}
+        {/* FORM REGISTRASI MANUAL (TANPA GOOGLE SIGN-IN)            */}
+        {/* ======================================================== */}
+        {mode === 'register' ? (
+          <form onSubmit={handleSubmit} className="space-y-3.5" noValidate>
+            {/* 1. Nama Lengkap */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Nama Lengkap
+                Nama Lengkap <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
+                  name="fullName"
                   required
                   placeholder="Contoh: Rian Pratama"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-sky-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-xs text-slate-900 outline-none"
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                  }}
+                  className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-xs sm:text-sm text-slate-900 outline-none transition ${
+                    errors.name
+                      ? 'border-rose-400 bg-rose-50/30 focus:ring-2 focus:ring-rose-200'
+                      : 'border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-100'
+                  }`}
                 />
               </div>
+              {errors.name && (
+                <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{errors.name}</span>
+                </p>
+              )}
             </div>
-          )}
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Email atau Nomor WhatsApp
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                required
-                placeholder="nama@email.com atau 0812xxxxxxxx"
-                value={emailOrPhone}
-                onChange={(e) => setEmailOrPhone(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-sky-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-xs text-slate-900 outline-none"
-              />
+            {/* 2. Email Address */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Alamat Email <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  placeholder="Contoh: namaanda@email.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
+                  }}
+                  className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-xs sm:text-sm text-slate-900 outline-none transition ${
+                    errors.email
+                      ? 'border-rose-400 bg-rose-50/30 focus:ring-2 focus:ring-rose-200'
+                      : 'border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-100'
+                  }`}
+                />
+              </div>
+              {errors.email ? (
+                <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{errors.email}</span>
+                </p>
+              ) : (
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Digunakan untuk menerima notifikasi iklan tayang dan welcome email.
+                </p>
+              )}
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Kata Sandi
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="password"
-                required
-                placeholder="Minimal 6 karakter"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-sky-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-xs text-slate-900 outline-none"
-              />
+            {/* 3. Kata Sandi */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Kata Sandi <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  required
+                  placeholder="Minimal 6 karakter"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (errors.password) setErrors((prev) => ({ ...prev, password: '' }));
+                  }}
+                  className={`w-full pl-10 pr-10 py-2.5 rounded-xl border text-xs sm:text-sm text-slate-900 outline-none transition ${
+                    errors.password
+                      ? 'border-rose-400 bg-rose-50/30 focus:ring-2 focus:ring-rose-200'
+                      : 'border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-100'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                  title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {errors.password && (
+                <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{errors.password}</span>
+                </p>
+              )}
             </div>
-          </div>
 
-          {/* ======================================================== */}
-          {/* SYARAT & KETENTUAN / DISCLAIMER TRANSAKSI (WAJIB DAFTAR) */}
-          {/* ======================================================== */}
-          {mode === 'register' && (
-            <div className="space-y-2 pt-1">
+            {/* 4. Nomor WhatsApp */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Nomor WhatsApp <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Phone className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  name="whatsapp"
+                  required
+                  placeholder="Contoh: 0821xxxxxxxx atau 628xxxxxxxx"
+                  value={whatsapp}
+                  onChange={handleWhatsAppInput}
+                  maxLength={14}
+                  className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-mono text-slate-900 outline-none transition ${
+                    errors.whatsapp
+                      ? 'border-rose-400 bg-rose-50/30 focus:ring-2 focus:ring-rose-200'
+                      : 'border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100'
+                  }`}
+                />
+              </div>
+              {errors.whatsapp ? (
+                <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{errors.whatsapp}</span>
+                </p>
+              ) : (
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Hanya angka (format: <strong>0821xxxxxxxx</strong> atau <strong>628xxxxxxxx</strong>).
+                </p>
+              )}
+            </div>
+
+            {/* Syarat & Ketentuan / Disclaimer Transaksi */}
+            <div className="pt-1">
               <div className="rounded-2xl bg-amber-50/90 border border-amber-200 p-3.5 text-slate-800 text-xs shadow-2xs">
-                {/* Header Disclaimer */}
                 <div className="flex items-center gap-1.5 pb-2 border-b border-amber-200/80 text-amber-950 font-extrabold">
                   <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
                   <span className="text-[11px] sm:text-xs uppercase tracking-wide">
-                    Syarat & Ketentuan / Disclaimer Transaksi
+                    Disclaimer Transaksi COD 100% Aman
                   </span>
                 </div>
 
-                {/* 4 Poin Inti Disclaimer */}
-                <div className="mt-2.5 space-y-2 text-[11px] leading-relaxed text-slate-700">
-                  <div className="flex items-start gap-1.5">
-                    <span className="font-bold text-amber-950 shrink-0">•</span>
-                    <p>
-                      <strong className="text-amber-950">Transaksi Langsung:</strong> Seluruh transaksi jual-beli dilakukan secara mandiri dan langsung antara pihak penjual dan pembeli (COD tatap muka / transfer langsung).
-                    </p>
-                  </div>
-
-                  <div className="flex items-start gap-1.5">
-                    <span className="font-bold text-amber-950 shrink-0">•</span>
-                    <p>
-                      <strong className="text-amber-950">Posisi Platform:</strong> <span className="font-semibold text-slate-900">jualrugi.my.id</span> bertindak semata-mata sebagai platform/aplikasi pihak ketiga penyedia ruang listing, bukan pihak penengah transaksi.
-                    </p>
-                  </div>
-
-                  <div className="flex items-start gap-1.5">
-                    <span className="font-bold text-amber-950 shrink-0">•</span>
-                    <p>
-                      <strong className="text-amber-950">Batasan Tanggung Jawab:</strong> <span className="font-semibold text-slate-900">jualrugi.my.id</span> tidak bertanggung jawab dalam bentuk apa pun atas segala tindak penipuan, kerugian finansial, sengketa, atau cacat barang.
-                    </p>
-                  </div>
-
-                  <div className="flex items-start gap-1.5">
-                    <span className="font-bold text-amber-950 shrink-0">•</span>
-                    <p>
-                      <strong className="text-amber-950">Kehati-hatian Pembeli:</strong> Keamanan transaksi, verifikasi identitas penjual, dan pengecekan keaslian/kondisi barang merupakan tanggung jawab penuh masing-masing pembeli.
-                    </p>
-                  </div>
+                <div className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-slate-700">
+                  <p>
+                    • Transaksi dilakukan langsung antara penjual &amp; pembeli secara <strong>COD tatap muka</strong> di ruang publik.
+                  </p>
+                  <p>
+                    • <strong>Dilarang mentransfer DP</strong> kepada siapapun sebelum melihat dan mengecek langsung fisik barang.
+                  </p>
+                  <p>
+                    • <strong className="text-amber-950">jualrugi.my.id</strong> merupakan penyedia ruang iklan dan tidak bertanggung jawab atas kerugian akibat transfer uang muka di luar ketentuan COD.
+                  </p>
                 </div>
 
-                {/* Kotak Checkbox Persetujuan Wajib */}
+                {/* Checkbox Persetujuan */}
                 <label className="flex items-start gap-2.5 mt-3 pt-2.5 border-t border-amber-200 cursor-pointer select-none group">
                   <input
                     type="checkbox"
+                    name="disclaimerAgreement"
                     required
                     checked={agreedToDisclaimer}
                     onChange={(e) => {
                       setAgreedToDisclaimer(e.target.checked);
-                      if (e.target.checked) setErrorMessage(null);
+                      if (e.target.checked && errors.disclaimer) {
+                        setErrors((prev) => ({ ...prev, disclaimer: '' }));
+                      }
                     }}
                     className="mt-0.5 w-4 h-4 rounded border-amber-400 text-sky-600 focus:ring-sky-500 shrink-0 cursor-pointer accent-sky-600"
                   />
                   <span className="text-[11px] font-bold text-slate-900 leading-snug group-hover:text-amber-950">
-                    Saya telah membaca, memahami, dan menyetujui seluruh Syarat & Ketentuan serta Disclaimer Transaksi di atas. <span className="text-red-500">*</span>
+                    Saya menyetujui seluruh Syarat, Ketentuan &amp; Disclaimer Transaksi di atas. <span className="text-rose-500">*</span>
                   </span>
                 </label>
               </div>
 
-              {/* Alert Error / Peringatan Ramah jika dicoba submit tanpa centang */}
-              {errorMessage && (
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-bold animate-in fade-in duration-200">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>{errorMessage}</span>
-                </div>
+              {errors.disclaimer && (
+                <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{errors.disclaimer}</span>
+                </p>
               )}
             </div>
-          )}
 
-          {/* Tombol Submit Manual */}
-          <button
-            type="submit"
-            disabled={isLoading || (mode === 'register' && !agreedToDisclaimer)}
-            className={`w-full py-3 rounded-2xl font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition mt-4 ${
-              mode === 'register' && !agreedToDisclaimer
-                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed shadow-none'
-                : 'bg-sky-500 hover:bg-sky-600 text-white shadow-md shadow-sky-500/25 cursor-pointer active:scale-98'
-            }`}
-            title={
-              mode === 'register' && !agreedToDisclaimer
-                ? 'Centang kotak persetujuan disclaimer untuk mengaktifkan tombol'
-                : undefined
-            }
-          >
-            <span>{mode === 'register' ? 'Daftar Sekarang' : 'Masuk ke Akun'}</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </form>
+            {/* Tombol Submit Registrasi */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 px-4 rounded-2xl bg-sky-500 hover:bg-sky-600 active:scale-98 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-sky-500/25 transition cursor-pointer mt-4 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Memproses Pendaftaran...</span>
+                </>
+              ) : (
+                <>
+                  <span>Daftar Akun Sekarang</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+        ) : (
+          /* ======================================================== */
+          /* FORM LOGIN MANUAL                                        */
+          /* ======================================================== */
+          <form onSubmit={handleSubmit} className="space-y-3.5" noValidate>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Email atau Nomor WhatsApp <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  name="loginIdentifier"
+                  required
+                  placeholder="nama@email.com atau 0821xxxxxxxx"
+                  value={loginIdentifier}
+                  onChange={(e) => {
+                    setLoginIdentifier(e.target.value);
+                    if (errors.loginIdentifier) {
+                      setErrors((prev) => ({ ...prev, loginIdentifier: '' }));
+                    }
+                  }}
+                  className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-xs sm:text-sm text-slate-900 outline-none transition ${
+                    errors.loginIdentifier
+                      ? 'border-rose-400 bg-rose-50/30 focus:ring-2 focus:ring-rose-200'
+                      : 'border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-100'
+                  }`}
+                />
+              </div>
+              {errors.loginIdentifier && (
+                <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{errors.loginIdentifier}</span>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Kata Sandi <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type={showLoginPassword ? 'text' : 'password'}
+                  name="loginPassword"
+                  required
+                  placeholder="Masukkan kata sandi Anda"
+                  value={loginPassword}
+                  onChange={(e) => {
+                    setLoginPassword(e.target.value);
+                    if (errors.loginPassword) {
+                      setErrors((prev) => ({ ...prev, loginPassword: '' }));
+                    }
+                  }}
+                  className={`w-full pl-10 pr-10 py-2.5 rounded-xl border text-xs sm:text-sm text-slate-900 outline-none transition ${
+                    errors.loginPassword
+                      ? 'border-rose-400 bg-rose-50/30 focus:ring-2 focus:ring-rose-200'
+                      : 'border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-100'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                  title={showLoginPassword ? 'Sembunyikan password' : 'Lihat password'}
+                >
+                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {errors.loginPassword && (
+                <p className="text-[11px] text-rose-600 mt-1 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{errors.loginPassword}</span>
+                </p>
+              )}
+            </div>
+
+            {/* Tombol Submit Login */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 px-4 rounded-2xl bg-sky-500 hover:bg-sky-600 active:scale-98 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-sky-500/25 transition cursor-pointer mt-4 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Memverifikasi Akun...</span>
+                </>
+              ) : (
+                <>
+                  <span>Masuk Sekarang</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+        )}
 
         {/* Footer Note */}
         <p className="text-[10px] text-slate-400 text-center mt-4">
-          Dengan melanjutkan, Anda menyetujui Ketentuan Layanan & Protokol Transaksi COD Aman JualRugi.my.id.
+          Dengan melanjutkan, Anda menyetujui Ketentuan Layanan &amp; Protokol Transaksi COD Aman JualRugi.my.id.
         </p>
       </div>
-
-      {/* ======================================================== */}
-      {/* POPUP GOOGLE IDENTITY: PILIHAN AKUN GMAIL USER RESMI      */}
-      {/* ======================================================== */}
-      {isGooglePickerOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="relative w-full max-w-sm rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden text-slate-800 p-6 animate-in zoom-in-95 duration-200">
-            {/* Header Google Identity */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <GoogleLogo />
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
-                    Login dengan Google
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Pilih akun Gmail Anda untuk melanjutkan
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsGooglePickerOpen(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* List Pilihan Akun Google Aktif */}
-            <div className="mt-4 space-y-2">
-              {/* Akun Gmail Pengguna Utama (bca.ccpl@gmail.com) */}
-              <button
-                type="button"
-                onClick={() =>
-                  handleSelectGoogleAccount(
-                    'Pengguna Google (BCA)',
-                    'bca.ccpl@gmail.com',
-                    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80'
-                  )
-                }
-                className="w-full p-3 rounded-2xl border border-slate-200 hover:border-sky-400 hover:bg-sky-50/50 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-98 group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                    B
-                  </div>
-                  <div className="truncate">
-                    <p className="text-xs font-bold text-slate-900 group-hover:text-sky-950">
-                      Pengguna Google
-                    </p>
-                    <p className="text-[11px] text-slate-500 font-mono truncate">
-                      bca.ccpl@gmail.com
-                    </p>
-                  </div>
-                </div>
-                <div className="w-5 h-5 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
-                  <Check className="w-3 h-3 stroke-[2.5]" />
-                </div>
-              </button>
-
-              {/* Akun Gmail Alternatif (indodigital1978@gmail.com) */}
-              <button
-                type="button"
-                onClick={() =>
-                  handleSelectGoogleAccount(
-                    'Indo Digital',
-                    'indodigital1978@gmail.com',
-                    'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=200&q=80'
-                  )
-                }
-                className="w-full p-3 rounded-2xl border border-slate-200 hover:border-sky-400 hover:bg-sky-50/50 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-98 group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                    I
-                  </div>
-                  <div className="truncate">
-                    <p className="text-xs font-bold text-slate-900 group-hover:text-sky-950">
-                      Indo Digital
-                    </p>
-                    <p className="text-[11px] text-slate-500 font-mono truncate">
-                      indodigital1978@gmail.com
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-sky-600 shrink-0" />
-              </button>
-
-              {/* Pilihan: Masukkan Akun Google Lain */}
-              {!showCustomEmailInput ? (
-                <button
-                  type="button"
-                  onClick={() => setShowCustomEmailInput(true)}
-                  className="w-full p-3 rounded-2xl border border-dashed border-slate-300 hover:border-sky-400 hover:bg-slate-50 flex items-center gap-3 text-left transition cursor-pointer text-slate-600 hover:text-sky-950"
-                >
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                    <Plus className="w-4 h-4 text-slate-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-700">
-                      Gunakan akun Google lain
-                    </p>
-                    <p className="text-[10px] text-slate-400">
-                      Masukkan alamat @gmail.com pribadi Anda
-                    </p>
-                  </div>
-                </button>
-              ) : (
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-sky-200 space-y-2 animate-in fade-in">
-                  <label className="block text-[11px] font-bold text-slate-700">
-                    Ketik Alamat Gmail Anda:
-                  </label>
-                  <input
-                    type="email"
-                    autoFocus
-                    placeholder="namaanda@gmail.com"
-                    value={customGmail}
-                    onChange={(e) => setCustomGmail(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-sky-300 text-xs text-slate-900 outline-none focus:ring-1 focus:ring-sky-500"
-                  />
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      type="button"
-                      disabled={!customGmail.includes('@')}
-                      onClick={() => {
-                        const emailName = customGmail.split('@')[0];
-                        const formattedName =
-                          emailName.charAt(0).toUpperCase() + emailName.slice(1);
-                        handleSelectGoogleAccount(
-                          formattedName,
-                          customGmail,
-                          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80'
-                        );
-                      }}
-                      className="grow py-2 rounded-xl bg-sky-500 hover:bg-sky-600 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs transition cursor-pointer"
-                    >
-                      Masuk dengan Akun Ini
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowCustomEmailInput(false)}
-                      className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs"
-                    >
-                      Batal
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Disclaimer & Keamanan Google */}
-            <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-400 leading-relaxed space-y-1">
-              <p>
-                Dengan memilih akun, Anda menyetujui bahwa Google akan membagikan nama, email, dan foto profil Anda ke <strong>JualRugi.my.id</strong> serta menyetujui seluruh <strong>Syarat, Ketentuan & Disclaimer Transaksi</strong>.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
