@@ -791,12 +791,46 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
           console.log('[Brevo API Dispatch]: Status', brevoRes.status, brevoData);
 
           if (brevoRes.ok) {
+            // C. Kirim Notifikasi WhatsApp Otomatis via Fonnte API
+            let fonnteResult = null;
+            if (userPhone && userPhone.replace(/\D/g, '').length >= 9) {
+              try {
+                const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+                const cleanPhone = userPhone.replace(/\D/g, '');
+                const pesanWa =
+                  `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
+                  `Akun Anda dengan email *${email}* sudah aktif dan siap digunakan.\n\n` +
+                  `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
+                  `https://jualrugi.my.id/?action=post\n\n` +
+                  `Happy Shopping!\n- Tim JualRugi`;
+
+                const formData = new FormData();
+                formData.append('target', cleanPhone);
+                formData.append('message', pesanWa);
+                formData.append('countryCode', '62');
+
+                console.log(`[Server - Fonnte WA] Mengirim WhatsApp ke ${cleanPhone}...`);
+                const fonnteRes = await fetch('https://api.fonnte.com/send', {
+                  method: 'POST',
+                  headers: {
+                    Authorization: FONNTE_TOKEN,
+                  },
+                  body: formData,
+                });
+                fonnteResult = await fonnteRes.json().catch(() => ({}));
+                console.log('[Server - Fonnte WA Status]:', fonnteRes.status, fonnteResult);
+              } catch (fonnteErr) {
+                console.warn('[Server - Fonnte WA Error]:', fonnteErr);
+              }
+            }
+
             return res.status(200).json({
               success: true,
               message: `Welcome email berhasil dikirim via Brevo API ke ${email} (Message ID: ${brevoData.messageId || 'ok'})!`,
-              provider: 'brevo',
+              provider: 'brevo_and_fonnte',
               emailSentTo: email,
               brevoMessageId: brevoData.messageId,
+              fonnte: fonnteResult,
               preview: {
                 subject: welcomeSubject,
                 html: welcomeHtml,

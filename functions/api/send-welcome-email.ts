@@ -2,6 +2,7 @@ interface Env {
   BREVO_API_KEY?: string;
   BREVO_SENDER_EMAIL?: string;
   BREVO_SENDER_NAME?: string;
+  FONNTE_TOKEN?: string;
 }
 
 export async function onRequestPost(context: { request: Request; env: Env }) {
@@ -223,13 +224,48 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     console.log(`[CF Pages - Welcome Email] Brevo Response Status: ${brevoRes.status}`, brevoData);
 
     if (brevoRes.ok) {
+      // D. Kirim Pesan WhatsApp Selamat Datang Otomatis via Fonnte API
+      let fonnteResult: any = null;
+      if (userPhone && userPhone.replace(/\D/g, '').length >= 9) {
+        try {
+          const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+          const cleanPhone = userPhone.replace(/\D/g, '');
+          const pesanWa =
+            `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
+            `Akun Anda dengan email *${targetEmail}* sudah aktif dan siap digunakan.\n\n` +
+            `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
+            `https://jualrugi.my.id/?action=post\n\n` +
+            `Happy Shopping!\n- Tim JualRugi`;
+
+          const fonnteFormData = new FormData();
+          fonnteFormData.append('target', cleanPhone);
+          fonnteFormData.append('message', pesanWa);
+          fonnteFormData.append('countryCode', '62');
+
+          console.log(`[CF Pages - Fonnte WA] Mengirim WhatsApp ke ${cleanPhone}...`);
+          const fonnteRes = await fetch('https://api.fonnte.com/send', {
+            method: 'POST',
+            headers: {
+              Authorization: FONNTE_TOKEN,
+            },
+            body: fonnteFormData,
+          });
+
+          fonnteResult = await fonnteRes.json().catch(() => ({}));
+          console.log(`[CF Pages - Fonnte WA] Status ${fonnteRes.status}:`, fonnteResult);
+        } catch (fonnteErr) {
+          console.warn('[CF Pages - Fonnte WA] Peringatan kirim WA Fonnte:', fonnteErr);
+        }
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
           message: `Welcome email berhasil dikirim via Brevo API ke ${targetEmail}!`,
-          provider: 'brevo_cloudflare_pages',
+          provider: 'brevo_and_fonnte',
           emailSentTo: targetEmail,
           brevoMessageId: brevoData.messageId,
+          fonnte: fonnteResult,
         }),
         {
           status: 200,
