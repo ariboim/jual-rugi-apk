@@ -163,6 +163,25 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       </div>
     </div>
 
+    <!-- Ajakan Bergabung Grup WhatsApp Resmi -->
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:16px;padding:20px;margin:28px 0;text-align:center;">
+      <div style="display:inline-block;background:#dcfce7;color:#15803d;padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:bold;text-transform:uppercase;margin-bottom:8px;">
+        💬 Komunitas JualRugi
+      </div>
+      <h3 style="color:#166534;font-size:16px;margin:4px 0 8px;">
+        Yuk, Gabung di Grup WhatsApp JualRugi.my.id!
+      </h3>
+      <p style="font-size:13px;line-height:1.5;color:#14532d;margin:0 0 16px;">
+        Dapatkan info kilat barang BU diskon sadis, tips aman transaksi COD tatap muka, dan promosi langsung dengan sesama anggota.
+      </p>
+      <a href="https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2" style="display:inline-block;background:#25D366;color:#ffffff;font-weight:bold;font-size:14px;padding:12px 24px;border-radius:10px;text-decoration:none;box-shadow:0 3px 10px rgba(37,211,102,0.35);" target="_blank" rel="noopener noreferrer">
+        🟢 Gabung Grup WhatsApp Sekarang
+      </a>
+      <div style="margin-top:10px;font-size:11px;color:#15803d;word-break:break-all;">
+        Link alternatif: <a href="https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2" style="color:#166534;font-weight:bold;text-decoration:underline;">https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi</a>
+      </div>
+    </div>
+
     <div style="border-top:1px solid #e2e8f0;padding-top:20px;margin-top:32px;font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;">
       Email otomatis ini dikirimkan khusus untuk <strong>${targetEmail}</strong> atas pendaftaran di JualRugi.my.id.<br/>
       Jangan pernah mentransfer DP kepada siapapun sebelum bertemu langsung (COD).
@@ -172,7 +191,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
 </html>
     `.trim();
 
-    const welcomeText = `Halo ${userName}!\n\nSelamat datang di JualRugi.my.id.\nAkun Anda mendapatkan bonus 1 Kuota Pasang Iklan Gratis.\nPasang iklan barang BU Anda sekarang melalui: https://jualrugi.my.id/#pasangiklan\n\nIngat selalu: Wajib transaksi COD tatap muka di tempat ramai tanpa transfer DP!`;
+    const welcomeText = `Halo ${userName}!\n\nSelamat datang di JualRugi.my.id.\nAkun Anda mendapatkan bonus 1 Kuota Pasang Iklan Gratis.\nPasang iklan barang BU Anda sekarang melalui: https://jualrugi.my.id/#pasangiklan\n\nYuk, gabung juga di Grup WhatsApp Komunitas JualRugi.my.id:\nhttps://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2\n\nIngat selalu: Wajib transaksi COD tatap muka di tempat ramai tanpa transfer DP!`;
 
     // C. Kirim via Brevo v3 Transactional SMTP Email API
     console.log('[CF Pages - Welcome Email] Mengirim payload ke https://api.brevo.com/v3/smtp/email...');

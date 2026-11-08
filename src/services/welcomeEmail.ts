@@ -159,6 +159,25 @@ export function getWelcomeEmailHtml(name: string, email: string): string {
       Direct Link Pasang Iklan: <a href="https://jualrugi.my.id/#pasangiklan" style="color: #0284c7; font-weight: 600;" data-track="false" data-msys-linktracking="0">https://jualrugi.my.id/#pasangiklan</a>
     </p>
 
+    <!-- Ajakan Bergabung Grup WhatsApp Resmi -->
+    <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 16px; padding: 20px; margin: 24px 0; text-align: center;">
+      <div style="display: inline-block; background: #dcfce7; color: #15803d; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+        💬 Komunitas JualRugi
+      </div>
+      <h3 style="color: #166534; font-size: 16px; margin: 4px 0 8px;">
+        Yuk, Gabung di Grup WhatsApp JualRugi.my.id!
+      </h3>
+      <p style="font-size: 13px; line-height: 1.5; color: #14532d; margin: 0 0 16px;">
+        Dapatkan info kilat barang BU diskon sadis, tips aman COD tatap muka, dan promosi langsung dengan sesama anggota.
+      </p>
+      <a href="https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2" style="display: inline-block; background: #25D366; color: #ffffff !important; font-weight: bold; font-size: 14px; padding: 12px 24px; border-radius: 10px; text-decoration: none; box-shadow: 0 3px 10px rgba(37, 211, 102, 0.35);" target="_blank" rel="noopener noreferrer" data-track="false" data-msys-linktracking="0" sh-no-track="true">
+        🟢 Gabung Grup WhatsApp Sekarang
+      </a>
+      <div style="margin-top: 10px; font-size: 11px; color: #15803d; word-break: break-all;">
+        Link alternatif: <a href="https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2" style="color: #166534; font-weight: bold; text-decoration: underline;" data-track="false" data-msys-linktracking="0">https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi</a>
+      </div>
+    </div>
+
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0 20px;" />
     <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
       Email otomatis ini dikirimkan khusus untuk ${email} atas pendaftaran di JualRugi.my.id.<br/>

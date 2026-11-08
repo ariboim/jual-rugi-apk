@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, MapPin, ShieldCheck, Copy, Check, ExternalLink } from 'lucide-react';
+import { Mail, MapPin, ShieldCheck, Copy, Check, ExternalLink, Users } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
 export const Footer: React.FC = () => {
@@ -91,6 +91,28 @@ export const Footer: React.FC = () => {
                   </button>
                   <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition" />
                 </div>
+              </a>
+
+              {/* WhatsApp Community Group Card */}
+              <a
+                href="https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center justify-between p-3 rounded-2xl bg-emerald-950/40 hover:bg-emerald-900/40 border border-emerald-800/70 hover:border-emerald-500/70 transition-all shadow-xs"
+                title="Gabung Grup Komunitas WhatsApp JualRugi"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                    <Users className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <span className="block text-[11px] text-emerald-300/80 font-medium">Grup Komunitas WhatsApp</span>
+                    <span className="font-extrabold text-xs sm:text-sm text-white group-hover:text-emerald-300 transition">
+                      Gabung Komunitas JualRugi
+                    </span>
+                  </div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-emerald-400/80 group-hover:text-emerald-300 transition" />
               </a>
 
               {/* Email Kontak Card */}
