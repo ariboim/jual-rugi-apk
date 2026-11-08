@@ -630,8 +630,15 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         globalZapierWebhookUrl = activeWebhook.trim();
       }
 
-      const userName = name?.trim() || 'Pengguna Baru';
-      const userPhone = phone || '-';
+      const userName = (req.body.fullName || req.body.name || req.body.nama_user || req.body.recipientName || 'Member JualRugi').trim();
+      const rawPhone = (req.body.whatsapp || req.body.phone || req.body.no_whatsapp || '').trim();
+      let cleanPhone = rawPhone.replace(/\D/g, '');
+      if (cleanPhone.startsWith('0')) {
+        cleanPhone = '62' + cleanPhone.slice(1);
+      } else if (cleanPhone.startsWith('8')) {
+        cleanPhone = '62' + cleanPhone;
+      }
+      const userPhone = cleanPhone || '-';
       const targetWebhook =
         activeWebhook || globalZapierWebhookUrl || process.env.MAKE_WELCOME_EMAIL_WEBHOOK_URL || DEFAULT_WEBHOOK_URL;
 

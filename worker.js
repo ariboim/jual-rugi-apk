@@ -9,10 +9,19 @@ export default {
       console.log('[CF Worker - Welcome Email] Menerima request /api/send-welcome-email');
       try {
         const body = await request.json().catch(() => ({}));
-        const { name, email, phone, city, brevoApiKey: clientKey } = body;
-        const targetEmail = (email || '').trim();
-        const userName = (name || 'Pengguna JualRugi').trim();
-        const userPhone = (phone || '').trim();
+        const targetEmail = (body.email || body.email_user || body.recipientEmail || '').trim();
+        const userName = (body.fullName || body.name || body.nama_user || body.recipientName || 'Member JualRugi').trim();
+        const rawPhone = (body.whatsapp || body.phone || body.no_whatsapp || body.userPhone || '').trim();
+        const clientKey = body.brevoApiKey;
+
+        // Normalisasi Nomor WhatsApp (hanya angka & wajib format 628...)
+        let cleanPhone = rawPhone.replace(/\D/g, '');
+        if (cleanPhone.startsWith('0')) {
+          cleanPhone = '62' + cleanPhone.slice(1);
+        } else if (cleanPhone.startsWith('8')) {
+          cleanPhone = '62' + cleanPhone;
+        }
+        const userPhone = cleanPhone;
 
         if (!targetEmail || !targetEmail.includes('@')) {
           return new Response(
@@ -109,50 +118,55 @@ export default {
         });
 
         const brevoData = await brevoRes.json().catch(() => ({}));
+        const brevoSuccess = brevoRes.ok;
         console.log(`[CF Worker - Welcome Email] Brevo HTTP ${brevoRes.status}:`, brevoData);
 
-        if (brevoRes.ok) {
-          // Kirim WhatsApp Selamat Datang Otomatis via Fonnte API
-          let fonnteResult = null;
-          if (userPhone && userPhone.replace(/\D/g, '').length >= 9) {
-            try {
-              const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
-              const cleanPhone = userPhone.replace(/\D/g, '');
-              const pesanWa =
-                `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
-                `Akun Anda dengan email *${targetEmail}* sudah aktif dan siap digunakan.\n\n` +
-                `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
-                `https://jualrugi.my.id/?action=post\n\n` +
-                `Happy Shopping!\n- Tim JualRugi`;
+        // Kirim WhatsApp Selamat Datang Otomatis via Fonnte API (Selalu dijalankan)
+        let fonnteResult = null;
+        let fonnteSuccess = false;
+        if (userPhone && userPhone.length >= 9) {
+          try {
+            const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+            const pesanWa =
+              `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
+              `Akun Anda dengan email *${targetEmail}* sudah aktif dan siap digunakan.\n\n` +
+              `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
+              `https://jualrugi.my.id/?action=post\n\n` +
+              `Happy Shopping!\n- Tim JualRugi`;
 
-              const fonnteFormData = new FormData();
-              fonnteFormData.append('target', cleanPhone);
-              fonnteFormData.append('message', pesanWa);
-              fonnteFormData.append('countryCode', '62');
+            const fonnteFormData = new FormData();
+            fonnteFormData.append('target', userPhone);
+            fonnteFormData.append('message', pesanWa);
+            fonnteFormData.append('countryCode', '62');
 
-              console.log(`[CF Worker - Fonnte WA] Mengirim WhatsApp ke ${cleanPhone}...`);
-              const fonnteRes = await fetch('https://api.fonnte.com/send', {
-                method: 'POST',
-                headers: {
-                  Authorization: FONNTE_TOKEN,
-                },
-                body: fonnteFormData,
-              });
+            console.log(`[CF Worker - Fonnte WA] Mengirim WhatsApp ke ${userPhone}...`);
+            const fonnteRes = await fetch('https://api.fonnte.com/send', {
+              method: 'POST',
+              headers: {
+                Authorization: FONNTE_TOKEN,
+              },
+              body: fonnteFormData,
+            });
 
-              fonnteResult = await fonnteRes.json().catch(() => ({}));
-              console.log(`[CF Worker - Fonnte WA] Status ${fonnteRes.status}:`, fonnteResult);
-            } catch (fonnteErr) {
-              console.warn('[CF Worker - Fonnte WA] Gagal kirim WA Fonnte:', fonnteErr);
-            }
+            fonnteResult = await fonnteRes.json().catch(() => ({}));
+            fonnteSuccess = fonnteRes.ok;
+            console.log(`[CF Worker - Fonnte WA] Status ${fonnteRes.status}:`, fonnteResult);
+          } catch (fonnteErr) {
+            console.warn('[CF Worker - Fonnte WA] Gagal kirim WA Fonnte:', fonnteErr);
           }
+        }
 
+        if (brevoSuccess || fonnteSuccess) {
           return new Response(
             JSON.stringify({
               success: true,
-              message: `Welcome email berhasil dikirim via Brevo ke ${targetEmail}!`,
+              message: `Notifikasi pendaftaran diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Gagal'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Gagal'}).`,
+              emailSentTo: targetEmail,
+              whatsappSentTo: userPhone,
               messageId: brevoData.messageId,
               provider: 'brevo_and_fonnte_worker',
-              fonnte: fonnteResult,
+              brevo: { success: brevoSuccess, status: brevoRes.status, detail: brevoData },
+              fonnte: { success: fonnteSuccess, detail: fonnteResult },
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           );
@@ -160,10 +174,11 @@ export default {
           return new Response(
             JSON.stringify({
               success: false,
-              error: `Brevo API Error (HTTP ${brevoRes.status}): ${brevoData.message || 'Ditolak oleh Brevo'}`,
-              details: brevoData,
+              error: `Gagal mengirim email via Brevo (HTTP ${brevoRes.status}) dan WhatsApp via Fonnte.`,
+              brevoDetails: brevoData,
+              fonnteDetails: fonnteResult,
             }),
-            { status: brevoRes.status, headers: { 'Content-Type': 'application/json' } }
+            { status: brevoRes.status || 500, headers: { 'Content-Type': 'application/json' } }
           );
         }
       } catch (workerErr) {

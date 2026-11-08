@@ -28,10 +28,18 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       );
     }
 
-    const { name, email, phone, userId, city, brevoApiKey: clientKey } = body;
-    const targetEmail = (email || '').trim();
-    const userName = (name || 'Pengguna JualRugi').trim();
-    const userPhone = (phone || '').trim();
+    const targetEmail = (body.email || body.email_user || body.recipientEmail || '').trim();
+    const userName = (body.fullName || body.name || body.nama_user || body.recipientName || 'Member JualRugi').trim();
+    const rawPhone = (body.whatsapp || body.phone || body.no_whatsapp || body.userPhone || '').trim();
+
+    // Normalisasi Nomor WhatsApp (hanya angka & wajib format 628...)
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '62' + cleanPhone.slice(1);
+    } else if (cleanPhone.startsWith('8')) {
+      cleanPhone = '62' + cleanPhone;
+    }
+    const userPhone = cleanPhone;
 
     if (!targetEmail || !targetEmail.includes('@')) {
       console.warn('[CF Pages - Welcome Email] Email penerima tidak valid:', targetEmail);
@@ -48,6 +56,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     }
 
     // Ambil API Key dari Cloudflare Pages Environment Variables, atau fallback ke body
+    const clientKey = body.brevoApiKey;
     const activeBrevoKey =
       (env.BREVO_API_KEY && env.BREVO_API_KEY.trim() && !env.BREVO_API_KEY.includes('your_')
         ? env.BREVO_API_KEY.trim()
@@ -113,7 +122,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
           attributes: {
             FIRSTNAME: userName,
             SMS: userPhone && userPhone !== '-' ? userPhone : undefined,
-            CITY: city || undefined,
+            CITY: body.city || undefined,
           },
           updateEnabled: true,
         }),
@@ -221,51 +230,61 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     });
 
     const brevoData = await brevoRes.json().catch(() => ({}));
+    const brevoSuccess = brevoRes.ok;
     console.log(`[CF Pages - Welcome Email] Brevo Response Status: ${brevoRes.status}`, brevoData);
 
-    if (brevoRes.ok) {
-      // D. Kirim Pesan WhatsApp Selamat Datang Otomatis via Fonnte API
-      let fonnteResult: any = null;
-      if (userPhone && userPhone.replace(/\D/g, '').length >= 9) {
-        try {
-          const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
-          const cleanPhone = userPhone.replace(/\D/g, '');
-          const pesanWa =
-            `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
-            `Akun Anda dengan email *${targetEmail}* sudah aktif dan siap digunakan.\n\n` +
-            `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
-            `https://jualrugi.my.id/?action=post\n\n` +
-            `Happy Shopping!\n- Tim JualRugi`;
+    // D. Kirim Pesan WhatsApp Selamat Datang Otomatis via Fonnte API (Selalu dieksekusi)
+    let fonnteResult: any = null;
+    let fonnteSuccess = false;
+    if (userPhone && userPhone.length >= 9) {
+      try {
+        const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+        const pesanWa =
+          `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
+          `Akun Anda dengan email *${targetEmail}* sudah aktif dan siap digunakan.\n\n` +
+          `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
+          `https://jualrugi.my.id/?action=post\n\n` +
+          `Happy Shopping!\n- Tim JualRugi`;
 
-          const fonnteFormData = new FormData();
-          fonnteFormData.append('target', cleanPhone);
-          fonnteFormData.append('message', pesanWa);
-          fonnteFormData.append('countryCode', '62');
+        const fonnteFormData = new FormData();
+        fonnteFormData.append('target', userPhone);
+        fonnteFormData.append('message', pesanWa);
+        fonnteFormData.append('countryCode', '62');
 
-          console.log(`[CF Pages - Fonnte WA] Mengirim WhatsApp ke ${cleanPhone}...`);
-          const fonnteRes = await fetch('https://api.fonnte.com/send', {
-            method: 'POST',
-            headers: {
-              Authorization: FONNTE_TOKEN,
-            },
-            body: fonnteFormData,
-          });
+        console.log(`[CF Pages - Fonnte WA] Mengirim WhatsApp ke ${userPhone}...`);
+        const fonnteRes = await fetch('https://api.fonnte.com/send', {
+          method: 'POST',
+          headers: {
+            Authorization: FONNTE_TOKEN,
+          },
+          body: fonnteFormData,
+        });
 
-          fonnteResult = await fonnteRes.json().catch(() => ({}));
-          console.log(`[CF Pages - Fonnte WA] Status ${fonnteRes.status}:`, fonnteResult);
-        } catch (fonnteErr) {
-          console.warn('[CF Pages - Fonnte WA] Peringatan kirim WA Fonnte:', fonnteErr);
-        }
+        fonnteResult = await fonnteRes.json().catch(() => ({}));
+        fonnteSuccess = fonnteRes.ok;
+        console.log(`[CF Pages - Fonnte WA] Status ${fonnteRes.status}:`, fonnteResult);
+      } catch (fonnteErr) {
+        console.warn('[CF Pages - Fonnte WA] Peringatan kirim WA Fonnte:', fonnteErr);
       }
+    }
 
+    if (brevoSuccess || fonnteSuccess) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: `Welcome email berhasil dikirim via Brevo API ke ${targetEmail}!`,
+          message: `Notifikasi pendaftaran diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Gagal'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Gagal'}).`,
           provider: 'brevo_and_fonnte',
           emailSentTo: targetEmail,
-          brevoMessageId: brevoData.messageId,
-          fonnte: fonnteResult,
+          whatsappSentTo: userPhone,
+          brevo: {
+            success: brevoSuccess,
+            status: brevoRes.status,
+            messageId: brevoData.messageId,
+          },
+          fonnte: {
+            success: fonnteSuccess,
+            detail: fonnteResult,
+          },
         }),
         {
           status: 200,
@@ -273,15 +292,16 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         }
       );
     } else {
-      console.error('[CF Pages - Welcome Email] Brevo API merespons error:', brevoRes.status, brevoData);
+      console.error('[CF Pages - Welcome Email] Pengiriman gagal di Brevo dan Fonnte');
       return new Response(
         JSON.stringify({
           success: false,
-          error: `Gagal mengirim email via Brevo (Status ${brevoRes.status}): ${brevoData.message || 'Terjadi penolakan dari API Brevo.'}`,
-          details: brevoData,
+          error: `Gagal mengirim notifikasi (Brevo HTTP ${brevoRes.status}).`,
+          brevoDetails: brevoData,
+          fonnteDetails: fonnteResult,
         }),
         {
-          status: brevoRes.status,
+          status: brevoRes.status || 500,
           headers: { 'Content-Type': 'application/json' },
         }
       );
