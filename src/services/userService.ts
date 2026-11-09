@@ -168,6 +168,82 @@ export function getWhatsAppChatLink(phone: string, text: string = ''): string {
 }
 
 /**
+ * Mengambil nomor WhatsApp seller secara dinamis dari data produk/iklan
+ */
+export function getSellerWhatsAppNumber(listing: any): string {
+  if (!listing) return '6281288991234';
+
+  // 1. Cek langsung properti nomor telepon seller di objek listing
+  let rawPhone =
+    listing.seller_phone ||
+    listing.sellerPhone ||
+    listing.whatsapp ||
+    listing.phone ||
+    listing.seller?.phone ||
+    listing.seller?.whatsapp ||
+    listing.seller?.phoneMasked ||
+    '';
+
+  // 2. Jika phoneMasked masih mengandung mask 'XXXX' atau '*', cari di database pengguna tersimpan
+  if (!rawPhone || rawPhone.includes('X') || rawPhone.includes('x') || rawPhone.includes('*')) {
+    const sellerId = listing.user_id || listing.seller?.id;
+    const sellerName = (listing.seller?.name || '').toLowerCase().trim();
+    const storedUsers = getStoredUsers();
+    const foundUser = storedUsers.find(
+      (u) =>
+        (sellerId && (u.id === sellerId || u.email.toLowerCase() === String(sellerId).toLowerCase())) ||
+        (sellerName && u.name.toLowerCase() === sellerName)
+    );
+    if (foundUser && (foundUser.whatsapp || foundUser.phone)) {
+      rawPhone = foundUser.whatsapp || foundUser.phone;
+    }
+  }
+
+  // 3. Fallback map nomor WhatsApp aktif untuk seller default
+  if (!rawPhone || rawPhone.includes('X') || rawPhone.includes('x') || rawPhone.includes('*')) {
+    const fallbackSellerMap: Record<string, string> = {
+      'seller-agus': '081288991234',
+      'seller-bambang': '085712345678',
+      'seller-dewi': '081323456789',
+      'seller-hendra': '082134567890',
+      'seller-siti': '081245678901',
+      'seller-budi': '085678901234',
+      'seller-maya': '087890123456',
+      'seller-rudi': '089601234567',
+      'buyer-rian': '081299887766',
+      'user-boim-ganteng': '081298765432',
+    };
+    const sId = listing.seller?.id || listing.user_id || '';
+    if (fallbackSellerMap[sId]) {
+      rawPhone = fallbackSellerMap[sId];
+    } else {
+      rawPhone = '081288991234';
+    }
+  }
+
+  // Normalisasi ke format 62xxx
+  let clean = cleanWhatsAppNumber(rawPhone);
+  if (clean.startsWith('0')) {
+    clean = '62' + clean.slice(1);
+  } else if (clean.startsWith('8')) {
+    clean = '62' + clean;
+  }
+  return clean || '6281288991234';
+}
+
+/**
+ * Membuat tautan dinamis wa.me ke seller dengan pesan otomatis:
+ * "Halo kak, saya tertarik dengan produk *[nama_produk]* yang ada di JualRugi.my.id"
+ */
+export function buildSellerWhatsAppChatUrl(listing: any): string {
+  const sellerPhone = getSellerWhatsAppNumber(listing);
+  const productName = listing?.title || 'Produk JualRugi';
+  const message = `Halo kak, saya tertarik dengan produk *${productName}* yang ada di JualRugi.my.id`;
+  return `https://wa.me/${sellerPhone}?text=${encodeURIComponent(message)}`;
+}
+
+
+/**
  * Mengambil seluruh data pengguna yang tersimpan di localStorage
  */
 export function getStoredUsers(): RegisteredUser[] {

@@ -56,7 +56,7 @@ export const QRISModal: React.FC<QRISModalProps> = ({
   const namaPengiklan = listing?.seller?.name || 'Pengiklan JualRugi';
 
   const isSundul = selectedPackage === 'sundul';
-  const namaPaket = isSundul ? 'Sundul Iklan' : 'Pasang BU Prioritas';
+  const namaPaket = isSundul ? 'Sundul' : 'Iklan Prioritas';
   const nominal = isSundul ? 25000 : 75000;
   const payUrl = isSundul ? MAYAR_SUNDUL_URL : MAYAR_BU_PRIORITAS_URL;
 
@@ -259,7 +259,7 @@ export const QRISModal: React.FC<QRISModalProps> = ({
               </div>
               <div>
                 <h4 className="text-xs font-black text-emerald-950">
-                  Konfirmasi Pembayaran via WhatsApp
+                  Konfirmasi Pembayaran via WhatsApp Admin
                 </h4>
                 <p className="text-[11px] text-emerald-800 leading-relaxed mt-0.5">
                   Setelah bayar di Mayar, klik tombol di bawah untuk kirim bukti ke WhatsApp Admin ({WA_ADMIN_PHONE}). ID Iklan otomatis tersemat!
@@ -271,10 +271,11 @@ export const QRISModal: React.FC<QRISModalProps> = ({
               href={waUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2 cursor-pointer block text-center"
+              className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2 cursor-pointer block text-center"
+              title="Kirim pesan konfirmasi pembayaran langsung ke WhatsApp Admin"
             >
-              <MessageCircle className="w-4 h-4 fill-white" />
-              <span>Konfirmasi Pembayaran via WhatsApp</span>
+              <MessageCircle className="w-4 h-4 fill-white shrink-0" />
+              <span>Konfirmasi Pembayaran via WhatsApp Admin</span>
             </a>
 
             {/* WA Message Preview Accordion */}

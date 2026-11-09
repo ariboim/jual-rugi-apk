@@ -21,6 +21,10 @@ import { getListingPhotos } from '../data/initialData';
 import { ProductGallery } from './gallery/ProductGallery';
 import { ListingStatsBar } from './ListingStatsBar';
 import { getAdExpiryInfo, isListingOwner } from '../services/listingLifecycle';
+import {
+  getSellerWhatsAppNumber,
+  buildSellerWhatsAppChatUrl,
+} from '../services/userService';
 
 export const WhatsAppIcon: React.FC<{ className?: string }> = ({
   className = 'w-4 h-4',
@@ -38,8 +42,8 @@ export const WhatsAppIcon: React.FC<{ className?: string }> = ({
 interface ListingDetailModalProps {
   listing: Listing;
   onClose: () => void;
-  onOpenChat: (listing: Listing) => void;
-  onQuickMakeOffer: (listing: Listing, offerPrice: number) => void;
+  onOpenChat?: (listing: Listing) => void;
+  onQuickMakeOffer?: (listing: Listing, offerPrice: number) => void;
   isFavorited?: boolean;
   onToggleFavorite?: () => void;
   onIncrementView?: (listingId: string) => void;
@@ -94,6 +98,11 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   const isSold = listing.status === 'sold';
   const isExpired = listing.status === 'expired' || (!isSold && listing.createdAt && (Date.now() - new Date(listing.createdAt).getTime() >= 30 * 24 * 60 * 60 * 1000));
   const isInactive = isSold || isExpired;
+
+  // Nomor WhatsApp Seller dinamis & Tautan Direct Chat WhatsApp resmi:
+  // wa.me/[nomor_hp_seller]?text=Halo kak, saya tertarik dengan produk *[nama_produk]* yang ada di JualRugi.my.id
+  const sellerWaNumber = useMemo(() => getSellerWhatsAppNumber(listing), [listing]);
+  const sellerDirectChatUrl = useMemo(() => buildSellerWhatsAppChatUrl(listing), [listing]);
 
   // Validasi Kepemilikan (Auth Check): HANYA seller/pemilik listing yang boleh melihat info tanggal kadaluarsa
   const isOwner = useMemo(() => {
@@ -527,26 +536,47 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                 </p>
               </div>
             </div>
+
+            {!isInactive && !isOwner && (
+              <a
+                href={sellerDirectChatUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-black flex items-center gap-1.5 border border-emerald-200 transition cursor-pointer shrink-0 shadow-2xs active:scale-95"
+                title="Chat Langsung via WhatsApp"
+              >
+                <WhatsAppIcon className="w-3.5 h-3.5 fill-[#25D366]" />
+                <span className="hidden sm:inline">Chat WA</span>
+              </a>
+            )}
           </div>
 
-          {/* Quick Sadis Offer Simulation Buttons */}
+          {/* Quick Sadis Offer Simulation Buttons via WhatsApp */}
           {!isInactive ? (
             <div className="space-y-1.5">
               <p className="text-xs text-slate-600 font-semibold flex items-center gap-1">
-                <span>⚡ Ajukan Nego Cepat (Langsung Chat):</span>
+                <span>⚡ Ajukan Nego Cepat ke WhatsApp Seller:</span>
               </p>
               <div className="grid grid-cols-2 gap-2">
-                {quickOffers.map((offer, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => onQuickMakeOffer(listing, offer)}
-                    className="py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-xs font-semibold text-sky-950 transition text-center cursor-pointer active:scale-95 shadow-xs"
-                  >
-                    Tawar <strong className="text-sky-700">{formatRupiah(offer)}</strong>
-                    <span className="block text-[10px] text-slate-500">Siap COD Hari Ini</span>
-                  </button>
-                ))}
+                {quickOffers.map((offer, idx) => {
+                  const offerWaMessage = `Halo kak, saya tertarik dengan produk *${listing.title}* yang ada di JualRugi.my.id. Boleh nego di harga ${formatRupiah(offer)}? Siap COD hari ini.`;
+                  const offerWaLink = `https://wa.me/${sellerWaNumber}?text=${encodeURIComponent(offerWaMessage)}`;
+
+                  return (
+                    <a
+                      key={idx}
+                      href={offerWaLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => onQuickMakeOffer && onQuickMakeOffer(listing, offer)}
+                      className="py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-xs font-semibold text-emerald-950 transition text-center cursor-pointer active:scale-95 shadow-xs block"
+                      title={`Kirim penawaran ${formatRupiah(offer)} ke WhatsApp penjual`}
+                    >
+                      Tawar <strong className="text-emerald-700">{formatRupiah(offer)}</strong>
+                      <span className="block text-[10px] text-emerald-600">Nego via WhatsApp &rarr;</span>
+                    </a>
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -667,13 +697,16 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
               <span>🔒 Iklan Tidak Aktif / Dihapus</span>
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={() => onOpenChat(listing)}
-              className="grow py-3 px-4 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all truncate"
+            <a
+              href={sellerDirectChatUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="grow py-3 px-4 rounded-2xl bg-[#25D366] hover:bg-[#20ba5a] active:scale-95 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all truncate text-center"
+              title="Chat Seller via WhatsApp resmi"
             >
-              <span>💬 Chat Penjual (COD)</span>
-            </button>
+              <WhatsAppIcon className="w-4 h-4 sm:w-5 sm:h-5 fill-white shrink-0" />
+              <span>Chat Seller via WhatsApp</span>
+            </a>
           )}
         </div>
       </div>

@@ -63,34 +63,37 @@ export function buildMayarCheckoutUrl(
 export interface WhatsAppConfirmationParams {
   id_iklan: string;
   nama_paket: string;
-  nominal: number | string;
-  judul_iklan: string;
-  nama_pengiklan: string;
+  nominal?: number | string;
+  judul_iklan?: string;
+  nama_pengiklan?: string;
 }
 
 /**
  * Menghasilkan Teks Pesan Wajib untuk Konfirmasi WhatsApp Admin
+ * Sesuai spesifikasi template resmi:
+ * Halo Admin JualRugi, saya ingin konfirmasi pembayaran untuk aktivasi Iklan Prioritas/Sundul.
+ * 
+ * - ID Iklan: [ID_IKLAN_DINAMIS]
+ * - Nama Paket: [NAMA_PAKET]
+ * - Lampiran/Status: (Mohon sertakan bukti transfer di chat ini)
+ * 
+ * Mohon segera diaktivasi ya, terima kasih.
  */
 export function generateWhatsAppMessage(params: WhatsAppConfirmationParams): string {
-  const formattedNominal =
-    typeof params.nominal === 'number'
-      ? params.nominal.toLocaleString('id-ID')
-      : params.nominal;
+  return `Halo Admin JualRugi, saya ingin konfirmasi pembayaran untuk aktivasi Iklan Prioritas/Sundul.
 
-  return `Halo Admin JualRugi, saya sudah melakukan pembayaran di Mayar.
+- ID Iklan: ${params.id_iklan}
+- Nama Paket: ${params.nama_paket}
+- Lampiran/Status: (Mohon sertakan bukti transfer di chat ini)
 
-* ID Iklan: ${params.id_iklan}
-* Paket: ${params.nama_paket} (Rp ${formattedNominal})
-* Judul Iklan: ${params.judul_iklan}
-* Nama Pengiklan: ${params.nama_pengiklan}
-
-Bukti bayar terlampir. Mohon verifikasi dan aktifkan status iklan saya. Terima kasih!`;
+Mohon segera diaktivasi ya, terima kasih.`;
 }
 
 /**
- * Menghasilkan URL target WhatsApp API resmi dengan encodeURIComponent
+ * Menghasilkan URL target WhatsApp API resmi dengan encodeURIComponent ke nomor Admin (WA_ADMIN_PHONE)
  */
 export function buildWhatsAppConfirmationUrl(params: WhatsAppConfirmationParams): string {
   const message = generateWhatsAppMessage(params);
-  return `https://api.whatsapp.com/send?phone=${WA_ADMIN_PHONE}&text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${WA_ADMIN_PHONE}?text=${encodeURIComponent(message)}`;
 }
+
