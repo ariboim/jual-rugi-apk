@@ -1,10 +1,24 @@
+import React from 'react';
 import { MapPin, Flame, ShieldCheck, Clock, CheckCircle2, Lock } from 'lucide-react';
 import { Listing } from '../types';
+
+export const WhatsAppIcon: React.FC<{ className?: string }> = ({
+  className = 'w-4 h-4',
+}) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 6.46 17.5 2 12.04 2M12.05 3.67C16.58 3.67 20.28 7.37 20.28 11.92C20.28 16.46 16.58 20.17 12.05 20.17C10.57 20.17 9.15 19.77 7.91 19.03L7.61 18.85L4.5 19.67L5.33 16.64L5.13 16.33C4.32 15.03 3.8 13.5 3.8 11.92C3.8 7.37 7.51 3.67 12.05 3.67M9.25 7.15C9.07 7.15 8.78 7.22 8.53 7.49C8.28 7.76 7.58 8.42 7.58 9.77C7.58 11.12 8.56 12.42 8.7 12.6C8.84 12.78 10.74 15.71 13.65 16.97C14.34 17.27 14.88 17.45 15.3 17.58C16 17.8 16.63 17.77 17.11 17.7C17.65 17.62 18.77 17.02 19.01 16.35C19.25 15.68 19.25 15.11 19.18 14.99C19.11 14.87 18.93 14.8 18.66 14.66C18.39 14.53 17.07 13.88 16.82 13.79C16.57 13.7 16.39 13.65 16.21 13.92C16.03 14.19 15.52 14.8 15.36 14.99C15.2 15.17 15.05 15.19 14.78 15.06C14.51 14.92 13.64 14.64 12.6 13.72C11.8 13.01 11.26 12.13 11.1 11.86C10.95 11.59 11.08 11.44 11.22 11.31C11.34 11.19 11.49 10.99 11.63 10.83C11.77 10.66 11.81 10.54 11.9 10.36C11.99 10.18 11.95 10.02 11.88 9.89C11.81 9.76 11.26 8.42 11.03 7.88C10.81 7.35 10.59 7.42 10.42 7.42C10.26 7.42 10.07 7.42 9.89 7.42C9.71 7.42 9.42 7.49 9.25 7.68V7.15Z" />
+  </svg>
+);
 
 interface ListingCardProps {
   listing: Listing;
   onClick: () => void;
-  onQuickChat: (e: React.MouseEvent) => void;
+  onQuickChat?: (e: React.MouseEvent) => void;
 }
 
 export const ListingCard: React.FC<ListingCardProps> = ({
@@ -30,6 +44,30 @@ export const ListingCard: React.FC<ListingCardProps> = ({
     if (diffHours < 24) return `${diffHours} jam lalu`;
     return `${Math.floor(diffHours / 24)} hari lalu`;
   };
+
+  // =========================================================================
+  // TOMBOL DIRECT CHAT WHATSAPP SELLER DENGAN FALLBACK NOMOR ADMIN 6289673686625
+  // =========================================================================
+  const FALLBACK_WA_ADMIN = '6289673686625';
+
+  const rawSellerPhone =
+    (listing as any).seller_phone ||
+    (listing as any).sellerPhone ||
+    (listing as any).whatsapp ||
+    (listing.seller as any)?.whatsapp ||
+    (listing.seller as any)?.phone ||
+    '';
+
+  let targetPhone = FALLBACK_WA_ADMIN;
+  if (rawSellerPhone && !rawSellerPhone.includes('X') && !rawSellerPhone.includes('*')) {
+    let clean = rawSellerPhone.replace(/\D/g, '');
+    if (clean.startsWith('0')) clean = '62' + clean.slice(1);
+    else if (clean.startsWith('8')) clean = '62' + clean;
+    if (clean.length >= 9) targetPhone = clean;
+  }
+
+  const messageText = `Halo kak, saya tertarik dengan produk *${listing.title}*`;
+  const whatsappUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(messageText)}`;
 
   return (
     <div
@@ -89,7 +127,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({
         {/* WATERMARK IKLAN KEDALUWARSA (30 HARI) */}
         {isExpired && !isSold && (
           <div className="absolute inset-0 z-20 bg-slate-950/70 backdrop-blur-[1.5px] flex flex-col items-center justify-center p-3 text-center">
-            <div className="px-3 py-1.5 rounded-xl bg-slate-800 text-amber-300 font-black text-xs tracking-wider uppercase shadow-xl border border-amber-400/50 flex items-center gap-1.5">
+            <div className="px-3.5 py-1.5 rounded-xl bg-slate-800 text-amber-300 font-black text-xs tracking-wider uppercase shadow-xl border border-amber-400/50 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>KEDALUWARSA (30 HARI)</span>
             </div>
@@ -202,7 +240,9 @@ export const ListingCard: React.FC<ListingCardProps> = ({
             </span>
           </div>
 
-          {/* Quick COD Chat Trigger Button (Dinonaktifkan jika Sold atau Expired) */}
+          {/* ========================================================================= */}
+          {/* TOMBOL HIJAU: CHAT SELLER VIA WHATSAPP (MENGGANTIKAN CHAT AJUKAN COD)     */}
+          {/* ========================================================================= */}
           {isSold ? (
             <button
               type="button"
@@ -224,17 +264,20 @@ export const ListingCard: React.FC<ListingCardProps> = ({
               <span>Iklan Tidak Aktif (30 Hari)</span>
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={onQuickChat}
-              className={`mt-3 w-full py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-xs ${
-                listing.isSuperBU
-                  ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border border-amber-500 shadow-amber-500/25 font-black'
-                  : 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/20'
-              }`}
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onQuickChat) onQuickChat(e);
+              }}
+              className="mt-3 w-full py-2.5 px-2 rounded-xl text-xs font-black bg-[#25D366] hover:bg-[#20ba5a] active:scale-95 text-white shadow-md shadow-emerald-500/25 flex items-center justify-center gap-1.5 cursor-pointer transition-all text-center"
+              title={`Chat Seller via WhatsApp untuk produk ${listing.title}`}
             >
-              <span>💬 Chat Ajukan COD</span>
-            </button>
+              <WhatsAppIcon className="w-4 h-4 fill-white shrink-0" />
+              <span>Chat Seller via WhatsApp</span>
+            </a>
           )}
         </div>
       </div>
