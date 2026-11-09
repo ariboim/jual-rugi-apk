@@ -1,0 +1,122 @@
+[
+  {
+    "id": "user-boim-ganteng",
+    "name": "Boim Ganteng",
+    "email": "boim.ganteng@gmail.com",
+    "whatsapp": "081298765432",
+    "phone": "0812-9876-5432",
+    "role": "buyer",
+    "registeredAt": "2026-11-09T08:00:00.000Z",
+    "city": "Jakarta Selatan",
+    "status": "active",
+    "count": 0
+  },
+  {
+    "id": "buyer-rian",
+    "name": "Rian Pratama",
+    "email": "rian.pratama@gmail.com",
+    "whatsapp": "081299887766",
+    "phone": "0812-9988-7766",
+    "role": "buyer",
+    "registeredAt": "2026-11-01T08:30:00.000Z",
+    "city": "Jakarta Selatan",
+    "status": "active",
+    "count": 2
+  },
+  {
+    "id": "seller-agus",
+    "name": "Agus Setiawan",
+    "email": "agus.setiawan@gmail.com",
+    "whatsapp": "081288991234",
+    "phone": "0812-8899-1234",
+    "role": "seller",
+    "registeredAt": "2026-11-02T10:15:00.000Z",
+    "city": "Jakarta Selatan",
+    "status": "active",
+    "count": 2
+  },
+  {
+    "id": "seller-bambang",
+    "name": "Bambang Riyadi",
+    "email": "bambang.riyadi@gmail.com",
+    "whatsapp": "085712345678",
+    "phone": "0857-1234-5678",
+    "role": "seller",
+    "registeredAt": "2026-11-03T14:20:00.000Z",
+    "city": "Depok",
+    "status": "active",
+    "count": 1
+  },
+  {
+    "id": "seller-dewi",
+    "name": "Dewi Lestari",
+    "email": "dewi.lestari@gmail.com",
+    "whatsapp": "081323456789",
+    "phone": "0813-2345-6789",
+    "role": "seller",
+    "registeredAt": "2026-11-04T09:40:00.000Z",
+    "city": "Bekasi",
+    "status": "active",
+    "count": 1
+  },
+  {
+    "id": "seller-hendra",
+    "name": "Hendra Kurniawan",
+    "email": "hendra.kurniawan@gmail.com",
+    "whatsapp": "082134567890",
+    "phone": "0821-3456-7890",
+    "role": "seller",
+    "registeredAt": "2026-11-05T11:25:00.000Z",
+    "city": "Tangerang",
+    "status": "active",
+    "count": 1
+  },
+  {
+    "id": "seller-siti",
+    "name": "Siti Rahmawati",
+    "email": "siti.rahmawati@gmail.com",
+    "whatsapp": "081245678901",
+    "phone": "0812-4567-8901",
+    "role": "seller",
+    "registeredAt": "2026-11-06T15:10:00.000Z",
+    "city": "Jakarta Barat",
+    "status": "active",
+    "count": 1
+  },
+  {
+    "id": "seller-budi",
+    "name": "Budi Santoso",
+    "email": "budi.santoso@gmail.com",
+    "whatsapp": "085678901234",
+    "phone": "0856-7890-1234",
+    "role": "seller",
+    "registeredAt": "2026-11-07T13:50:00.000Z",
+    "city": "Jakarta Pusat",
+    "status": "active",
+    "count": 1
+  },
+  {
+    "id": "seller-maya",
+    "name": "Maya Indah",
+    "email": "maya.indah@gmail.com",
+    "whatsapp": "087890123456",
+    "phone": "0878-9012-3456",
+    "role": "seller",
+    "registeredAt": "2026-11-08T16:05:00.000Z",
+    "city": "Jakarta Timur",
+    "status": "active",
+    "count": 1
+  },
+  {
+    "id": "seller-rudi",
+    "name": "Rudi Hermawan",
+    "email": "rudi.hermawan@gmail.com",
+    "whatsapp": "089601234567",
+    "phone": "0896-0123-4567",
+    "role": "seller",
+    "registeredAt": "2026-11-08T18:45:00.000Z",
+    "city": "Depok",
+    "status": "active",
+    "count": 1
+  }
+]

@@ -4,6 +4,8 @@
  * untuk kemudahan kampanye pemasaran via WhatsApp & Email.
  */
 
+import { fetchAllUsersFromSupabase } from './supabase';
+
 export interface RegisteredUser {
   id: string;
   name: string;
@@ -19,8 +21,20 @@ export interface RegisteredUser {
 
 const STORAGE_KEY = 'jualrugi_registered_users';
 
-// Data pendaftar bawaan / awal
+// Data pendaftar bawaan / awal (Menyertakan Boim Ganteng hasil simulasi registrasi)
 const DEFAULT_REGISTERED_USERS: RegisteredUser[] = [
+  {
+    id: 'user-boim-ganteng',
+    name: 'Boim Ganteng',
+    email: 'boim.ganteng@gmail.com',
+    whatsapp: '081298765432',
+    phone: '0812-9876-5432',
+    role: 'buyer',
+    registeredAt: '2026-11-09T08:00:00.000Z',
+    city: 'Jakarta Selatan',
+    status: 'active',
+    count: 0,
+  },
   {
     id: 'buyer-rian',
     name: 'Rian Pratama',
@@ -168,6 +182,20 @@ export function getStoredUsers(): RegisteredUser[] {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_REGISTERED_USERS));
       return DEFAULT_REGISTERED_USERS;
     }
+
+    // Pastikan Boim Ganteng dari simulasi registrasi selalu tersedia di daftar
+    const hasBoim = parsed.some(
+      (u: RegisteredUser) =>
+        (u.name && u.name.toLowerCase().includes('boim')) ||
+        (u.email && u.email.toLowerCase().includes('boim'))
+    );
+    if (!hasBoim) {
+      const boimUser = DEFAULT_REGISTERED_USERS[0];
+      const withBoim = [boimUser, ...parsed];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(withBoim));
+      return withBoim;
+    }
+
     return parsed;
   } catch (e) {
     console.error('[userService] Gagal membaca user storage:', e);
@@ -251,39 +279,87 @@ export function saveNewRegisteredUser(userData: {
 }
 
 /**
- * Sinkronisasi data pengguna dari server backend jika tersedia
+ * Sinkronisasi data pengguna dari server backend dan Supabase database
+ * Menggabungkan seluruh sumber pendaftaran (localStorage, Server API, Supabase DB)
  */
 export async function syncUsersFromServer(): Promise<RegisteredUser[]> {
+  const localList = getStoredUsers();
+  const map = new Map<string, RegisteredUser>();
+
+  // 1. Masukkan data lokal terlebih dahulu
+  localList.forEach((u) => {
+    if (u.email) map.set(u.email.toLowerCase().trim(), u);
+  });
+
+  // 2. Ambil dari Supabase DB (Tabel users / profiles)
+  try {
+    const sbUsers = await fetchAllUsersFromSupabase();
+    if (Array.isArray(sbUsers) && sbUsers.length > 0) {
+      sbUsers.forEach((row: any) => {
+        const emailKey = (row.email || '').toLowerCase().trim();
+        if (emailKey) {
+          const existing = map.get(emailKey);
+          const rawWa = (row.whatsapp || row.phone || '').trim();
+          const cleanWa = cleanWhatsAppNumber(rawWa);
+          map.set(emailKey, {
+            id: row.id || existing?.id || `user-sb-${Date.now()}`,
+            name: row.name || existing?.name || 'Member JualRugi',
+            email: emailKey,
+            whatsapp: cleanWa || existing?.whatsapp || rawWa,
+            phone: rawWa || existing?.phone || cleanWa,
+            role: (row.role as any) || existing?.role || 'buyer',
+            registeredAt: row.created_at || existing?.registeredAt || new Date().toISOString(),
+            city: row.city || existing?.city || 'Jakarta Selatan',
+            status: existing?.status || 'active',
+            count: existing?.count || 0,
+          });
+        }
+      });
+    }
+  } catch (sbErr) {
+    console.warn('[userService] Sinkronisasi Supabase DB:', sbErr);
+  }
+
+  // 3. Ambil dari Server Endpoint (/api/admin/users)
   try {
     const res = await fetch('/api/admin/users');
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.users) && data.users.length > 0) {
-        const localList = getStoredUsers();
-        const map = new Map<string, RegisteredUser>();
-
-        // Masukkan lokal terlebih dahulu
-        localList.forEach((u) => map.set(u.email.toLowerCase(), u));
-
-        // Gabungkan dengan data server
         data.users.forEach((u: RegisteredUser) => {
-          const key = (u.email || '').toLowerCase();
+          const key = (u.email || '').toLowerCase().trim();
           if (key) {
             const existing = map.get(key);
             map.set(key, { ...existing, ...u });
           }
         });
-
-        const merged = Array.from(map.values());
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-        return merged;
       }
     }
   } catch (e) {
-    // Fallback lokal
+    // Silent fallback
   }
-  return getStoredUsers();
+
+  // 4. Pastikan Boim Ganteng tetap ada
+  const hasBoim = Array.from(map.values()).some(
+    (u) =>
+      (u.name && u.name.toLowerCase().includes('boim')) ||
+      (u.email && u.email.toLowerCase().includes('boim'))
+  );
+  if (!hasBoim) {
+    const boim = DEFAULT_REGISTERED_USERS[0];
+    map.set(boim.email.toLowerCase(), boim);
+  }
+
+  const merged = Array.from(map.values());
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+  } catch (err) {
+    console.warn('[userService] Gagal update localStorage:', err);
+  }
+
+  return merged;
 }
+
 
 /**
  * Helper Download File di Browser

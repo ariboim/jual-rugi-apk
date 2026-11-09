@@ -104,6 +104,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   // Persistent Registered Users State (Disinkronkan dari localStorage & Server)
   const [persistentUsers, setPersistentUsers] = useState<RegisteredUser[]>(() => getStoredUsers());
+  const [isRefreshingUsers, setIsRefreshingUsers] = useState(false);
 
   // UI state
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -123,13 +124,35 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testStatus, setTestStatus] = useState<{ success?: boolean; message?: string; details?: any } | null>(null);
 
+  // Handler Tombol Refresh Data Pengguna (Manual & Real-time Sync)
+  const handleRefreshUsers = async () => {
+    setIsRefreshingUsers(true);
+    try {
+      const latest = await syncUsersFromServer();
+      if (latest && latest.length > 0) {
+        setPersistentUsers(latest);
+        showNotification(`✅ Data pengguna berhasil disegarkan! Ditemukan ${latest.length} akun terdaftar.`);
+      } else {
+        const local = getStoredUsers();
+        setPersistentUsers(local);
+        showNotification(`✅ Data pengguna diperbarui (${local.length} akun).`);
+      }
+    } catch (err) {
+      const local = getStoredUsers();
+      setPersistentUsers(local);
+      showNotification('✅ Data pengguna disegarkan dari penyimpanan lokal.');
+    } finally {
+      setTimeout(() => setIsRefreshingUsers(false), 400);
+    }
+  };
+
   // Muat data saat modal dibuka atau tab berganti
   useEffect(() => {
     if (isOpen) {
       loadEmailLogs();
       setPersistentUsers(getStoredUsers());
 
-      // Sinkronisasi data pengguna dari server
+      // Sinkronisasi data pengguna dari server & Supabase
       syncUsersFromServer().then((latest) => {
         if (latest && latest.length > 0) {
           setPersistentUsers(latest);
@@ -150,9 +173,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     const handleUserRegistered = () => {
       setPersistentUsers(getStoredUsers());
     };
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'jualrugi_registered_users') {
+        setPersistentUsers(getStoredUsers());
+      }
+    };
     window.addEventListener('jualrugi_user_registered', handleUserRegistered);
+    window.addEventListener('storage', handleStorageChange);
     return () => {
       window.removeEventListener('jualrugi_user_registered', handleUserRegistered);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
 
@@ -981,6 +1011,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       Aktif ({allUsersList.length - blockedUserIds.length})
                     </button>
                   </div>
+
+                  {/* Tombol Refresh Data Pengguna (Real-time Sync) */}
+                  <button
+                    type="button"
+                    onClick={handleRefreshUsers}
+                    disabled={isRefreshingUsers}
+                    className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white text-xs font-black flex items-center gap-1.5 shadow-xs active:scale-95 transition cursor-pointer shrink-0"
+                    title="Segarkan data pendaftar baru dari database Supabase & server secara real-time"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingUsers ? 'animate-spin' : ''}`} />
+                    <span>{isRefreshingUsers ? 'Menyinkronkan...' : 'Refresh Data'}</span>
+                  </button>
 
                   {/* Tombol Ekspor / Download untuk Kampanye Marketing (CSV, XLS, PDF) */}
                   <div className="flex items-center gap-1.5 shrink-0 flex-wrap">

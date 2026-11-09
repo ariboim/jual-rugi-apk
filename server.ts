@@ -26,13 +26,98 @@ function getServerEmailConfig(): { brevoApiKey?: string; brevoSenderEmail?: stri
   return {};
 }
 
+const USERS_FILE_PATH = path.resolve(__dirname, 'registered-users.json');
+
+const INITIAL_SERVER_USERS = [
+  {
+    id: 'user-boim-ganteng',
+    name: 'Boim Ganteng',
+    email: 'boim.ganteng@gmail.com',
+    whatsapp: '081298765432',
+    phone: '0812-9876-5432',
+    role: 'buyer',
+    registeredAt: new Date().toISOString(),
+    city: 'Jakarta Selatan',
+    status: 'active',
+    count: 0,
+  },
+  {
+    id: 'buyer-rian',
+    name: 'Rian Pratama',
+    email: 'rian.pratama@gmail.com',
+    whatsapp: '081299887766',
+    phone: '0812-9988-7766',
+    role: 'buyer',
+    registeredAt: '2026-11-01T08:30:00.000Z',
+    city: 'Jakarta Selatan',
+    status: 'active',
+    count: 2,
+  },
+  {
+    id: 'seller-agus',
+    name: 'Agus Setiawan',
+    email: 'agus.setiawan@gmail.com',
+    whatsapp: '081288991234',
+    phone: '0812-8899-1234',
+    role: 'seller',
+    registeredAt: '2026-11-02T10:15:00.000Z',
+    city: 'Jakarta Selatan',
+    status: 'active',
+    count: 2,
+  },
+  {
+    id: 'seller-bambang',
+    name: 'Bambang Riyadi',
+    email: 'bambang.riyadi@gmail.com',
+    whatsapp: '085712345678',
+    phone: '0857-1234-5678',
+    role: 'seller',
+    registeredAt: '2026-11-03T14:20:00.000Z',
+    city: 'Depok',
+    status: 'active',
+    count: 1,
+  },
+];
+
+function saveRegisteredUsersToDisk(users: any[]) {
+  try {
+    fs.writeFileSync(USERS_FILE_PATH, JSON.stringify(users, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('[Server Disk Users Save Warn]:', e);
+  }
+}
+
+function loadRegisteredUsersFromDisk(): any[] {
+  try {
+    if (fs.existsSync(USERS_FILE_PATH)) {
+      const data = JSON.parse(fs.readFileSync(USERS_FILE_PATH, 'utf8'));
+      if (Array.isArray(data) && data.length > 0) {
+        const hasBoim = data.some(
+          (u) =>
+            (u.name && u.name.toLowerCase().includes('boim')) ||
+            (u.email && u.email.toLowerCase().includes('boim'))
+        );
+        if (!hasBoim) {
+          data.unshift(INITIAL_SERVER_USERS[0]);
+          saveRegisteredUsersToDisk(data);
+        }
+        return data;
+      }
+    }
+  } catch (e) {
+    console.warn('[Server Disk Users Warn]:', e);
+  }
+  saveRegisteredUsersToDisk(INITIAL_SERVER_USERS);
+  return [...INITIAL_SERVER_USERS];
+}
+
 async function startServer() {
   const app = express();
   const httpServer = http.createServer(app);
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-  // In-memory persistent registered users array for admin dashboard
-  const serverRegisteredUsers: any[] = [];
+  // Persistent registered users loaded from disk
+  const serverRegisteredUsers: any[] = loadRegisteredUsersFromDisk();
 
   // JSON body parser with limit for base64 images
   app.use(express.json({ limit: '25mb' }));
@@ -708,6 +793,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         } else {
           serverRegisteredUsers.unshift(serverUserEntry);
         }
+        saveRegisteredUsersToDisk(serverRegisteredUsers);
       }
 
       return res.status(200).json({
@@ -761,6 +847,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         } else {
           serverRegisteredUsers.unshift(entry);
         }
+        saveRegisteredUsersToDisk(serverRegisteredUsers);
       }
       return res.json({ success: true, count: serverRegisteredUsers.length });
     } catch (e: any) {
@@ -794,6 +881,31 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         cleanPhone = '62' + cleanPhone;
       }
       const userPhone = cleanPhone || '-';
+
+      // Pastikan data pendaftar tercatat di database admin
+      if (email) {
+        const cleanEmail = email.trim().toLowerCase();
+        const existingIdx = serverRegisteredUsers.findIndex((u) => u.email.toLowerCase() === cleanEmail);
+        const autoEntry = {
+          id: req.body.id || `user-${Date.now()}`,
+          name: userName,
+          email: cleanEmail,
+          whatsapp: userPhone !== '-' ? userPhone : '081298765432',
+          phone: userPhone !== '-' ? userPhone : '0812-9876-5432',
+          role: 'buyer',
+          registeredAt: new Date().toISOString(),
+          city: 'Jakarta Selatan',
+          status: 'active',
+          count: 0,
+        };
+        if (existingIdx >= 0) {
+          serverRegisteredUsers[existingIdx] = { ...serverRegisteredUsers[existingIdx], ...autoEntry };
+        } else {
+          serverRegisteredUsers.unshift(autoEntry);
+        }
+        saveRegisteredUsersToDisk(serverRegisteredUsers);
+      }
+
       const targetWebhook =
         activeWebhook || globalZapierWebhookUrl || process.env.MAKE_WELCOME_EMAIL_WEBHOOK_URL || DEFAULT_WEBHOOK_URL;
 

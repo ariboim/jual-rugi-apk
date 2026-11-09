@@ -477,3 +477,39 @@ export async function fetchUserByEmailFromSupabase(email: string): Promise<any |
     return null;
   }
 }
+
+/**
+ * Mengambil seluruh data user dari Supabase (tabel 'users' atau fallback 'profiles')
+ * Digunakan oleh Panel Kontrol Admin untuk menampilkan seluruh pendaftar secara real-time.
+ */
+export async function fetchAllUsersFromSupabase(): Promise<any[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+
+    // Fallback ke tabel 'profiles'
+    const { data: profData, error: profError } = await client
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!profError && Array.isArray(profData)) {
+      return profData;
+    }
+
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('[Supabase DB] Gagal fetch all users:', err);
+    return [];
+  }
+}
+
