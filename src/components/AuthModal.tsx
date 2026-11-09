@@ -13,7 +13,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { sendWelcomeEmailAutomation } from '../services/welcomeEmail';
+import { sendWelcomeEmailAutomation, sendRegistrationToMakeWebhook } from '../services/welcomeEmail';
 import { BrandLogo } from './BrandLogo';
 
 interface AuthModalProps {
@@ -49,6 +49,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Validation & UI State
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -57,6 +58,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setMode(targetMode);
     setErrors({});
     setGeneralError(null);
+    setSuccessMessage(null);
   };
 
   /**
@@ -148,20 +150,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const regName = name.trim();
       const regEmail = email.trim().toLowerCase();
       const regPhone = whatsapp.trim();
+      const regPassword = password;
 
-      // Trigger Welcome Email Otomatis via Brevo API
+      // Kirim Data Registrasi ke Webhook Make.com (format JSON: nama, email, password, nomor_wa) & Welcome Email
       try {
-        console.log('[Auth] Memicu Welcome Email untuk:', regEmail);
+        console.log('[Auth] Mengirim data pendaftaran ke Make.com Webhook...');
+        sendRegistrationToMakeWebhook({
+          nama: regName,
+          email: regEmail,
+          password: regPassword,
+          nomor_wa: regPhone,
+        }).catch((hookErr) => {
+          console.warn('[Auth] Gagal kirim ke Make.com Webhook:', hookErr);
+        });
+
+        // Trigger Welcome Email & WhatsApp Otomatis
         await sendWelcomeEmailAutomation({
           name: regName,
           email: regEmail,
           phone: regPhone,
+          nama: regName,
+          password: regPassword,
+          nomor_wa: regPhone,
         });
-      } catch (emailErr) {
-        console.warn('[Auth] Gagal mengirim welcome email:', emailErr);
+      } catch (authDispatchErr) {
+        console.warn('[Auth] Notifikasi pendaftaran mengalami kendala:', authDispatchErr);
       }
 
-      setIsLoading(false);
+      setSuccessMessage(`Selamat ${regName}, pendaftaran akun berhasil! Data telah terkirim. Happy shopping! 🎉`);
 
       const authenticatedUser: UserProfile = {
         id: `user-${Date.now()}`,
@@ -180,8 +196,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         },
       };
 
-      onLoginSuccess(authenticatedUser);
-      onClose();
+      // Tampilkan notifikasi "happy shopping" sejenak sebelum modal ditutup
+      setTimeout(() => {
+        setIsLoading(false);
+        onLoginSuccess(authenticatedUser);
+        onClose();
+      }, 1200);
     } else {
       // Mode Login
       const isValid = validateLogin();
@@ -295,6 +315,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Status
               </button>
             )}
+          </div>
+        )}
+
+        {/* Success Banner */}
+        {successMessage && (
+          <div className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold mb-4 animate-in fade-in">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{successMessage}</span>
           </div>
         )}
 

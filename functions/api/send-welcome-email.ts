@@ -268,11 +268,43 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       }
     }
 
+    // E. Teruskan data registrasi ke Webhook Make.com (Payload: nama, email, password, nomor_wa)
+    const MAKE_WEBHOOK_URL = 'https://hook.eu1.make.com/1i6d9bq5157dnksxju764f8uno3bdsam';
+    const MAKE_FALLBACK_URL = 'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
+    const makePayload = {
+      nama: userName,
+      email: targetEmail,
+      password: body.password || '',
+      nomor_wa: userPhone,
+    };
+    try {
+      fetch(MAKE_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makePayload),
+      }).then(async (res) => {
+        const text = await res.text().catch(() => '');
+        if (!res.ok || text.includes('Webhook not found')) {
+          fetch(MAKE_FALLBACK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(makePayload),
+          }).catch(() => {});
+        }
+      }).catch(() => {
+        fetch(MAKE_FALLBACK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(makePayload),
+        }).catch(() => {});
+      });
+    } catch (e) {}
+
     if (brevoSuccess || fonnteSuccess) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: `Notifikasi pendaftaran diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Gagal'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Gagal'}).`,
+          message: `Notifikasi pendaftaran diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Gagal'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Gagal'}). Happy shopping!`,
           provider: 'brevo_and_fonnte',
           emailSentTo: targetEmail,
           whatsappSentTo: userPhone,

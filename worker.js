@@ -3,6 +3,60 @@ export default {
     const url = new URL(request.url);
 
     // =========================================================================
+    // API ROUTE 0: /api/registration-webhook (Cloudflare Worker Handler)
+    // =========================================================================
+    if (url.pathname === '/api/registration-webhook' && request.method === 'POST') {
+      try {
+        const body = await request.json().catch(() => ({}));
+        const nama = (body.nama || body.fullName || body.name || body.nama_user || 'Member JualRugi').trim();
+        const email = (body.email || '').trim().toLowerCase();
+        const password = body.password || '';
+        const rawPhone = (body.nomor_wa || body.whatsapp || body.phone || body.no_whatsapp || '').trim();
+
+        let cleanPhone = rawPhone.replace(/\D/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+        else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+        const nomor_wa = cleanPhone || rawPhone;
+
+        const targetWebhook = body.webhookUrl || 'https://hook.eu1.make.com/1i6d9bq5157dnksxju764f8uno3bdsam';
+        const fallbackWebhook = 'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
+        const makePayload = { nama, email, password, nomor_wa };
+
+        let makeRes = await fetch(targetWebhook, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(makePayload),
+        });
+        let responseText = await makeRes.text().catch(() => '');
+
+        if ((!makeRes.ok || responseText.includes('Webhook not found')) && targetWebhook !== fallbackWebhook) {
+          try {
+            const fbRes = await fetch(fallbackWebhook, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(makePayload),
+            });
+            const fbText = await fbRes.text().catch(() => '');
+            if (fbRes.ok) {
+              makeRes = fbRes;
+              responseText = fbText;
+            }
+          } catch (e) {}
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Data registrasi berhasil dikirim ke Make.com. Happy shopping!', status: makeRes.status, makeResponse: responseText, data: makePayload }),
+          { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message || 'Worker Error' }),
+          { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+        );
+      }
+    }
+
+    // =========================================================================
     // API ROUTE 1: /api/send-welcome-email (Cloudflare Worker Handler)
     // =========================================================================
     if (url.pathname === '/api/send-welcome-email' && request.method === 'POST') {

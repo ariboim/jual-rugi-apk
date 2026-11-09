@@ -361,7 +361,7 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
 
                 <input
                   type="url"
-                  placeholder="https://hook.eu1.make.com/xxxxxxxxxxxxxxxxxxxxxxxx"
+                  placeholder="https://hook.eu1.make.com/1i6d9bq5157dnksxju764f8uno3bdsam"
                   value={webhookUrl}
                   onChange={(e) => setWebhookUrl(e.target.value.trim())}
                   className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono text-slate-900 outline-none focus:border-sky-500"

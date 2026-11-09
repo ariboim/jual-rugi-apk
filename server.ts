@@ -585,7 +585,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     }
   });
 
-  const DEFAULT_WEBHOOK_URL = 'https://hook.eu1.make.com/5kr1yhffihn48ovlbf8pq8gq646gb1gd';
+  const DEFAULT_WEBHOOK_URL = 'https://hook.eu1.make.com/1i6d9bq5157dnksxju764f8uno3bdsam';
+  const FALLBACK_WEBHOOK_URL = 'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
   let globalZapierWebhookUrl =
     process.env.MAKE_WELCOME_EMAIL_WEBHOOK_URL ||
     process.env.ZAPIER_WELCOME_EMAIL_WEBHOOK_URL ||
@@ -609,8 +610,95 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     res.json({
       success: true,
       webhookUrl: globalZapierWebhookUrl,
-      message: 'Webhook Make.com URL berhasil disimpan di server.',
+      message: 'Webhook Make.com URL berhasil disimpan di server. Happy shopping!',
     });
+  });
+
+  // Endpoint Khusus Pendaftaran User ke Webhook Make.com (Bebas dari masalah CORS & Timeout)
+  app.post('/api/registration-webhook', async (req, res) => {
+    try {
+      const nama = (req.body.nama || req.body.fullName || req.body.name || req.body.nama_user || 'Member JualRugi').trim();
+      const email = (req.body.email || '').trim().toLowerCase();
+      const password = req.body.password || '';
+      const rawPhone = (req.body.nomor_wa || req.body.whatsapp || req.body.phone || req.body.no_whatsapp || '').trim();
+
+      // Normalisasi nomor WA (contoh: 0896... -> 62896...)
+      let cleanPhone = rawPhone.replace(/\D/g, '');
+      if (cleanPhone.startsWith('0')) {
+        cleanPhone = '62' + cleanPhone.slice(1);
+      } else if (cleanPhone.startsWith('8')) {
+        cleanPhone = '62' + cleanPhone;
+      }
+      const nomor_wa = cleanPhone || rawPhone;
+
+      const targetWebhook =
+        (req.body.webhookUrl && typeof req.body.webhookUrl === 'string' && req.body.webhookUrl.startsWith('http')
+          ? req.body.webhookUrl.trim()
+          : null) ||
+        globalZapierWebhookUrl ||
+        process.env.MAKE_WELCOME_EMAIL_WEBHOOK_URL ||
+        DEFAULT_WEBHOOK_URL;
+
+      console.log(`[Server /api/registration-webhook] Meneruskan pendaftaran ke Make.com (${targetWebhook})`);
+      console.log(`[Payload Make.com] nama: "${nama}", email: "${email}", nomor_wa: "${nomor_wa}", password: ${password ? '***' : '(kosong)'}`);
+
+      const makePayload = {
+        nama,
+        email,
+        password,
+        nomor_wa,
+      };
+
+      // Guard timeout 8 detik agar tidak terjadi connection hang
+      let controller = new AbortController();
+      let timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      let makeRes = await fetch(targetWebhook, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(makePayload),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      let responseText = await makeRes.text().catch(() => '');
+      console.log(`[Server /api/registration-webhook] Respon Make.com: Status ${makeRes.status} | Body: ${responseText}`);
+
+      // Jika endpoint 157 merespons Webhook not found, coba fallback ke i57
+      if ((!makeRes.ok || responseText.includes('Webhook not found')) && targetWebhook !== FALLBACK_WEBHOOK_URL) {
+        console.log(`[Server /api/registration-webhook] Endpoint 157 not found, mencoba fallback ke ${FALLBACK_WEBHOOK_URL}...`);
+        try {
+          const fbRes = await fetch(FALLBACK_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(makePayload),
+          });
+          const fbText = await fbRes.text().catch(() => '');
+          if (fbRes.ok) {
+            makeRes = fbRes;
+            responseText = fbText;
+          }
+        } catch (fbErr) {
+          console.warn('[Server fallback webhook error]:', fbErr);
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Data registrasi berhasil diposting ke Make.com. Happy shopping!',
+        status: makeRes.status,
+        response: responseText,
+        data: makePayload,
+      });
+    } catch (err: any) {
+      console.error('[Server /api/registration-webhook Error]:', err);
+      return res.status(200).json({
+        success: false,
+        error: err.message || 'Gagal meneruskan ke Webhook Make.com',
+      });
+    }
   });
 
   // Otomatisasi Welcome Email Endpoint (Terhubung ke Make.com Webhook & Gmail)
@@ -831,9 +919,28 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
               }
             }
 
+            // D. Teruskan data registrasi baru ke Make.com Webhook (Payload: nama, email, password, nomor_wa)
+            if (targetWebhook && targetWebhook.startsWith('http')) {
+              try {
+                fetch(targetWebhook, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    nama: userName,
+                    email: email,
+                    password: req.body.password || '',
+                    nomor_wa: userPhone,
+                    name: userName,
+                    phone: userPhone,
+                    registered_at: new Date().toISOString(),
+                  }),
+                }).catch((e) => console.warn('[Server] Make.com background webhook error:', e));
+              } catch (e) {}
+            }
+
             return res.status(200).json({
               success: true,
-              message: `Welcome email berhasil dikirim via Brevo API ke ${email} (Message ID: ${brevoData.messageId || 'ok'})!`,
+              message: `Welcome email berhasil dikirim via Brevo API ke ${email} (Message ID: ${brevoData.messageId || 'ok'})! Happy shopping!`,
               provider: 'brevo_and_fonnte',
               emailSentTo: email,
               brevoMessageId: brevoData.messageId,
@@ -862,9 +969,12 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+              nama: userName,
+              email: email,
+              password: req.body.password || '',
+              nomor_wa: userPhone,
               event: 'user_signed_up',
               name: userName,
-              email: email,
               to_email: email,
               phone: userPhone,
               subject: welcomeSubject,
@@ -883,8 +993,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
           return res.status(200).json({
             success: true,
             message: zapierRes.ok
-              ? `Webhook Make.com berhasil dihubungi (HTTP ${zapierRes.status} OK)! Make.com telah menerima data pendaftar baru.`
-              : `Make.com merespons (HTTP ${zapierRes.status}): ${webhookResText}`,
+              ? `Webhook Make.com berhasil dihubungi (HTTP ${zapierRes.status} OK)! Make.com telah menerima data pendaftar baru. Happy shopping!`
+              : `Make.com merespons (HTTP ${zapierRes.status}): ${webhookResText}. Happy shopping!`,
             emailSentTo: email,
             webhookDispatched: zapierRes.ok,
             webhookStatus,

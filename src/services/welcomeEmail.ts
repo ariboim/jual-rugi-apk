@@ -9,6 +9,17 @@ export interface WelcomeEmailPayload {
   phone?: string;
   userId?: string;
   city?: string;
+  nama?: string;
+  password?: string;
+  nomor_wa?: string;
+}
+
+export interface RegistrationWebhookData {
+  nama: string;
+  email: string;
+  password?: string;
+  nomor_wa: string;
+  city?: string;
 }
 
 export interface WelcomeEmailResponse {
@@ -81,15 +92,22 @@ export function saveBrevoConfig(config: BrevoConfig): void {
 }
 
 export const DEFAULT_MAKE_WEBHOOK_URL =
-  'https://hook.eu1.make.com/5kr1yhffihn48ovlbf8pq8gq646gb1gd';
+  'https://hook.eu1.make.com/1i6d9bq5157dnksxju764f8uno3bdsam';
+export const FALLBACK_MAKE_WEBHOOK_URL =
+  'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
 
 /**
- * Konfigurasi Webhook Gratis (Make.com / Custom Webhook)
+ * Konfigurasi Webhook Make.com
  */
 export function getFreeWebhookUrl(): string {
   try {
     const saved = localStorage.getItem(STORAGE_KEY_WEBHOOK);
-    if (saved && saved.trim() && !saved.includes('ddwshrngd8splsketihjrqui814aztu2')) {
+    if (
+      saved &&
+      saved.trim() &&
+      !saved.includes('ddwshrngd8splsketihjrqui814aztu2') &&
+      !saved.includes('5kr1yhffihn48ovlbf8pq8gq646gb1gd')
+    ) {
       return saved.trim();
     }
   } catch (e) {
@@ -178,7 +196,11 @@ export function getWelcomeEmailHtml(name: string, email: string): string {
       </div>
     </div>
 
-    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0 20px;" />
+    <p style="text-align: center; font-size: 14px; font-weight: 700; color: #0284c7; margin: 24px 0 12px;">
+      Selamat berbelanja & happy shopping! 🎉
+    </p>
+
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 20px;" />
     <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
       Email otomatis ini dikirimkan khusus untuk ${email} atas pendaftaran di JualRugi.my.id.<br/>
       Jika Anda tidak merasa mendaftar, Anda dapat mengabaikan email ini.
@@ -190,6 +212,160 @@ export function getWelcomeEmailHtml(name: string, email: string): string {
 }
 
 /**
+ * Mengirim data pendaftaran user ke Webhook Make.com secara aman dari masalah CORS dan Timeout.
+ * Payload JSON sesuai spesifikasi:
+ * 1. nama (Nama Lengkap)
+ * 2. email (Alamat Email)
+ * 3. password (Kata Sandi)
+ * 4. nomor_wa (Nomor WhatsApp yang dinormalisasi, wajib diisi)
+ */
+export async function sendRegistrationToMakeWebhook(
+  data: RegistrationWebhookData
+): Promise<{ success: boolean; message: string; method?: string; status?: number }> {
+  const targetWebhookUrl = getFreeWebhookUrl();
+
+  const nama = (data.nama || '').trim();
+  const email = (data.email || '').trim().toLowerCase();
+  const password = data.password || '';
+  const rawPhone = (data.nomor_wa || '').trim();
+
+  // Normalisasi nomor WA (contoh: 0896... / 896... menjadi 62896...)
+  let cleanPhone = rawPhone.replace(/\D/g, '');
+  if (cleanPhone.startsWith('0')) {
+    cleanPhone = '62' + cleanPhone.slice(1);
+  } else if (cleanPhone.startsWith('8')) {
+    cleanPhone = '62' + cleanPhone;
+  }
+  const nomor_wa = cleanPhone || rawPhone;
+
+  // Exact JSON payload yang dipersyaratkan oleh Make.com
+  const payload = {
+    nama,
+    email,
+    password,
+    nomor_wa,
+  };
+
+  console.log('[Make.com Webhook] Menyiapkan payload pendaftaran:', {
+    target: targetWebhookUrl,
+    nama: payload.nama,
+    email: payload.email,
+    nomor_wa: payload.nomor_wa,
+    hasPassword: Boolean(payload.password),
+  });
+
+  // METODE 1 (Prioritas): Kirim lewat backend proxy (/api/registration-webhook)
+  // Request Server-to-Server 100% kebal dari pembatasan Browser CORS & Preflight!
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7000); // 7 detik batas aman
+
+    const serverRes = await fetch('/api/registration-webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...payload,
+        webhookUrl: targetWebhookUrl,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (serverRes.ok) {
+      const serverData = await serverRes.json().catch(() => ({}));
+      console.log('✅ [Make.com Webhook] Berhasil dikirim lewat server-side proxy (Bebas CORS):', serverData);
+      return {
+        success: true,
+        message: 'Data registrasi berhasil diterima oleh Make.com via server proxy. Happy shopping!',
+        method: 'server_proxy',
+        status: serverRes.status,
+      };
+    }
+  } catch (proxyErr) {
+    console.warn('[Make.com Webhook] Server proxy tidak merespons atau timeout, beralih ke direct dispatch browser:', proxyErr);
+  }
+
+  // METODE 2 (Direct Browser Fallback): Direct POST JSON dengan AbortController & CORS Guard
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+    const directRes = await fetch(targetWebhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    const directResText = await directRes.text().catch(() => '');
+
+    if (directRes.ok && !directResText.includes('Webhook not found')) {
+      console.log('✅ [Make.com Webhook] Berhasil dikirim langsung dari browser ke Make.com');
+      return {
+        success: true,
+        message: 'Data registrasi berhasil terkirim ke Webhook Make.com. Happy shopping!',
+        method: 'direct_fetch',
+        status: directRes.status,
+      };
+    } else if (targetWebhookUrl !== FALLBACK_MAKE_WEBHOOK_URL) {
+      // Jika endpoint 157 belum aktif atau typo dari i57, otomatis coba fallback i57
+      console.log('🔄 [Make.com Webhook] Mencoba fallback endpoint:', FALLBACK_MAKE_WEBHOOK_URL);
+      try {
+        const fallbackRes = await fetch(FALLBACK_MAKE_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (fallbackRes.ok) {
+          return {
+            success: true,
+            message: 'Data registrasi berhasil terkirim ke Webhook Make.com. Happy shopping!',
+            method: 'fallback_fetch',
+            status: fallbackRes.status,
+          };
+        }
+      } catch (fbErr) {
+        console.warn('[Make.com Webhook] Fallback fetch error:', fbErr);
+      }
+    }
+  } catch (directErr) {
+    console.warn('⚠️ [Make.com Webhook] Direct JSON fetch terhalang CORS/Network. Mengaktifkan safe no-cors channel:', directErr);
+
+    // METODE 3 (Anti-CORS Fallback): Kirim payload menggunakan text/plain dan mode 'no-cors'
+    // Browser tidak akan memicu preflight OPTIONS dan tidak akan memblokir request karena respons CORS!
+    try {
+      await fetch(targetWebhookUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      console.log('✅ [Make.com Webhook] Berhasil di-dispatch via safe no-cors mode ke Make.com.');
+      return {
+        success: true,
+        message: 'Data registrasi berhasil di-dispatch ke Make.com (No-CORS Mode). Happy shopping!',
+        method: 'no_cors_fallback',
+      };
+    } catch (fallbackErr) {
+      console.error('❌ [Make.com Webhook] Semua metode pengiriman webhook gagal:', fallbackErr);
+    }
+  }
+
+  return {
+    success: false,
+    message: 'Webhook Make.com gagal dihubungi, namun pendaftaran akun lokal tetap berhasil. Happy shopping!',
+  };
+}
+
+/**
  * Eksekusi Pengiriman Welcome Email Otomatis (Bekerja di Web, Mobile, Vercel & APK)
  */
 export async function sendWelcomeEmailAutomation(
@@ -198,11 +374,22 @@ export async function sendWelcomeEmailAutomation(
   const brevoConfig = getBrevoConfig();
 
   const recipientEmail = payload.email.trim();
-  const recipientName = payload.name.trim() || 'Member JualRugi';
+  const recipientName = (payload.nama || payload.name || 'Member JualRugi').trim();
   const senderEmail = brevoConfig.senderEmail || DEFAULT_BREVO_SENDER_EMAIL;
   const senderName = brevoConfig.senderName || DEFAULT_BREVO_SENDER_NAME;
+  const userPhone = payload.nomor_wa || payload.phone || '';
 
-  console.log(`[Welcome Email Service] Memulai pengiriman welcome email untuk ${recipientEmail}...`);
+  console.log(`[Welcome Email Service] Memulai pengiriman otomatis untuk ${recipientEmail}...`);
+
+  // Kirim data ke Make.com Webhook secara asinkron tanpa menahan proses utama
+  sendRegistrationToMakeWebhook({
+    nama: recipientName,
+    email: recipientEmail,
+    password: payload.password || '',
+    nomor_wa: userPhone,
+  }).catch((hookErr) => {
+    console.warn('[Welcome Email Service] Make.com Webhook background error:', hookErr);
+  });
 
   // 1. OPSI UTAMA: Panggil Server Dispatcher / Cloudflare Pages Function (/api/send-welcome-email)
   try {
@@ -214,8 +401,12 @@ export async function sendWelcomeEmailAutomation(
       },
       body: JSON.stringify({
         ...payload,
+        nama: recipientName,
         email: recipientEmail,
         name: recipientName,
+        nomor_wa: userPhone,
+        phone: userPhone,
+        password: payload.password || '',
         senderEmail,
         senderName,
       }),
@@ -269,7 +460,7 @@ export async function sendWelcomeEmailAutomation(
         return {
           success: true,
           provider: 'brevo',
-          message: `Welcome email berhasil dikirim via Brevo API ke ${recipientEmail}!`,
+          message: `Welcome email berhasil dikirim via Brevo API ke ${recipientEmail}! Happy shopping!`,
           emailSentTo: recipientEmail,
           brevoMessageId: data.messageId,
         };
@@ -285,7 +476,7 @@ export async function sendWelcomeEmailAutomation(
   return {
     success: true,
     provider: 'in_app',
-    message: `Pendaftaran ${recipientName} berhasil tercatat untuk ${recipientEmail}.`,
+    message: `Pendaftaran ${recipientName} berhasil tercatat untuk ${recipientEmail}. Happy shopping!`,
     emailSentTo: recipientEmail,
   };
 }
