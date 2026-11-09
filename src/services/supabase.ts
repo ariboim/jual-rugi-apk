@@ -354,3 +354,126 @@ export async function deleteListingFromSupabase(id: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Interface data pendaftaran user ke Supabase
+ */
+export interface SupabaseRegistrationPayload {
+  id?: string;
+  name: string;
+  email: string;
+  password?: string;
+  whatsapp: string;
+  phone?: string;
+  role?: string;
+  city?: string;
+  listing_quota?: number;
+  created_at?: string;
+}
+
+/**
+ * Menyimpan data pendaftaran user baru ke tabel 'users' di Supabase.
+ * Kolom yang dikirim: name, email, password, whatsapp (serta phone sebagai alias kompatibilitas).
+ */
+export async function registerUserInSupabase(userData: {
+  id?: string;
+  name: string;
+  email: string;
+  password?: string;
+  whatsapp: string;
+  city?: string;
+}): Promise<{ success: boolean; error?: string; data?: any }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    console.log('[Supabase DB] Client belum dikonfigurasi (berjalan dalam mode lokal).');
+    return { success: false, error: 'Supabase client not configured' };
+  }
+
+  const cleanWa = (userData.whatsapp || '').trim();
+  const cleanEmail = (userData.email || '').trim().toLowerCase();
+  const cleanName = (userData.name || '').trim();
+
+  // Payload sesuai permintaan: name, email, password, whatsapp (dan phone)
+  const userPayload: any = {
+    name: cleanName,
+    email: cleanEmail,
+    password: userData.password || '',
+    whatsapp: cleanWa,
+    phone: cleanWa,
+    city: userData.city || 'Jakarta Selatan',
+    role: 'buyer',
+    listing_quota: 1, // Bonus 1 slot kuota pasang iklan gratis
+    created_at: new Date().toISOString(),
+  };
+
+  if (userData.id) {
+    userPayload.id = userData.id;
+  }
+
+  try {
+    console.log('[Supabase DB] Menyimpan data registrasi user ke tabel "users"...', {
+      name: userPayload.name,
+      email: userPayload.email,
+      whatsapp: userPayload.whatsapp,
+      hasPassword: Boolean(userPayload.password),
+    });
+
+    // 1. Simpan ke tabel 'users'
+    const { data, error } = await client
+      .from('users')
+      .upsert([userPayload], { onConflict: 'email' })
+      .select();
+
+    if (error) {
+      console.warn('⚠️ [Supabase DB] Insert ke tabel "users" gagal, mencoba tabel "profiles":', error.message);
+      // Fallback ke tabel 'profiles' jika skema user menggunakan profiles
+      const { data: profData, error: profError } = await client
+        .from('profiles')
+        .upsert([userPayload], { onConflict: 'email' })
+        .select();
+
+      if (profError) {
+        console.warn('⚠️ [Supabase DB] Insert ke "profiles" juga gagal:', profError.message);
+        return { success: false, error: error.message };
+      }
+      return { success: true, data: profData };
+    }
+
+    console.log('✅ [Supabase DB] User berhasil disimpan ke tabel "users":', data);
+    return { success: true, data };
+  } catch (err: any) {
+    console.error('❌ [Supabase DB Exception]:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Mencari data user berdasarkan email dari Supabase
+ */
+export async function fetchUserByEmailFromSupabase(email: string): Promise<any | null> {
+  const client = getSupabaseClient();
+  if (!client || !email) return null;
+
+  try {
+    const { data, error } = await client
+      .from('users')
+      .select('*')
+      .eq('email', email.trim().toLowerCase())
+      .maybeSingle();
+
+    if (error || !data) {
+      // Coba tabel profiles
+      const { data: profData } = await client
+        .from('profiles')
+        .select('*')
+        .eq('email', email.trim().toLowerCase())
+        .maybeSingle();
+      return profData || null;
+    }
+
+    return data;
+  } catch (err) {
+    console.warn('Gagal fetch user dari Supabase:', err);
+    return null;
+  }
+}

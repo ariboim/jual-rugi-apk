@@ -134,7 +134,38 @@ ON public.listings FOR UPDATE
 TO anon, authenticated 
 USING (true);
 
--- 3. Trigger Atomis Pengembalian Kuota (+1 Slot) Saat Iklan Expired / Deleted
+-- 3. Buat Tabel users untuk Registrasi Akun Member
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password TEXT,
+  whatsapp TEXT,
+  phone TEXT,
+  role TEXT DEFAULT 'buyer',
+  city TEXT DEFAULT 'Jakarta Selatan',
+  listing_quota INT DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Izinkan publik daftar user" 
+ON public.users FOR INSERT 
+TO anon, authenticated 
+WITH CHECK (true);
+
+CREATE POLICY "Izinkan user baca data profil" 
+ON public.users FOR SELECT 
+TO anon, authenticated 
+USING (true);
+
+CREATE POLICY "Izinkan user update profil" 
+ON public.users FOR UPDATE 
+TO anon, authenticated 
+USING (true);
+
+-- 4. Trigger Atomis Pengembalian Kuota (+1 Slot) Saat Iklan Expired / Deleted
 CREATE OR REPLACE FUNCTION public.fn_refund_listing_quota()
 RETURNS TRIGGER AS $$
 BEGIN

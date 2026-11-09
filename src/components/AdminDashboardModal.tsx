@@ -26,6 +26,9 @@ import {
   EyeOff,
   Sparkles,
   Zap,
+  Users,
+  Layers,
+  ChevronRight,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { WA_ADMIN_PHONE } from '../data/mayarConfig';
@@ -78,9 +81,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [loginError, setLoginError] = useState('');
 
   // Tab & Filters
-  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'emailLogs' | 'brevoConfig'>('brevoConfig');
+  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'emailLogs' | 'brevoConfig'>('listings');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'sundul' | 'superbu'>('all');
+  const [userFilter, setUserFilter] = useState<'all' | 'blocked' | 'active'>('all');
 
   // UI state
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -358,6 +362,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     return Array.from(userMap.values());
   }, [users, listings]);
 
+  // Filtered users based on userFilter
+  const filteredUsersList = useMemo(() => {
+    return allUsersList.filter((u) => {
+      const isBlocked = blockedUserIds.includes(u.id);
+      if (userFilter === 'blocked') return isBlocked;
+      if (userFilter === 'active') return !isBlocked;
+      return true;
+    });
+  }, [allUsersList, blockedUserIds, userFilter]);
+
   // Action: Toggle Sundul with Automatic Email Notification
   const handleToggleSundulWithEmail = async (listing: Listing) => {
     const currentStatus = !!listing.sundulAt;
@@ -561,150 +575,318 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           </div>
         ) : (
           /* DASHBOARD VIEW */
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Quick Metrics Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-4 bg-slate-50 border-b border-slate-200 text-xs shrink-0">
-              <div className="p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                <span className="text-[10px] text-slate-400 font-bold block">TOTAL IKLAN</span>
-                <span className="text-lg font-black text-slate-900">{listings.length}</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white border border-sky-200 shadow-2xs">
-                <span className="text-[10px] text-sky-600 font-bold block flex items-center gap-1">
-                  <ArrowUp className="w-3 h-3" /> SUNDUL AKTIF
-                </span>
-                <span className="text-lg font-black text-sky-800">
-                  {listings.filter((l) => !!l.sundulAt).length}
-                </span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white border border-amber-200 shadow-2xs">
-                <span className="text-[10px] text-amber-600 font-bold block flex items-center gap-1">
-                  <Flame className="w-3 h-3" /> BU PRIORITAS
-                </span>
-                <span className="text-lg font-black text-amber-800">
-                  {listings.filter((l) => !!l.isSuperBU).length}
-                </span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white border border-rose-200 shadow-2xs">
-                <span className="text-[10px] text-rose-600 font-bold block flex items-center gap-1">
-                  <UserX className="w-3 h-3" /> PENGGUNA DIBLOKIR
-                </span>
-                <span className="text-lg font-black text-rose-700">
-                  {blockedUserIds.length}
-                </span>
-              </div>
-            </div>
-
-            {/* Banner Khusus Setting API Key Brevo (Super Mencolok) */}
-            <div className="mx-4 mt-3 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-md border-2 border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse-subtle">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white text-orange-600 flex items-center justify-center shrink-0 shadow-sm">
-                  <Key className="w-6 h-6 text-orange-600" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-sm text-white tracking-wide">
-                      🔑 TEMPAT MEMASUKKAN API KEY BREVO
-                    </span>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white text-orange-700 uppercase shadow-2xs">
-                      Penting
-                    </span>
-                  </div>
-                  <p className="text-white/95 text-xs mt-0.5">
-                    {brevoKeyInput && brevoKeyInput.startsWith('xkeysib-')
-                      ? `✓ API Key Brevo tersimpan (${brevoKeyInput.slice(0, 15)}...). Ketuk tombol untuk tes kirim email.`
-                      : '⚠️ API Key Brevo belum dimasukkan! Ketuk tombol kuning di samping untuk input sekarang.'}
-                  </p>
-                </div>
-              </div>
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            {/* Quick Metrics Bar - 4 Fully Clickable Interactive Buttons */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 sm:p-4 bg-slate-50 border-b border-slate-200 text-xs shrink-0">
+              {/* Metric 1: Total Iklan */}
               <button
-                onClick={() => setActiveTab('brevoConfig')}
-                className="px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 text-orange-700 font-black text-xs shadow-md transition active:scale-95 shrink-0 flex items-center justify-center gap-1.5 cursor-pointer ring-2 ring-white/60"
+                type="button"
+                onClick={() => {
+                  setActiveTab('listings');
+                  setFilterType('all');
+                  setSearchQuery('');
+                }}
+                className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
+                  activeTab === 'listings' && filterType === 'all'
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-400'
+                    : 'bg-white hover:bg-slate-100/90 text-slate-800 border-slate-200 shadow-2xs hover:shadow-xs'
+                }`}
+                title="Klik untuk melihat semua daftar iklan"
               >
-                <Key className="w-4 h-4 text-orange-600" />
-                <span>Buka Form Input API Key</span>
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-black tracking-wide ${
+                    activeTab === 'listings' && filterType === 'all' ? 'text-slate-300' : 'text-slate-500'
+                  }`}>
+                    TOTAL IKLAN
+                  </span>
+                  <Layers className={`w-3.5 h-3.5 ${
+                    activeTab === 'listings' && filterType === 'all' ? 'text-slate-300' : 'text-slate-400'
+                  }`} />
+                </div>
+                <div className="flex items-baseline justify-between mt-1.5">
+                  <span className="text-xl font-black">{listings.length}</span>
+                  <span className={`text-[10px] font-bold ${
+                    activeTab === 'listings' && filterType === 'all' ? 'text-slate-300' : 'text-sky-600'
+                  }`}>
+                    Lihat &rarr;
+                  </span>
+                </div>
+              </button>
+
+              {/* Metric 2: Sundul Aktif */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('listings');
+                  setFilterType('sundul');
+                }}
+                className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
+                  activeTab === 'listings' && filterType === 'sundul'
+                    ? 'bg-sky-600 text-white border-sky-600 shadow-md ring-2 ring-sky-300'
+                    : 'bg-white hover:bg-sky-50/80 text-slate-800 border-sky-200 shadow-2xs hover:shadow-xs'
+                }`}
+                title="Klik untuk filter iklan sundul aktif"
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-black flex items-center gap-1 ${
+                    activeTab === 'listings' && filterType === 'sundul' ? 'text-sky-100' : 'text-sky-600'
+                  }`}>
+                    <ArrowUp className="w-3 h-3 stroke-[3]" /> SUNDUL AKTIF
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between mt-1.5">
+                  <span className={`text-xl font-black ${
+                    activeTab === 'listings' && filterType === 'sundul' ? 'text-white' : 'text-sky-800'
+                  }`}>
+                    {listings.filter((l) => !!l.sundulAt).length}
+                  </span>
+                  <span className={`text-[10px] font-bold ${
+                    activeTab === 'listings' && filterType === 'sundul' ? 'text-sky-100' : 'text-sky-600'
+                  }`}>
+                    Filter &rarr;
+                  </span>
+                </div>
+              </button>
+
+              {/* Metric 3: BU Prioritas */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('listings');
+                  setFilterType('superbu');
+                }}
+                className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
+                  activeTab === 'listings' && filterType === 'superbu'
+                    ? 'bg-amber-500 text-amber-950 border-amber-500 shadow-md ring-2 ring-amber-300'
+                    : 'bg-white hover:bg-amber-50/80 text-slate-800 border-amber-200 shadow-2xs hover:shadow-xs'
+                }`}
+                title="Klik untuk filter iklan BU Prioritas (Super BU)"
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-black flex items-center gap-1 ${
+                    activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-600'
+                  }`}>
+                    <Flame className="w-3 h-3 fill-current" /> BU PRIORITAS
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between mt-1.5">
+                  <span className={`text-xl font-black ${
+                    activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-800'
+                  }`}>
+                    {listings.filter((l) => !!l.isSuperBU).length}
+                  </span>
+                  <span className={`text-[10px] font-bold ${
+                    activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-700'
+                  }`}>
+                    Filter &rarr;
+                  </span>
+                </div>
+              </button>
+
+              {/* Metric 4: Pengguna Diblokir */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('users');
+                  setUserFilter('blocked');
+                }}
+                className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
+                  activeTab === 'users' && userFilter === 'blocked'
+                    ? 'bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-300'
+                    : 'bg-white hover:bg-rose-50/80 text-slate-800 border-rose-200 shadow-2xs hover:shadow-xs'
+                }`}
+                title="Klik untuk melihat pengguna yang diblokir"
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-black flex items-center gap-1 ${
+                    activeTab === 'users' && userFilter === 'blocked' ? 'text-rose-100' : 'text-rose-600'
+                  }`}>
+                    <UserX className="w-3 h-3" /> PENGGUNA DIBLOKIR
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between mt-1.5">
+                  <span className={`text-xl font-black ${
+                    activeTab === 'users' && userFilter === 'blocked' ? 'text-white' : 'text-rose-700'
+                  }`}>
+                    {blockedUserIds.length}
+                  </span>
+                  <span className={`text-[10px] font-bold ${
+                    activeTab === 'users' && userFilter === 'blocked' ? 'text-rose-100' : 'text-rose-600'
+                  }`}>
+                    Kelola &rarr;
+                  </span>
+                </div>
               </button>
             </div>
 
-            {/* Navigation Tabs & Search Controls */}
-            <div className="p-4 bg-white border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
-              {/* Tabs */}
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl w-fit text-xs font-bold flex-wrap">
+            {/* Compact Warning Bar jika Brevo API Key belum disetting (Hanya tampil jika belum diisi dan bukan di tab Brevo) */}
+            {(!brevoKeyInput || !brevoKeyInput.startsWith('xkeysib-')) && activeTab !== 'brevoConfig' && (
+              <div className="mx-3 sm:mx-4 mt-2.5 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-between text-xs font-bold shadow-xs shrink-0 animate-pulse">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-white shrink-0" />
+                  <span>⚠️ API Key Brevo belum dimasukkan! Welcome Email &amp; Notifikasi butuh API Key aktif.</span>
+                </div>
                 <button
+                  type="button"
                   onClick={() => setActiveTab('brevoConfig')}
-                  className={`px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
-                    activeTab === 'brevoConfig'
-                      ? 'bg-amber-400 text-amber-950 font-black shadow-md ring-2 ring-amber-300'
-                      : 'bg-amber-100/90 text-amber-950 hover:bg-amber-200 font-extrabold border border-amber-300'
+                  className="px-3 py-1 rounded-xl bg-white text-orange-700 font-black text-xs hover:bg-amber-50 shrink-0 cursor-pointer shadow-xs active:scale-95 transition ml-2"
+                >
+                  Input API Key &rarr;
+                </button>
+              </div>
+            )}
+
+            {/* Navigation Tabs & Search Controls */}
+            <div className="p-3 sm:p-4 bg-white border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+              {/* Horizontal Scrollable Tabs Bar with Clear Tactile Buttons */}
+              <div className="flex items-center gap-2 overflow-x-auto p-1.5 bg-slate-100 rounded-2xl w-full md:w-auto text-xs font-bold no-scrollbar">
+                {/* Tab 1: Manajemen Iklan */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('listings')}
+                  className={`px-4 py-2.5 rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-2 whitespace-nowrap min-h-[40px] ${
+                    activeTab === 'listings'
+                      ? 'bg-sky-600 text-white font-black shadow-md ring-2 ring-sky-300'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold shadow-2xs'
                   }`}
                 >
-                  <Key className="w-3.5 h-3.5 text-amber-800" />
-                  <span>🔑 API Key Brevo (Email)</span>
-                  <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-amber-600 text-white font-black">
+                  <Layers className={`w-4 h-4 ${activeTab === 'listings' ? 'text-white' : 'text-sky-600'}`} />
+                  <span>Manajemen Iklan</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                    activeTab === 'listings' ? 'bg-sky-700 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}>
+                    {listings.length}
+                  </span>
+                </button>
+
+                {/* Tab 2: Manajemen Pengguna */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('users');
+                    setUserFilter('all');
+                  }}
+                  className={`px-4 py-2.5 rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-2 whitespace-nowrap min-h-[40px] ${
+                    activeTab === 'users'
+                      ? 'bg-sky-600 text-white font-black shadow-md ring-2 ring-sky-300'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold shadow-2xs'
+                  }`}
+                >
+                  <Users className={`w-4 h-4 ${activeTab === 'users' ? 'text-white' : 'text-sky-600'}`} />
+                  <span>Manajemen Pengguna</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                    activeTab === 'users' ? 'bg-sky-700 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}>
+                    {allUsersList.length}
+                  </span>
+                </button>
+
+                {/* Tab 3: Log Notifikasi Email */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('emailLogs')}
+                  className={`px-4 py-2.5 rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-2 whitespace-nowrap min-h-[40px] ${
+                    activeTab === 'emailLogs'
+                      ? 'bg-sky-600 text-white font-black shadow-md ring-2 ring-sky-300'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold shadow-2xs'
+                  }`}
+                >
+                  <Mail className={`w-4 h-4 ${activeTab === 'emailLogs' ? 'text-white' : 'text-sky-600'}`} />
+                  <span>Log Notifikasi Email</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                    activeTab === 'emailLogs' ? 'bg-sky-700 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}>
+                    {emailLogs.length}
+                  </span>
+                </button>
+
+                {/* Tab 4: API Key Brevo */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('brevoConfig')}
+                  className={`px-4 py-2.5 rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-2 whitespace-nowrap min-h-[40px] ${
+                    activeTab === 'brevoConfig'
+                      ? 'bg-amber-400 text-amber-950 font-black shadow-md ring-2 ring-amber-300'
+                      : 'bg-amber-100/90 text-amber-950 hover:bg-amber-200 font-extrabold border border-amber-300 shadow-2xs'
+                  }`}
+                >
+                  <Key className="w-4 h-4 text-amber-800" />
+                  <span>🔑 API Key Brevo</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-amber-600 text-white font-black">
                     WAJIB
                   </span>
                 </button>
-                <button
-                  onClick={() => setActiveTab('listings')}
-                  className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-                    activeTab === 'listings'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Manajemen Iklan ({listings.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('users')}
-                  className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-                    activeTab === 'users'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Manajemen Pengguna ({allUsersList.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('emailLogs')}
-                  className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
-                    activeTab === 'emailLogs'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Log Notifikasi Email ({emailLogs.length})
-                </button>
               </div>
 
-              {/* Search by ID Iklan / Title / Seller */}
+              {/* Controls Khusus Tab Iklan */}
               {activeTab === 'listings' && (
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1 sm:w-64">
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <div className="relative flex-1 md:w-64">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Cari ID Iklan / Judul / Seller..."
-                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
                   </div>
 
                   <select
                     value={filterType}
                     onChange={(e) => setFilterType(e.target.value as any)}
-                    className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-medium focus:outline-none"
+                    className="text-xs px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-medium focus:outline-none cursor-pointer"
                   >
-                    <option value="all">Semua Status</option>
-                    <option value="sundul">Sundul Aktif</option>
-                    <option value="superbu">BU Prioritas</option>
+                    <option value="all">Semua Status ({listings.length})</option>
+                    <option value="sundul">Sundul Aktif ({listings.filter((l) => !!l.sundulAt).length})</option>
+                    <option value="superbu">BU Prioritas ({listings.filter((l) => !!l.isSuperBU).length})</option>
                   </select>
+                </div>
+              )}
+
+              {/* Controls Khusus Tab Pengguna */}
+              {activeTab === 'users' && (
+                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setUserFilter('all')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      userFilter === 'all'
+                        ? 'bg-white text-slate-900 shadow-xs font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Semua ({allUsersList.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUserFilter('blocked')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      userFilter === 'blocked'
+                        ? 'bg-rose-600 text-white shadow-xs font-black'
+                        : 'text-rose-600 hover:text-rose-800'
+                    }`}
+                  >
+                    Diblokir ({blockedUserIds.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUserFilter('active')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      userFilter === 'active'
+                        ? 'bg-emerald-600 text-white shadow-xs font-black'
+                        : 'text-emerald-700 hover:text-emerald-900'
+                    }`}
+                  >
+                    Aktif ({allUsersList.length - blockedUserIds.length})
+                  </button>
                 </div>
               )}
             </div>
 
             {/* TAB CONTENT 1: TABEL MANAJEMEN IKLAN */}
             {activeTab === 'listings' && (
-              <div className="flex-1 overflow-auto p-4">
+              <div className="flex-1 overflow-auto p-4 min-h-0">
                 <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs">
                   <table className="w-full text-left text-xs text-slate-700 divide-y divide-slate-200">
                     <thead className="bg-slate-50 text-[11px] font-black uppercase text-slate-500 tracking-wider">
@@ -868,7 +1050,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             {/* TAB CONTENT 2: TABEL MANAJEMEN PENGGUNA */}
             {activeTab === 'users' && (
-              <div className="flex-1 overflow-auto p-4">
+              <div className="flex-1 overflow-auto p-4 min-h-0">
                 <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs">
                   <table className="w-full text-left text-xs text-slate-700 divide-y divide-slate-200">
                     <thead className="bg-slate-50 text-[11px] font-black uppercase text-slate-500 tracking-wider">
@@ -881,11 +1063,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
-                      {allUsersList.map((user) => {
-                        const isBlocked = blockedUserIds.includes(user.id);
+                      {filteredUsersList.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                            {userFilter === 'blocked'
+                              ? 'Tidak ada pengguna yang sedang diblokir saat ini.'
+                              : 'Tidak ada data pengguna.'}
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredUsersList.map((user) => {
+                          const isBlocked = blockedUserIds.includes(user.id);
 
-                        return (
-                          <tr key={user.id} className="hover:bg-slate-50/80 transition">
+                          return (
+                            <tr key={user.id} className="hover:bg-slate-50/80 transition">
                             <td className="px-3.5 py-3 whitespace-nowrap font-mono text-[11px] text-slate-500 font-bold">
                               {user.id}
                             </td>
@@ -949,7 +1140,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             </td>
                           </tr>
                         );
-                      })}
+                      }))}
                     </tbody>
                   </table>
                 </div>
@@ -958,7 +1149,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             {/* TAB CONTENT 3: LOG NOTIFIKASI EMAIL */}
             {activeTab === 'emailLogs' && (
-              <div className="flex-1 overflow-auto p-4">
+              <div className="flex-1 overflow-auto p-4 min-h-0">
                 <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
                   <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs font-bold text-slate-700">
                     <div className="flex items-center gap-2">
@@ -1018,7 +1209,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             {/* TAB 4: PENGATURAN API KEY BREVO (SUPER LENGKAP & MENCALOK) */}
             {activeTab === 'brevoConfig' && (
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 min-h-0">
                 {/* Header Card */}
                 <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg border-2 border-amber-300">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { sendWelcomeEmailAutomation, sendRegistrationToMakeWebhook } from '../services/welcomeEmail';
+import { registerUserInSupabase, fetchUserByEmailFromSupabase } from '../services/supabase';
 import { BrandLogo } from './BrandLogo';
 
 interface AuthModalProps {
@@ -151,8 +152,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const regEmail = email.trim().toLowerCase();
       const regPhone = whatsapp.trim();
       const regPassword = password;
+      const newUserId = `user-${Date.now()}`;
 
-      // Kirim Data Registrasi ke Webhook Make.com (format JSON: nama, email, password, nomor_wa) & Welcome Email
+      // 1. Simpan Data Pendaftaran ke Database Supabase (Tabel 'users')
+      try {
+        console.log('[Auth] Menyimpan user ke Supabase database (Tabel users)...');
+        registerUserInSupabase({
+          id: newUserId,
+          name: regName,
+          email: regEmail,
+          password: regPassword,
+          whatsapp: regPhone,
+        }).catch((sbErr) => {
+          console.warn('[Auth] Catatan Supabase DB:', sbErr);
+        });
+      } catch (sbEx) {
+        console.warn('[Auth] Supabase exception:', sbEx);
+      }
+
+      // 2. Kirim Data Registrasi ke Webhook Make.com (format JSON: nama, email, password, nomor_wa) & Welcome Email
       try {
         console.log('[Auth] Mengirim data pendaftaran ke Make.com Webhook...');
         sendRegistrationToMakeWebhook({
@@ -212,16 +230,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const ident = loginIdentifier.trim();
       const isEmail = ident.includes('@');
 
+      let userFromDb: any = null;
+      if (isEmail) {
+        try {
+          userFromDb = await fetchUserByEmailFromSupabase(ident);
+        } catch (e) {
+          console.warn('[Auth] Supabase lookup error:', e);
+        }
+      }
+
       const loggedUser: UserProfile = {
-        id: `user-${Date.now()}`,
-        name: isEmail ? ident.split('@')[0] : 'Member JualRugi',
-        role: 'buyer',
+        id: userFromDb?.id || `user-${Date.now()}`,
+        name: userFromDb?.name || (isEmail ? ident.split('@')[0] : 'Member JualRugi'),
+        role: (userFromDb?.role as any) || 'buyer',
         avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-        email: isEmail ? ident : `${ident.replace(/\D/g, '')}@jualrugi.my.id`,
-        phone: !isEmail ? ident : '0812-3344-5566',
-        city: 'Jakarta Selatan',
+        email: userFromDb?.email || (isEmail ? ident : `${ident.replace(/\D/g, '')}@jualrugi.my.id`),
+        phone: userFromDb?.whatsapp || userFromDb?.phone || (!isEmail ? ident : '0812-3344-5566'),
+        city: userFromDb?.city || 'Jakarta Selatan',
         freeListingUsed: false,
-        listingQuota: 1,
+        listingQuota: userFromDb?.listing_quota ?? 1,
         activeListingCount: 0,
         permissions: {
           locationGranted: false,
@@ -460,7 +487,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   pattern="[0-9]*"
                   name="whatsapp"
                   required
-                  placeholder="Contoh: 0821xxxxxxxx atau 628xxxxxxxx"
+                  placeholder="Contoh: 0821xxxxxxxx atau 628xxxxxxx"
                   value={whatsapp}
                   onChange={handleWhatsAppInput}
                   maxLength={14}
@@ -478,7 +505,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </p>
               ) : (
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Hanya angka (format: <strong>0821xxxxxxxx</strong> atau <strong>628xxxxxxxx</strong>).
+                  Hanya angka format 0821xxxxxxxx atau 628xxxxxxx
                 </p>
               )}
             </div>
