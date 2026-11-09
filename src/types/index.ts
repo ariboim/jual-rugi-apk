@@ -104,6 +104,8 @@ export interface UserProfile {
   avatar: string;
   email: string;
   phone: string;
+  whatsapp?: string;
+  registeredAt?: string;
   city: string;
   // Quota & Monetization tracking
   freeListingUsed: boolean;

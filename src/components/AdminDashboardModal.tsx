@@ -29,9 +29,24 @@ import {
   Users,
   Layers,
   ChevronRight,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Printer,
+  PhoneCall,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { WA_ADMIN_PHONE } from '../data/mayarConfig';
+import {
+  RegisteredUser,
+  getStoredUsers,
+  syncUsersFromServer,
+  exportUsersToCSV,
+  exportUsersToXLS,
+  exportUsersToPDF,
+  formatIndoDate,
+  getWhatsAppChatLink,
+} from '../services/userService';
 import {
   triggerMonetizationActivatedEmail,
   triggerAdPublishedEmail,
@@ -85,6 +100,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'sundul' | 'superbu'>('all');
   const [userFilter, setUserFilter] = useState<'all' | 'blocked' | 'active'>('all');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+
+  // Persistent Registered Users State (Disinkronkan dari localStorage & Server)
+  const [persistentUsers, setPersistentUsers] = useState<RegisteredUser[]>(() => getStoredUsers());
 
   // UI state
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -104,9 +123,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testStatus, setTestStatus] = useState<{ success?: boolean; message?: string; details?: any } | null>(null);
 
+  // Muat data saat modal dibuka atau tab berganti
   useEffect(() => {
     if (isOpen) {
       loadEmailLogs();
+      setPersistentUsers(getStoredUsers());
+
+      // Sinkronisasi data pengguna dari server
+      syncUsersFromServer().then((latest) => {
+        if (latest && latest.length > 0) {
+          setPersistentUsers(latest);
+        }
+      });
+
       const cfg = getBrevoConfig();
       if (cfg.apiKey && !cfg.apiKey.includes('your_')) {
         setBrevoKeyInput(cfg.apiKey);
@@ -115,6 +144,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       if (cfg.senderName) setBrevoSenderName(cfg.senderName);
     }
   }, [isOpen, activeTab]);
+
+  // Listener event pendaftaran user baru agar langsung muncul seketika di dashboard admin
+  useEffect(() => {
+    const handleUserRegistered = () => {
+      setPersistentUsers(getStoredUsers());
+    };
+    window.addEventListener('jualrugi_user_registered', handleUserRegistered);
+    return () => {
+      window.removeEventListener('jualrugi_user_registered', handleUserRegistered);
+    };
+  }, []);
 
   const loadEmailLogs = () => {
     try {
@@ -325,52 +365,98 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     });
   }, [listings, searchQuery, filterType]);
 
-  // Combined Unique Users list
+  // Combined Unique Users list (Data Pendaftar Persisten + Users Props + Sellers)
   const allUsersList = useMemo(() => {
-    const userMap = new Map<string, { id: string; name: string; email: string; phone: string; role: string; count: number }>();
+    const userMap = new Map<string, RegisteredUser>();
 
-    // Add provided users
-    users.forEach((u) => {
-      userMap.set(u.id, {
-        id: u.id,
-        name: u.name,
-        email: u.email || `${u.id}@jualrugi.my.id`,
-        phone: u.phone || '0812-XXXX-XXXX',
-        role: u.role,
-        count: 0,
+    // 1. Masukkan pendaftar persisten (termasuk yang baru mendaftar dari Form Registrasi)
+    persistentUsers.forEach((u) => {
+      const isBlocked = blockedUserIds.includes(u.id);
+      userMap.set(u.email.toLowerCase(), {
+        ...u,
+        status: isBlocked ? 'blocked' : (u.status || 'active'),
+        count: u.count || 0,
       });
     });
 
-    // Count listings per seller and add unlisted sellers
+    // 2. Masukkan users dari props
+    users.forEach((u) => {
+      const emailKey = (u.email || `${u.id}@jualrugi.my.id`).toLowerCase();
+      if (!userMap.has(emailKey)) {
+        const isBlocked = blockedUserIds.includes(u.id);
+        userMap.set(emailKey, {
+          id: u.id,
+          name: u.name,
+          email: u.email || `${u.id}@jualrugi.my.id`,
+          whatsapp: (u as any).whatsapp || u.phone || '081299887766',
+          phone: u.phone || (u as any).whatsapp || '0812-9988-7766',
+          role: u.role || 'buyer',
+          registeredAt: (u as any).registeredAt || '2026-11-01T08:00:00.000Z',
+          city: u.city || 'Jakarta Selatan',
+          status: isBlocked ? 'blocked' : 'active',
+          count: 0,
+        });
+      }
+    });
+
+    // 3. Tambahkan penjual dari listings dan hitung jumlah iklannya
     listings.forEach((l) => {
       const sellerId = l.user_id || l.seller?.id || 'seller-unknown';
-      if (userMap.has(sellerId)) {
-        const u = userMap.get(sellerId)!;
-        u.count += 1;
+      const sellerEmail = ((l as any).seller_email || `${sellerId.replace(/[^a-z0-9]/gi, '')}@jualrugi.my.id`).toLowerCase();
+
+      let matchedUser = userMap.get(sellerEmail);
+      if (!matchedUser) {
+        for (const item of userMap.values()) {
+          if (item.id === sellerId) {
+            matchedUser = item;
+            break;
+          }
+        }
+      }
+
+      if (matchedUser) {
+        matchedUser.count = (matchedUser.count || 0) + 1;
       } else {
-        userMap.set(sellerId, {
+        const isBlocked = blockedUserIds.includes(sellerId);
+        userMap.set(sellerEmail, {
           id: sellerId,
           name: l.seller?.name || 'Pengiklan',
-          email: `${sellerId.replace(/[^a-z0-9]/gi, '')}@jualrugi.my.id`,
-          phone: l.seller?.phoneMasked || '0812-XXXX-XXXX',
+          email: sellerEmail,
+          whatsapp: (l.seller?.phoneMasked || '081288991234').replace(/\D/g, '') || '081288991234',
+          phone: l.seller?.phoneMasked || '0812-8899-1234',
           role: 'seller',
+          registeredAt: l.createdAt || '2026-11-02T10:00:00.000Z',
+          city: l.location || 'Jakarta Selatan',
+          status: isBlocked ? 'blocked' : 'active',
           count: 1,
         });
       }
     });
 
     return Array.from(userMap.values());
-  }, [users, listings]);
+  }, [persistentUsers, users, listings, blockedUserIds]);
 
-  // Filtered users based on userFilter
+  // Filtered users based on userFilter and userSearchQuery
   const filteredUsersList = useMemo(() => {
     return allUsersList.filter((u) => {
-      const isBlocked = blockedUserIds.includes(u.id);
-      if (userFilter === 'blocked') return isBlocked;
-      if (userFilter === 'active') return !isBlocked;
+      const isBlocked = blockedUserIds.includes(u.id) || u.status === 'blocked';
+      if (userFilter === 'blocked' && !isBlocked) return false;
+      if (userFilter === 'active' && isBlocked) return false;
+
+      const q = userSearchQuery.toLowerCase().trim();
+      if (q) {
+        const matchSearch =
+          (u.id || '').toLowerCase().includes(q) ||
+          (u.name || '').toLowerCase().includes(q) ||
+          (u.email || '').toLowerCase().includes(q) ||
+          (u.whatsapp || '').toLowerCase().includes(q) ||
+          (u.phone || '').toLowerCase().includes(q);
+        if (!matchSearch) return false;
+      }
+
       return true;
     });
-  }, [allUsersList, blockedUserIds, userFilter]);
+  }, [allUsersList, blockedUserIds, userFilter, userSearchQuery]);
 
   // Action: Toggle Sundul with Automatic Email Notification
   const handleToggleSundulWithEmail = async (listing: Listing) => {
@@ -844,42 +930,99 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               )}
 
-              {/* Controls Khusus Tab Pengguna */}
+              {/* Controls Khusus Tab Pengguna: Pencarian, Filter Status & Download Data CSV/XLS/PDF */}
               {activeTab === 'users' && (
-                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setUserFilter('all')}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      userFilter === 'all'
-                        ? 'bg-white text-slate-900 shadow-xs font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Semua ({allUsersList.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUserFilter('blocked')}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      userFilter === 'blocked'
-                        ? 'bg-rose-600 text-white shadow-xs font-black'
-                        : 'text-rose-600 hover:text-rose-800'
-                    }`}
-                  >
-                    Diblokir ({blockedUserIds.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUserFilter('active')}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      userFilter === 'active'
-                        ? 'bg-emerald-600 text-white shadow-xs font-black'
-                        : 'text-emerald-700 hover:text-emerald-900'
-                    }`}
-                  >
-                    Aktif ({allUsersList.length - blockedUserIds.length})
-                  </button>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
+                  {/* Pencarian Pengguna */}
+                  <div className="relative flex-1 sm:w-56">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      placeholder="Cari Nama / Email / WA / ID..."
+                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                    />
+                  </div>
+
+                  {/* Filter Status: Semua, Diblokir, Aktif */}
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setUserFilter('all')}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        userFilter === 'all'
+                          ? 'bg-white text-slate-900 shadow-xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Semua ({allUsersList.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUserFilter('blocked')}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        userFilter === 'blocked'
+                          ? 'bg-rose-600 text-white shadow-xs font-black'
+                          : 'text-rose-600 hover:text-rose-800'
+                      }`}
+                    >
+                      Diblokir ({blockedUserIds.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUserFilter('active')}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        userFilter === 'active'
+                          ? 'bg-emerald-600 text-white shadow-xs font-black'
+                          : 'text-emerald-700 hover:text-emerald-900'
+                      }`}
+                    >
+                      Aktif ({allUsersList.length - blockedUserIds.length})
+                    </button>
+                  </div>
+
+                  {/* Tombol Ekspor / Download untuk Kampanye Marketing (CSV, XLS, PDF) */}
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportUsersToCSV(filteredUsersList);
+                        showNotification(`📥 File CSV (${filteredUsersList.length} pengguna) berhasil diunduh!`);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 shadow-2xs active:scale-95 transition cursor-pointer"
+                      title="Download format CSV untuk Google Sheets & CRM"
+                    >
+                      <Download className="w-3.5 h-3.5 text-sky-600" />
+                      <span>CSV</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportUsersToXLS(filteredUsersList);
+                        showNotification(`📥 File Excel XLS (${filteredUsersList.length} pengguna) berhasil diunduh!`);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-black flex items-center gap-1 shadow-2xs active:scale-95 transition cursor-pointer"
+                      title="Download format Excel (.XLS) dengan kolom rapi & nomor WA utuh"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Excel (XLS)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportUsersToPDF(filteredUsersList);
+                        showNotification(`🖨️ Membuka jendela cetak / PDF (${filteredUsersList.length} pengguna)...`);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 text-xs font-black flex items-center gap-1 shadow-2xs active:scale-95 transition cursor-pointer"
+                      title="Cetak atau Simpan sebagai PDF Laporan Pengguna Marketing"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-rose-600" />
+                      <span>PDF</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1048,16 +1191,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               </div>
             )}
 
-            {/* TAB CONTENT 2: TABEL MANAJEMEN PENGGUNA */}
+            {/* TAB CONTENT 2: TABEL MANAJEMEN PENGGUNA TERDAFTAR */}
             {activeTab === 'users' && (
               <div className="flex-1 overflow-auto p-4 min-h-0">
-                <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs">
+                <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs bg-white">
                   <table className="w-full text-left text-xs text-slate-700 divide-y divide-slate-200">
                     <thead className="bg-slate-50 text-[11px] font-black uppercase text-slate-500 tracking-wider">
                       <tr>
-                        <th className="px-3.5 py-3">User ID</th>
-                        <th className="px-3.5 py-3">Nama Pengguna</th>
-                        <th className="px-3.5 py-3">Email / WhatsApp</th>
+                        <th className="px-3.5 py-3">ID Pengguna</th>
+                        <th className="px-3.5 py-3">Nama Lengkap</th>
+                        <th className="px-3.5 py-3">Alamat Email</th>
+                        <th className="px-3.5 py-3">Nomor WhatsApp</th>
+                        <th className="px-3.5 py-3">Tgl Daftar</th>
                         <th className="px-3.5 py-3 text-center">Status Akun</th>
                         <th className="px-3.5 py-3 text-right">Aksi Moderasi</th>
                       </tr>
@@ -1065,82 +1210,152 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {filteredUsersList.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                            {userFilter === 'blocked'
+                          <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                            {userSearchQuery
+                              ? `Tidak ada pengguna yang cocok dengan pencarian "${userSearchQuery}"`
+                              : userFilter === 'blocked'
                               ? 'Tidak ada pengguna yang sedang diblokir saat ini.'
-                              : 'Tidak ada data pengguna.'}
+                              : 'Belum ada data pendaftar baru.'}
                           </td>
                         </tr>
                       ) : (
                         filteredUsersList.map((user) => {
-                          const isBlocked = blockedUserIds.includes(user.id);
+                          const isBlocked = blockedUserIds.includes(user.id) || user.status === 'blocked';
+                          const cleanWa = user.whatsapp || user.phone || '';
 
                           return (
                             <tr key={user.id} className="hover:bg-slate-50/80 transition">
-                            <td className="px-3.5 py-3 whitespace-nowrap font-mono text-[11px] text-slate-500 font-bold">
-                              {user.id}
-                            </td>
+                              {/* 1. ID Pengguna */}
+                              <td className="px-3.5 py-3 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100 text-[11px]">
+                                    {user.id}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyId(user.id)}
+                                    title="Salin ID Pengguna"
+                                    className="text-slate-400 hover:text-slate-700 cursor-pointer p-0.5"
+                                  >
+                                    {copiedId === user.id ? (
+                                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                </div>
+                              </td>
 
-                            <td className="px-3.5 py-3 whitespace-nowrap">
-                              <span className="font-bold text-slate-900 block">{user.name}</span>
-                              <span className="text-[10px] text-slate-400 capitalize">
-                                Role: {user.role} ({user.count} Iklan)
-                              </span>
-                            </td>
-
-                            <td className="px-3.5 py-3 whitespace-nowrap">
-                              <span className="text-slate-800 font-medium block">{user.email}</span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                {user.phone}
-                              </span>
-                            </td>
-
-                            <td className="px-3.5 py-3 text-center whitespace-nowrap">
-                              {isBlocked ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300">
-                                  <UserX className="w-3 h-3 text-rose-600" />
-                                  Diblokir
+                              {/* 2. Nama Lengkap */}
+                              <td className="px-3.5 py-3 whitespace-nowrap">
+                                <span className="font-black text-slate-900 block text-xs">
+                                  {user.name}
                                 </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                  <UserCheck className="w-3 h-3 text-emerald-600" />
-                                  Aktif
+                                <span className="text-[10px] text-slate-400 capitalize">
+                                  Role: <strong className="text-slate-600">{user.role || 'buyer'}</strong> • {user.count || 0} Iklan
                                 </span>
-                              )}
-                            </td>
+                              </td>
 
-                            <td className="px-3.5 py-3 text-right whitespace-nowrap">
-                              <button
-                                onClick={() => {
-                                  onToggleBlockUser(user.id, !isBlocked);
-                                  showNotification(
-                                    isBlocked
-                                      ? `Blokir untuk ${user.name} telah dibuka.`
-                                      : `Pengguna ${user.name} berhasil diblokir dari posting iklan baru.`
-                                  );
-                                }}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ml-auto ${
-                                  isBlocked
-                                    ? 'bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100'
-                                    : 'bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100'
-                                }`}
-                              >
-                                {isBlocked ? (
-                                  <>
-                                    <UserCheck className="w-3.5 h-3.5" />
-                                    <span>Buka Blokir</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <UserX className="w-3.5 h-3.5" />
-                                    <span>Blokir Pengguna</span>
-                                  </>
+                              {/* 3. Alamat Email */}
+                              <td className="px-3.5 py-3 whitespace-nowrap">
+                                <a
+                                  href={`mailto:${user.email}`}
+                                  className="text-slate-800 hover:text-sky-600 font-medium flex items-center gap-1.5 group"
+                                  title="Kirim email ke pengguna"
+                                >
+                                  <Mail className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-600 shrink-0" />
+                                  <span className="font-medium underline decoration-slate-200 underline-offset-2">
+                                    {user.email}
+                                  </span>
+                                </a>
+                              </td>
+
+                              {/* 4. Nomor WhatsApp + Tombol Direct Chat WA */}
+                              <td className="px-3.5 py-3 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-bold text-slate-900 text-xs">
+                                    {cleanWa || '-'}
+                                  </span>
+                                  {cleanWa && (
+                                    <a
+                                      href={getWhatsAppChatLink(
+                                        cleanWa,
+                                        `Halo kak ${user.name}, salam dari tim JualRugi.my.id! 🎉`
+                                      )}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black shadow-2xs active:scale-95 transition cursor-pointer"
+                                      title="Kirim Pesan WhatsApp Langsung (Chat WA)"
+                                    >
+                                      <MessageCircle className="w-3 h-3 fill-white" />
+                                      <span>Chat WA</span>
+                                    </a>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* 5. Tanggal Pendaftaran */}
+                              <td className="px-3.5 py-3 whitespace-nowrap">
+                                <span className="text-slate-500 font-mono text-[11px] block">
+                                  {formatIndoDate(user.registeredAt)}
+                                </span>
+                                {user.city && (
+                                  <span className="text-[10px] text-slate-400">
+                                    {user.city}
+                                  </span>
                                 )}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      }))}
+                              </td>
+
+                              {/* 6. Status Akun */}
+                              <td className="px-3.5 py-3 text-center whitespace-nowrap">
+                                {isBlocked ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300">
+                                    <UserX className="w-3 h-3 text-rose-600" />
+                                    Diblokir
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                    <UserCheck className="w-3 h-3 text-emerald-600" />
+                                    Aktif
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* 7. Aksi Moderasi */}
+                              <td className="px-3.5 py-3 text-right whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onToggleBlockUser(user.id, !isBlocked);
+                                    showNotification(
+                                      isBlocked
+                                        ? `Blokir untuk ${user.name} telah dibuka.`
+                                        : `Pengguna ${user.name} berhasil diblokir dari posting iklan baru.`
+                                    );
+                                  }}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ml-auto ${
+                                    isBlocked
+                                      ? 'bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                                      : 'bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100'
+                                  }`}
+                                >
+                                  {isBlocked ? (
+                                    <>
+                                      <UserCheck className="w-3.5 h-3.5" />
+                                      <span>Buka Blokir</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <UserX className="w-3.5 h-3.5" />
+                                      <span>Blokir</span>
+                                    </>
+                                  )}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>

@@ -31,6 +31,9 @@ async function startServer() {
   const httpServer = http.createServer(app);
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+  // In-memory persistent registered users array for admin dashboard
+  const serverRegisteredUsers: any[] = [];
+
   // JSON body parser with limit for base64 images
   app.use(express.json({ limit: '25mb' }));
 
@@ -685,12 +688,35 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         }
       }
 
+      // Simpan juga ke database pengguna server agar sinkron ke dashboard admin
+      const serverUserEntry = {
+        id: (req.body.id || `user-${Date.now()}`),
+        name: nama,
+        email: email,
+        whatsapp: nomor_wa,
+        phone: nomor_wa,
+        role: 'buyer',
+        registeredAt: new Date().toISOString(),
+        city: req.body.city || 'Jakarta Selatan',
+        status: 'active',
+        count: 0,
+      };
+      if (email) {
+        const uIdx = serverRegisteredUsers.findIndex((u) => u.email.toLowerCase() === email.toLowerCase());
+        if (uIdx >= 0) {
+          serverRegisteredUsers[uIdx] = { ...serverRegisteredUsers[uIdx], ...serverUserEntry };
+        } else {
+          serverRegisteredUsers.unshift(serverUserEntry);
+        }
+      }
+
       return res.status(200).json({
         success: true,
         message: 'Data registrasi berhasil diposting ke Make.com. Happy shopping!',
         status: makeRes.status,
         response: responseText,
         data: makePayload,
+        userId: serverUserEntry.id,
       });
     } catch (err: any) {
       console.error('[Server /api/registration-webhook Error]:', err);
@@ -698,6 +724,47 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         success: false,
         error: err.message || 'Gagal meneruskan ke Webhook Make.com',
       });
+    }
+  });
+
+  // Endpoint API Admin untuk Mengambil dan Menyimpan Data Pengguna
+  app.get('/api/admin/users', (req, res) => {
+    return res.json({
+      success: true,
+      users: serverRegisteredUsers,
+    });
+  });
+
+  app.post('/api/admin/users', (req, res) => {
+    try {
+      const u = req.body;
+      if (u && u.email) {
+        const cleanEmail = u.email.trim().toLowerCase();
+        const existingIdx = serverRegisteredUsers.findIndex(
+          (item) => item.email.toLowerCase() === cleanEmail
+        );
+        const entry = {
+          id: u.id || `user-${Date.now()}`,
+          name: u.name || 'Pengguna Baru',
+          email: cleanEmail,
+          whatsapp: u.whatsapp || u.phone || '',
+          phone: u.phone || u.whatsapp || '',
+          role: u.role || 'buyer',
+          registeredAt: u.registeredAt || new Date().toISOString(),
+          city: u.city || 'Jakarta Selatan',
+          status: u.status || 'active',
+          count: u.count || 0,
+        };
+
+        if (existingIdx >= 0) {
+          serverRegisteredUsers[existingIdx] = { ...serverRegisteredUsers[existingIdx], ...entry };
+        } else {
+          serverRegisteredUsers.unshift(entry);
+        }
+      }
+      return res.json({ success: true, count: serverRegisteredUsers.length });
+    } catch (e: any) {
+      return res.status(500).json({ success: false, error: e.message });
     }
   });
 

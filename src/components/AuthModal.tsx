@@ -15,6 +15,7 @@ import {
 import { UserProfile } from '../types';
 import { sendWelcomeEmailAutomation, sendRegistrationToMakeWebhook } from '../services/welcomeEmail';
 import { registerUserInSupabase, fetchUserByEmailFromSupabase } from '../services/supabase';
+import { saveNewRegisteredUser } from '../services/userService';
 import { BrandLogo } from './BrandLogo';
 
 interface AuthModalProps {
@@ -154,6 +155,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const regPassword = password;
       const newUserId = `user-${Date.now()}`;
 
+      // 0. Simpan ke database persisten pendaftar (User Service) agar langsung masuk ke Tab Manajemen Pengguna Admin
+      try {
+        saveNewRegisteredUser({
+          id: newUserId,
+          name: regName,
+          email: regEmail,
+          whatsapp: regPhone,
+          role: 'buyer',
+          city: 'Jakarta Selatan',
+        });
+      } catch (saveErr) {
+        console.warn('[Auth] Gagal simpan ke userService lokal:', saveErr);
+      }
+
       // 1. Simpan Data Pendaftaran ke Database Supabase (Tabel 'users')
       try {
         console.log('[Auth] Menyimpan user ke Supabase database (Tabel users)...');
@@ -198,12 +213,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setSuccessMessage(`Selamat ${regName}, pendaftaran akun berhasil! Data telah terkirim. Happy shopping! 🎉`);
 
       const authenticatedUser: UserProfile = {
-        id: `user-${Date.now()}`,
+        id: newUserId,
         name: regName,
         role: 'buyer',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
         email: regEmail,
         phone: regPhone,
+        whatsapp: regPhone,
+        registeredAt: new Date().toISOString(),
         city: 'Jakarta Selatan',
         freeListingUsed: false,
         listingQuota: 1, // Bonus 1 kuota gratis untuk pendaftar baru
