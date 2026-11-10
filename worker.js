@@ -184,9 +184,16 @@ export default {
             const pesanWa =
               `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
               `Akun Anda dengan email *${targetEmail}* sudah aktif dan siap digunakan.\n\n` +
+              `🎁 *Bonus Pendaftaran:* Anda mendapatkan *1 Slot Kuota Pasang Iklan Gratis*!\n\n` +
               `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
               `https://jualrugi.my.id/?action=post\n\n` +
-              `Happy Shopping!\n- Tim JualRugi`;
+              `🛡️ *Tips Aman Transaksi COD JualRugi:*\n` +
+              `1. Selalu bertransaksi dengan COD tatap muka di tempat ramai.\n` +
+              `2. Jangan pernah transfer DP / uang muka sebelum cek fisik barang.\n` +
+              `3. Cek kondisi fisik & fungsi barang sebelum pembayaran.\n\n` +
+              `💬 Gabung Grup WhatsApp Resmi JualRugi:\n` +
+              `https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi\n\n` +
+              `Happy Shopping!\n- Tim JualRugi.my.id`;
 
             const fonnteFormData = new FormData();
             fonnteFormData.append('target', userPhone);

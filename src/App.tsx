@@ -689,11 +689,13 @@ export default function App() {
             ? currentUser.email
             : 'bca.ccpl@gmail.com';
 
-        // 1. Eksekusi pengiriman email notifikasi otomatis "Iklan Tayang"
+        // 1. Eksekusi pengiriman double notifikasi otomatis "Iklan Tayang" (Email Brevo + WA Fonnte)
         await triggerAdPublishedEmail({
           listingId: newListing.id,
           listingTitle: newListing.title,
           recipientEmail: recipient,
+          recipientPhone: currentUser.phone || currentUser.whatsapp,
+          whatsapp: currentUser.phone || currentUser.whatsapp,
           recipientName: currentUser.name || 'Admin Tester',
           sellingPrice: newListing.sellingPrice,
           category: newListing.category,
@@ -749,11 +751,13 @@ export default function App() {
       }
     );
 
-    // Kirim notifikasi email "Iklan Tayang"
+    // Kirim double notifikasi "Iklan Tayang" (Email Brevo + WA Fonnte)
     await triggerAdPublishedEmail({
       listingId: pendingModeration.id,
       listingTitle: pendingModeration.title,
       recipientEmail: recipient,
+      recipientPhone: currentUser.phone || currentUser.whatsapp,
+      whatsapp: currentUser.phone || currentUser.whatsapp,
       recipientName: currentUser.name || 'Admin Tester',
       category: pendingModeration.category,
       subject: 'Iklan Tayang',
@@ -877,14 +881,17 @@ export default function App() {
         const dynamicUrl = getDynamicAdLink(target.id);
         const recipient = currentUser.email || 'seller@jualrugi.my.id';
 
-        // Kirim notifikasi email "Iklan Tayang"
+        // Kirim double notifikasi "Iklan Tayang" (Email Brevo + WA Fonnte)
         await triggerAdPublishedEmail({
           listingId: target.id,
           listingTitle: target.title,
           recipientEmail: recipient,
+          recipientPhone: currentUser.phone || currentUser.whatsapp,
+          whatsapp: currentUser.phone || currentUser.whatsapp,
           recipientName: currentUser.name,
           sellingPrice: target.sellingPrice,
           category: target.category,
+          subject: 'Iklan Tayang',
         });
 
         // Tampilkan push / in-app notification banner
@@ -1014,10 +1021,12 @@ export default function App() {
         return updated;
       });
 
-      // Pemicu Email Otomatis 'kuota iklan' via Brevo API
+      // Pemicu Double Notifikasi Otomatis 'kuota iklan' via Brevo API & Fonnte WA
       if (currentUser.email) {
         triggerQuotaActivatedEmail({
           recipientEmail: currentUser.email,
+          recipientPhone: currentUser.phone || currentUser.whatsapp,
+          whatsapp: currentUser.phone || currentUser.whatsapp,
           recipientName: currentUser.name,
           addedQuota,
           newTotalQuota: res.newQuota,
@@ -1161,6 +1170,8 @@ export default function App() {
         listingId: newId,
         listingTitle: newListing.title,
         recipientEmail: currentUser.email,
+        recipientPhone: currentUser.phone || currentUser.whatsapp,
+        whatsapp: currentUser.phone || currentUser.whatsapp,
         recipientName: currentUser.name || 'Pengiklan',
         sellingPrice: newListing.sellingPrice,
         category: newListing.category,

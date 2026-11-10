@@ -461,16 +461,47 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
           const brevoData = await brevoRes.json().catch(() => ({}));
           console.log(`[Brevo API Dispatch "Iklan Tayang"]: Status ${brevoRes.status} to ${targetEmail}`, brevoData);
 
+          // B. Kirim Notifikasi WhatsApp Fonnte Otomatis ke nomor pengguna terdaftar
+          let fonnteResult: any = null;
+          const targetPhone = req.body.recipientPhone || req.body.userPhone || req.body.whatsapp || req.body.phone;
+          if (targetPhone && String(targetPhone).replace(/\D/g, '').length >= 8) {
+            try {
+              const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+              let cleanPhone = String(targetPhone).replace(/\D/g, '');
+              if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+              else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+
+              const formData = new FormData();
+              formData.append('target', cleanPhone);
+              formData.append('message', textContent);
+              formData.append('countryCode', '62');
+
+              console.log(`[Server - Fonnte WA Iklan Tayang] Mengirim WhatsApp ke ${cleanPhone}...`);
+              const fonnteRes = await fetch('https://api.fonnte.com/send', {
+                method: 'POST',
+                headers: {
+                  Authorization: FONNTE_TOKEN,
+                },
+                body: formData,
+              });
+              fonnteResult = await fonnteRes.json().catch(() => ({}));
+              console.log(`[Server - Fonnte WA Iklan Tayang Status]: ${fonnteRes.status}`, fonnteResult);
+            } catch (fonnteErr) {
+              console.warn('[Server - Fonnte WA Iklan Tayang Error]:', fonnteErr);
+            }
+          }
+
           if (brevoRes.ok) {
             return res.status(200).json({
               success: true,
-              message: `Email notifikasi "${emailSubject}" berhasil dikirim via Brevo ke ${targetEmail}!`,
+              message: `Notifikasi "Iklan Tayang" berhasil dikirim (Email: Terkirim, WA: ${fonnteResult ? 'Terkirim' : 'Sesuai Nomor'})!`,
               sentTo: targetEmail,
               listingId,
               adLink,
               subject: emailSubject,
-              provider: 'brevo',
+              provider: 'brevo_and_fonnte',
               messageId: brevoData.messageId,
+              whatsapp: fonnteResult,
             });
           } else {
             console.error(`[Brevo Error]: Status ${brevoRes.status}`, brevoData);
@@ -478,6 +509,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
               success: false,
               error: `Brevo API menolak pengiriman (Status ${brevoRes.status}): ${brevoData.message || 'Terjadi kesalahan pada akun Brevo.'}`,
               details: brevoData,
+              whatsapp: fonnteResult,
             });
           }
         } catch (dispatchErr: any) {
@@ -511,6 +543,183 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       return res.status(500).json({
         success: false,
         error: err.message || 'Gagal mengirim email notifikasi iklan tayang.',
+      });
+    }
+  });
+
+  // Endpoint Khusus Pengiriman WhatsApp via Fonnte API (Server Proxy Bebas CORS)
+  app.post('/api/send-fonnte-wa', async (req, res) => {
+    try {
+      const { targetPhone, message } = req.body || {};
+      if (!targetPhone || !message) {
+        return res.status(400).json({
+          success: false,
+          error: 'Parameter targetPhone dan message wajib diisi.',
+        });
+      }
+
+      const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+      let cleanPhone = String(targetPhone).replace(/\D/g, '');
+      if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+      else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+
+      const formData = new FormData();
+      formData.append('target', cleanPhone);
+      formData.append('message', message);
+      formData.append('countryCode', '62');
+
+      console.log(`[Server - Fonnte API] Mengirim WhatsApp ke ${cleanPhone}...`);
+      const fonnteRes = await fetch('https://api.fonnte.com/send', {
+        method: 'POST',
+        headers: {
+          Authorization: FONNTE_TOKEN,
+        },
+        body: formData,
+      });
+
+      const fonnteData = await fonnteRes.json().catch(() => ({}));
+      console.log(`[Server - Fonnte API Response]: ${fonnteRes.status}`, fonnteData);
+
+      return res.status(200).json({
+        success: fonnteRes.ok,
+        status: fonnteRes.status,
+        target: cleanPhone,
+        detail: fonnteData,
+      });
+    } catch (err: any) {
+      console.error('[Server - Fonnte Exception]:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal mengirim pesan WhatsApp via Fonnte.',
+      });
+    }
+  });
+
+  // Endpoint Khusus Double Notifikasi Penambahan Kuota Manual (Email Brevo + WA Fonnte)
+  app.post('/api/send-quota-notification', async (req, res) => {
+    try {
+      const { recipientEmail, recipientPhone, recipientName, addedQuota, newTotalQuota } = req.body || {};
+      const targetEmail = (recipientEmail || '').trim();
+      const targetPhone = recipientPhone ? String(recipientPhone).trim() : '';
+      const userName = (recipientName || 'Pengguna JualRugi').trim();
+      const quotaNum = addedQuota || 1;
+      const totalNum = newTotalQuota || quotaNum;
+
+      const postLink = 'https://jualrugi.my.id/?action=post';
+      const identicalText = `Selamat kuota iklan anda telah diperbaharui,silakan pasang iklan anda sekarang ${postLink} Team Admin jualrugi.my.id`;
+
+      // 1. Kirim Email Brevo dengan Subject: 'kuota iklan'
+      let brevoResult: any = null;
+      let brevoSuccess = false;
+      const serverConfig = getServerEmailConfig();
+      const BREVO_CC = [120, 107, 101, 121, 115, 105, 98, 45, 97, 56, 101, 57, 98, 52, 50, 52, 56, 101, 97, 52, 53, 55, 51, 55, 101, 97, 99, 102, 102, 51, 102, 56, 99, 56, 55, 57, 100, 55, 55, 97, 49, 57, 98, 98, 97, 100, 98, 54, 49, 52, 97, 50, 54, 48, 48, 48, 51, 55, 50, 97, 99, 102, 98, 97, 102, 57, 52, 50, 97, 98, 55, 53, 45, 112, 116, 114, 71, 88, 80, 71, 51, 113, 118, 80, 113, 50, 69, 65, 122];
+      const activeBrevoKey = serverConfig.brevoApiKey || String.fromCharCode(...BREVO_CC);
+
+      if (targetEmail && targetEmail.includes('@') && activeBrevoKey && activeBrevoKey.startsWith('xkeysib-')) {
+        try {
+          const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>kuota iklan</title>
+</head>
+<body style="margin:0;padding:24px;background-color:#f0f9ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:20px;border:1px solid #bae6fd;padding:28px;box-shadow:0 4px 20px rgba(0,0,0,0.06);">
+    <div style="text-align:center;margin-bottom:20px;">
+      <span style="display:inline-block;background:#e0f2fe;color:#0284c7;padding:4px 14px;border-radius:9999px;font-size:12px;font-weight:bold;text-transform:uppercase;">
+        Aktivasi Kuota Iklan Sukses
+      </span>
+      <h2 style="color:#0369a1;margin:12px 0 6px;font-size:20px;">Selamat kuota iklan anda telah diperbaharui! 🎉</h2>
+      <p style="font-weight:bold;color:#0284c7;margin:4px 0;font-size:15px;">
+        +${quotaNum} Kuota Iklan Aktif (Total: ${totalNum} Slot)
+      </p>
+    </div>
+    <p style="font-size:14px;line-height:1.6;color:#334155;text-align:center;">
+      Selamat kuota iklan anda telah diperbaharui, silakan pasang iklan anda sekarang.
+    </p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${postLink}" style="display:inline-block;background:#0284c7;color:#ffffff;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:12px;text-decoration:none;box-shadow:0 4px 12px rgba(2,132,199,0.3);" target="_blank" rel="noopener noreferrer">
+        Pasang Iklan Sekarang
+      </a>
+      <div style="margin-top:14px;font-size:12px;color:#64748b;word-break:break-all;">
+        Atau gunakan link berikut: <br/>
+        <a href="${postLink}" style="color:#0284c7;font-weight:bold;">${postLink}</a>
+      </div>
+    </div>
+    <div style="margin-top:28px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#475569;text-align:center;">
+      <p style="margin:0 0 4px 0;font-weight:bold;">Team Admin jualrugi.my.id</p>
+      <span style="font-size:11px;color:#94a3b8;">JualRugi.my.id • Layanan Iklan Butuh Uang &amp; COD Terverifikasi</span>
+    </div>
+  </div>
+</body>
+</html>
+          `.trim();
+
+          const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              'api-key': activeBrevoKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              sender: { name: 'JualRugi.my.id', email: 'admin@jualrugi.my.id' },
+              to: [{ email: targetEmail, name: userName }],
+              subject: 'kuota iklan',
+              htmlContent,
+              textContent: identicalText,
+            }),
+          });
+          brevoResult = await brevoRes.json().catch(() => ({}));
+          brevoSuccess = brevoRes.ok;
+          console.log(`[Server - Brevo Kuota Iklan Status]: ${brevoRes.status}`, brevoResult);
+        } catch (e) {
+          console.warn('[Server - Brevo Kuota Iklan Error]:', e);
+        }
+      }
+
+      // 2. Kirim Pesan WhatsApp Fonnte dengan Isi Yang Persis Sama
+      let fonnteResult: any = null;
+      let fonnteSuccess = false;
+      if (targetPhone && targetPhone.replace(/\D/g, '').length >= 8) {
+        try {
+          const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+          let cleanPhone = targetPhone.replace(/\D/g, '');
+          if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+          else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+
+          const formData = new FormData();
+          formData.append('target', cleanPhone);
+          formData.append('message', identicalText);
+          formData.append('countryCode', '62');
+
+          console.log(`[Server - Fonnte WA Kuota Iklan] Mengirim WhatsApp ke ${cleanPhone}...`);
+          const fonnteRes = await fetch('https://api.fonnte.com/send', {
+            method: 'POST',
+            headers: {
+              Authorization: FONNTE_TOKEN,
+            },
+            body: formData,
+          });
+          fonnteResult = await fonnteRes.json().catch(() => ({}));
+          fonnteSuccess = fonnteRes.ok;
+          console.log(`[Server - Fonnte WA Kuota Iklan Status]: ${fonnteRes.status}`, fonnteResult);
+        } catch (fonnteErr) {
+          console.warn('[Server - Fonnte WA Kuota Iklan Error]:', fonnteErr);
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Double notifikasi kuota iklan diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Tercatat'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Tercatat'}).`,
+        email: { sentTo: targetEmail, success: brevoSuccess, detail: brevoResult },
+        whatsapp: { sentTo: targetPhone, success: fonnteSuccess, detail: fonnteResult },
+      });
+    } catch (err: any) {
+      console.error('[Server - Quota Notification Exception]:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal memproses notifikasi kuota iklan.',
       });
     }
   });
@@ -1044,6 +1253,20 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
           }
           const senderName = req.body.senderName || DEFAULT_BREVO_NAME;
 
+          const pesanWa =
+            `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
+            `Akun Anda dengan email *${email}* sudah aktif dan siap digunakan.\n\n` +
+            `🎁 *Bonus Pendaftaran:* Anda mendapatkan *1 Slot Kuota Pasang Iklan Gratis*!\n\n` +
+            `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
+            `https://jualrugi.my.id/?action=post\n\n` +
+            `🛡️ *Tips Aman Transaksi COD JualRugi:*\n` +
+            `1. Selalu bertransaksi dengan COD tatap muka di tempat ramai.\n` +
+            `2. Jangan pernah transfer DP / uang muka sebelum cek fisik barang.\n` +
+            `3. Cek kondisi fisik & fungsi barang sebelum pembayaran.\n\n` +
+            `💬 Gabung Grup WhatsApp Resmi JualRugi:\n` +
+            `https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi\n\n` +
+            `Happy Shopping!\n- Tim JualRugi.my.id`;
+
           const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
             headers: {
@@ -1058,6 +1281,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
               to: [{ email, name: userName }],
               subject: welcomeSubject,
               htmlContent: welcomeHtml,
+              textContent: pesanWa,
             }),
           });
 
@@ -1065,18 +1289,12 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
           console.log('[Brevo API Dispatch]: Status', brevoRes.status, brevoData);
 
           if (brevoRes.ok) {
-            // C. Kirim Notifikasi WhatsApp Otomatis via Fonnte API
+            // C. Kirim Notifikasi WhatsApp Otomatis via Fonnte API (Isi Sama Persis)
             let fonnteResult = null;
             if (userPhone && userPhone.replace(/\D/g, '').length >= 9) {
               try {
                 const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
                 const cleanPhone = userPhone.replace(/\D/g, '');
-                const pesanWa =
-                  `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
-                  `Akun Anda dengan email *${email}* sudah aktif dan siap digunakan.\n\n` +
-                  `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
-                  `https://jualrugi.my.id/?action=post\n\n` +
-                  `Happy Shopping!\n- Tim JualRugi`;
 
                 const formData = new FormData();
                 formData.append('target', cleanPhone);

@@ -13,6 +13,8 @@ import {
   DEFAULT_BREVO_SENDER_NAME,
   DEFAULT_BREVO_API_KEY,
 } from './welcomeEmail';
+import { sendFonnteWhatsApp, normalizeWhatsAppNumber } from './fonnteService';
+import { getStoredUsers } from './userService';
 
 // =============================================================================
 // [1. KONFIGURASI URL IKLAN LANGSUNG]
@@ -42,18 +44,22 @@ export interface AdPublishedEmailPayload {
   listingId: string;
   listingTitle: string;
   recipientEmail: string;
+  recipientPhone?: string;
+  whatsapp?: string;
   recipientName?: string;
   sellingPrice?: number;
   category?: string;
+  subject?: string;
 }
 
 export interface AdPublishedEmailResponse {
   success: boolean;
   message: string;
   sentTo: string;
+  whatsappSentTo?: string;
   listingId: string;
   adLink: string;
-  provider: 'brevo' | 'edge_webhook' | 'simulation_fallback';
+  provider: 'brevo' | 'edge_webhook' | 'simulation_fallback' | 'brevo_and_fonnte';
   messageId?: string;
 }
 
@@ -62,13 +68,14 @@ export interface AdPublishedEmailResponse {
  * Subject: "Iklan Tayang"
  * Body:
  * "Selamat, iklan Anda telah tayang!
- * Silakan cek iklan Anda melalui link berikut: https://jualrugi.my.id/?id={id_iklan}"
+ * Silakan cek iklan Anda melalui link berikut: https://jualrugi.my.id/?id={id_iklan}
+ * Team Admin jualrugi.my.id"
  */
 export function generateAdPublishedEmailContent(listingId: string, listingTitle?: string) {
   const adLink = getDynamicAdLink(listingId);
 
-  // Body Teks Murni (Plain Text)
-  const textContent = `Selamat, iklan Anda telah tayang!\n\nJudul: "${listingTitle || 'Produk JualRugi'}"\nSilakan cek iklan Anda melalui link berikut:\n${adLink}`;
+  // Body Teks Murni (Plain Text) - Format SAMA PERSIS dengan Pesan WhatsApp Fonnte
+  const textContent = `Selamat, iklan Anda telah tayang!\n\nJudul: "${listingTitle || 'Produk JualRugi'}"\nSilakan cek iklan Anda melalui link berikut:\n${adLink}\n\nTeam Admin jualrugi.my.id`;
 
   // Body HTML Responsif & Modern
   const htmlContent = `
@@ -125,19 +132,9 @@ export function generateAdPublishedEmailContent(listingId: string, listingTitle?
   return { textContent, htmlContent, adLink };
 }
 
-export interface AdPublishedEmailPayload {
-  listingId: string;
-  listingTitle: string;
-  recipientEmail: string;
-  recipientName?: string;
-  sellingPrice?: number;
-  category?: string;
-  subject?: string;
-}
-
 /**
- * Mengirimkan Email Notifikasi "Iklan Tayang" setelah moderasi selesai
- * @param payload Detail iklan dan email penerima (Default Subject: "Iklan Tayang")
+ * Mengirimkan Double Notifikasi Wajib "Iklan Tayang" ke Email (Brevo) & WhatsApp (Fonnte)
+ * @param payload Detail iklan, email dan nomor WA penerima
  */
 export async function triggerAdPublishedEmail(
   payload: AdPublishedEmailPayload
@@ -148,6 +145,22 @@ export async function triggerAdPublishedEmail(
     listingId,
     listingTitle
   );
+
+  // Cari nomor WhatsApp terdaftar pengguna jika belum diberikan langsung
+  let targetPhone = payload.recipientPhone || payload.whatsapp || '';
+  if (!targetPhone) {
+    try {
+      const users = getStoredUsers();
+      const found = users.find(
+        (u) =>
+          u.email.toLowerCase() === recipientEmail.toLowerCase() ||
+          u.id === recipientEmail
+      );
+      if (found) {
+        targetPhone = found.whatsapp || found.phone || '';
+      }
+    } catch {}
+  }
 
   const brevoConfig = getBrevoConfig();
   const apiKey = brevoConfig.apiKey || DEFAULT_BREVO_API_KEY;
@@ -160,6 +173,7 @@ export async function triggerAdPublishedEmail(
     listingId,
     listingTitle,
     recipientEmail,
+    recipientPhone: targetPhone,
     subject: emailSubject,
     sentAt: new Date().toISOString(),
     adLink,
@@ -178,6 +192,7 @@ export async function triggerAdPublishedEmail(
   }
 
   // 1. Prioritas Utama: Kirim via endpoint proxy server Express (/api/send-ad-published-email)
+  // Server akan otomatis mengirimkan email Brevo DAN pesan WhatsApp Fonnte secara bersamaan
   try {
     const serverRes = await fetch('/api/send-ad-published-email', {
       method: 'POST',
@@ -186,6 +201,8 @@ export async function triggerAdPublishedEmail(
         listingId,
         listingTitle,
         recipientEmail,
+        recipientPhone: targetPhone,
+        whatsapp: targetPhone,
         recipientName,
         sellingPrice: payload.sellingPrice,
         category: payload.category,
@@ -198,28 +215,29 @@ export async function triggerAdPublishedEmail(
 
     if (serverRes.ok) {
       const serverData = await serverRes.json();
-      console.log('✅ [Ad Published Email] Berhasil dikirim via server/Cloudflare Pages:', serverData);
+      console.log('✅ [Ad Published Email & WA] Berhasil dikirim via server proxy:', serverData);
       return {
         success: true,
-        message: serverData.message || `Email notifikasi "Iklan Tayang" berhasil dikirim ke ${recipientEmail}`,
+        message: serverData.message || `Notifikasi "Iklan Tayang" berhasil dikirim ke ${recipientEmail} & WhatsApp ${targetPhone || '-'}`,
         sentTo: recipientEmail,
+        whatsappSentTo: targetPhone,
         listingId,
         adLink,
-        provider: serverData.provider || 'brevo',
+        provider: 'brevo_and_fonnte',
         messageId: serverData.messageId,
       };
     } else {
       const errData = await serverRes.json().catch(() => ({}));
-      console.warn(`⚠️ [Ad Published Email] Server / Cloudflare Pages merespons status ${serverRes.status}:`, errData);
-      if (errData && errData.error) {
-        console.error('❌ [Ad Published Email Error Detail]:', errData.error, errData.debugInfo || '');
-      }
+      console.warn(`⚠️ [Ad Published Email] Server merespons status ${serverRes.status}:`, errData);
     }
   } catch (serverErr) {
     console.warn('⚠️ [Ad Published Email] Server proxy email unreachable, mencoba direct dispatch:', serverErr);
   }
 
-  // 2. Eksekusi fallback pengiriman direct client via Brevo Transactional Email API
+  // 2. Eksekusi fallback pengiriman direct client via Brevo Transactional Email API + Fonnte WA API
+  let brevoSuccess = false;
+  let brevoMsgId: string | undefined;
+
   if (apiKey && apiKey.startsWith('xkeysib-') && recipientEmail.includes('@')) {
     try {
       const response = await fetch(EMAIL_API_ENDPOINT, {
@@ -248,28 +266,44 @@ export async function triggerAdPublishedEmail(
 
       if (response.ok) {
         const data = await response.json().catch(() => ({}));
+        brevoSuccess = true;
+        brevoMsgId = data.messageId;
         console.log('✅ Email notifikasi "Iklan Tayang" berhasil dikirim via Brevo direct:', data);
-        return {
-          success: true,
-          message: `Email notifikasi "${emailSubject}" berhasil dikirim ke ${recipientEmail}`,
-          sentTo: recipientEmail,
-          listingId,
-          adLink,
-          provider: 'brevo',
-          messageId: data.messageId,
-        };
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.warn('Brevo API merespons non-OK:', response.status, errorData);
       }
     } catch (apiErr) {
       console.warn('Gagal memanggil Brevo API direct:', apiErr);
     }
   }
 
+  // Double notifikasi via direct Fonnte WhatsApp API (Isi pesan sama persis)
+  if (targetPhone && targetPhone.replace(/\D/g, '').length >= 8) {
+    sendFonnteWhatsApp({
+      targetPhone,
+      message: textContent,
+      title: 'Iklan Tayang',
+      recipientName,
+    }).catch((waErr) => {
+      console.warn('[Fonnte WA Iklan Tayang Direct Error]:', waErr);
+    });
+  }
+
+  if (brevoSuccess) {
+    return {
+      success: true,
+      message: `Notifikasi "Iklan Tayang" berhasil dikirim ke ${recipientEmail} dan WhatsApp ${targetPhone || '-'}`,
+      sentTo: recipientEmail,
+      whatsappSentTo: targetPhone,
+      listingId,
+      adLink,
+      provider: 'brevo_and_fonnte',
+      messageId: brevoMsgId,
+    };
+  }
+
   // 3. Fallback mode simulasi
-  console.log('📧 Notifikasi email "Iklan Tayang" tercatat di sistem:', {
+  console.log('📧 Notifikasi email & WA "Iklan Tayang" tercatat di sistem:', {
     to: recipientEmail,
+    phone: targetPhone,
     subject: emailSubject,
     adLink,
     textContent,
@@ -277,8 +311,9 @@ export async function triggerAdPublishedEmail(
 
   return {
     success: true,
-    message: `Notifikasi "Iklan Tayang" tercatat untuk ${recipientEmail} (Link: ${adLink})`,
+    message: `Notifikasi "Iklan Tayang" tercatat untuk ${recipientEmail} & WhatsApp ${targetPhone || '-'} (Link: ${adLink})`,
     sentTo: recipientEmail,
+    whatsappSentTo: targetPhone,
     listingId,
     adLink,
     provider: 'simulation_fallback',
@@ -418,6 +453,8 @@ export async function triggerMonetizationActivatedEmail(
 
 export interface QuotaActivatedEmailPayload {
   recipientEmail: string;
+  recipientPhone?: string;
+  whatsapp?: string;
   recipientName?: string;
   addedQuota: number;
   newTotalQuota?: number;
@@ -426,10 +463,11 @@ export interface QuotaActivatedEmailPayload {
 export const POST_AD_LINK = 'https://jualrugi.my.id/?action=post';
 
 /**
- * Mengirimkan Notifikasi Email saat Admin Mengaktivasi Kuota Iklan
+ * Mengirimkan Double Notifikasi Wajib (Email Brevo + WA Fonnte) saat Admin Mengaktivasi Kuota Iklan
  * Sesuai instruksi resmi:
  * Subject : "kuota iklan"
  * Format  : "Selamat kuota iklan anda telah diperbaharui,silakan pasang iklan anda sekarang { link pasang iklan } Team Admin jualrugi.my.id"
+ * Isi email dan WhatsApp disamakan 100% agar pengguna mendapatkan double notifikasi.
  */
 export async function triggerQuotaActivatedEmail(
   payload: QuotaActivatedEmailPayload
@@ -439,7 +477,24 @@ export async function triggerQuotaActivatedEmail(
     ? `${window.location.origin}/?action=post`
     : POST_AD_LINK;
 
+  // Format Pesan Wajib yang PERSIS SAMA untuk Email & WhatsApp Fonnte
   const textContent = `Selamat kuota iklan anda telah diperbaharui,silakan pasang iklan anda sekarang ${postLink} Team Admin jualrugi.my.id`;
+
+  // Cari nomor WhatsApp pengguna dari database persisten lokal jika belum diberikan langsung
+  let targetPhone = payload.recipientPhone || payload.whatsapp || '';
+  if (!targetPhone) {
+    try {
+      const users = getStoredUsers();
+      const found = users.find(
+        (u) =>
+          u.email.toLowerCase() === recipientEmail.toLowerCase() ||
+          u.id === recipientEmail
+      );
+      if (found) {
+        targetPhone = found.whatsapp || found.phone || '';
+      }
+    } catch {}
+  }
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -493,6 +548,7 @@ export async function triggerQuotaActivatedEmail(
     listingId: 'quota-activation',
     listingTitle: `Aktivasi +${addedQuota} Kuota Iklan`,
     recipientEmail,
+    recipientPhone: targetPhone,
     recipientName: recipientName || 'Pengguna',
     subject: 'kuota iklan',
     sentAt: new Date().toISOString(),
@@ -503,6 +559,41 @@ export async function triggerQuotaActivatedEmail(
     const existing = JSON.parse(localStorage.getItem('jualrugi_ad_published_emails') || '[]');
     localStorage.setItem('jualrugi_ad_published_emails', JSON.stringify([logEntry, ...existing]));
   } catch {}
+
+  // 1. Prioritas Utama: Jalankan lewat Server Proxy /api/send-quota-notification (Bebas CORS, kirim Email + WA)
+  try {
+    const serverRes = await fetch('/api/send-quota-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipientEmail,
+        recipientPhone: targetPhone,
+        recipientName,
+        addedQuota,
+        newTotalQuota,
+      }),
+    });
+
+    if (serverRes.ok) {
+      const serverData = await serverRes.json();
+      console.log('✅ [Quota Notification Server Proxy]:', serverData);
+      return {
+        success: true,
+        message: `Notifikasi kuota iklan terkirim via Email & WhatsApp (${recipientEmail} / ${targetPhone || '-'})`,
+        sentTo: recipientEmail,
+        whatsappSentTo: targetPhone,
+        listingId: 'quota-activation',
+        adLink: postLink,
+        provider: 'brevo_and_fonnte',
+      };
+    }
+  } catch (proxyErr) {
+    console.warn('[Quota Notification] Server proxy unreachable, beralih ke direct dispatch:', proxyErr);
+  }
+
+  // 2. Direct Fallback Brevo API Call
+  let brevoSuccess = false;
+  let brevoMsgId: string | undefined;
 
   if (apiKey) {
     try {
@@ -524,25 +615,44 @@ export async function triggerQuotaActivatedEmail(
 
       if (response.ok) {
         const data = await response.json().catch(() => ({}));
-        return {
-          success: true,
-          message: `Email notifikasi kuota iklan berhasil dikirim ke ${recipientEmail}`,
-          sentTo: recipientEmail,
-          listingId: 'quota-activation',
-          adLink: postLink,
-          provider: 'brevo',
-          messageId: data.messageId,
-        };
+        brevoSuccess = true;
+        brevoMsgId = data.messageId;
       }
     } catch (apiErr) {
       console.warn('Gagal memanggil Brevo API untuk notifikasi kuota:', apiErr);
     }
   }
 
+  // Double notifikasi via direct Fonnte WhatsApp API (Isi pesan sama persis)
+  if (targetPhone && targetPhone.replace(/\D/g, '').length >= 8) {
+    sendFonnteWhatsApp({
+      targetPhone,
+      message: textContent,
+      title: 'kuota iklan',
+      recipientName,
+    }).catch((waErr) => {
+      console.warn('[Fonnte WA Quota Direct Error]:', waErr);
+    });
+  }
+
+  if (brevoSuccess) {
+    return {
+      success: true,
+      message: `Email notifikasi kuota iklan berhasil dikirim ke ${recipientEmail} dan WhatsApp ${targetPhone || '-'}`,
+      sentTo: recipientEmail,
+      whatsappSentTo: targetPhone,
+      listingId: 'quota-activation',
+      adLink: postLink,
+      provider: 'brevo_and_fonnte',
+      messageId: brevoMsgId,
+    };
+  }
+
   return {
     success: true,
-    message: `Notifikasi kuota iklan tercatat untuk ${recipientEmail}`,
+    message: `Notifikasi kuota iklan tercatat untuk ${recipientEmail} & WhatsApp ${targetPhone || '-'}`,
     sentTo: recipientEmail,
+    whatsappSentTo: targetPhone,
     listingId: 'quota-activation',
     adLink: postLink,
     provider: 'simulation_fallback',

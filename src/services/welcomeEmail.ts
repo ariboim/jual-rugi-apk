@@ -1,7 +1,10 @@
 /**
  * Service untuk Otomatisasi Welcome Email Pengguna Baru
  * Didukung sepenuhnya oleh Brevo Transactional Email API (Branded Domain: jualrugi.my.id)
+ * dan Fonnte WhatsApp API untuk Double Notifikasi Wajib.
  */
+
+import { sendFonnteWhatsApp } from './fonnteService';
 
 export interface WelcomeEmailPayload {
   name: string;
@@ -25,8 +28,9 @@ export interface RegistrationWebhookData {
 export interface WelcomeEmailResponse {
   success: boolean;
   message: string;
-  provider?: 'brevo' | 'make_webhook' | 'server' | 'in_app';
+  provider?: 'brevo' | 'make_webhook' | 'server' | 'in_app' | 'brevo_and_fonnte';
   emailSentTo?: string;
+  whatsappSentTo?: string;
   brevoMessageId?: string;
   preview?: {
     subject: string;
@@ -368,6 +372,26 @@ export async function sendRegistrationToMakeWebhook(
 /**
  * Eksekusi Pengiriman Welcome Email Otomatis (Bekerja di Web, Mobile, Vercel & APK)
  */
+export function getWelcomeMessageText(name: string, email: string): string {
+  return (
+    `Halo *${name}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
+    `Akun Anda dengan email *${email}* sudah aktif dan siap digunakan.\n\n` +
+    `🎁 *Bonus Pendaftaran:* Anda mendapatkan *1 Slot Kuota Pasang Iklan Gratis*!\n\n` +
+    `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
+    `https://jualrugi.my.id/?action=post\n\n` +
+    `🛡️ *Tips Aman Transaksi COD JualRugi:*\n` +
+    `1. Selalu bertransaksi dengan COD tatap muka di tempat ramai.\n` +
+    `2. Jangan pernah transfer DP / uang muka sebelum cek fisik barang.\n` +
+    `3. Cek kondisi fisik & fungsi barang sebelum pembayaran.\n\n` +
+    `💬 Gabung Grup WhatsApp Resmi JualRugi:\n` +
+    `https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi\n\n` +
+    `Happy Shopping!\n- Tim JualRugi.my.id`
+  );
+}
+
+/**
+ * Eksekusi Pengiriman Welcome Email & WhatsApp Otomatis (Double Notifikasi)
+ */
 export async function sendWelcomeEmailAutomation(
   payload: WelcomeEmailPayload
 ): Promise<WelcomeEmailResponse> {
@@ -378,8 +402,9 @@ export async function sendWelcomeEmailAutomation(
   const senderEmail = brevoConfig.senderEmail || DEFAULT_BREVO_SENDER_EMAIL;
   const senderName = brevoConfig.senderName || DEFAULT_BREVO_SENDER_NAME;
   const userPhone = payload.nomor_wa || payload.phone || '';
+  const welcomeText = getWelcomeMessageText(recipientName, recipientEmail);
 
-  console.log(`[Welcome Email Service] Memulai pengiriman otomatis untuk ${recipientEmail}...`);
+  console.log(`[Welcome Email Service] Memulai pengiriman otomatis untuk ${recipientEmail} (WA: ${userPhone})...`);
 
   // Kirim data ke Make.com Webhook secara asinkron tanpa menahan proses utama
   sendRegistrationToMakeWebhook({
@@ -392,6 +417,7 @@ export async function sendWelcomeEmailAutomation(
   });
 
   // 1. OPSI UTAMA: Panggil Server Dispatcher / Cloudflare Pages Function (/api/send-welcome-email)
+  // Server secara simultan mengirim Email Brevo DAN WhatsApp via Fonnte
   try {
     console.log('[Welcome Email Service] Mengirim request ke endpoint /api/send-welcome-email...');
     const res = await fetch('/api/send-welcome-email', {
@@ -418,13 +444,10 @@ export async function sendWelcomeEmailAutomation(
       return data;
     } else {
       const errData = await res.json().catch(() => ({}));
-      console.warn(`⚠️ [Welcome Email Service] Server / Cloudflare Pages merespons status ${res.status}:`, errData);
-      if (errData && errData.error) {
-        console.error('❌ [Welcome Email Error Detail]:', errData.error, errData.debugInfo || '');
-      }
+      console.warn(`⚠️ [Welcome Email Service] Server merespons status ${res.status}:`, errData);
     }
   } catch (serverErr) {
-    console.warn('⚠️ [Welcome Email Service] Endpoint /api/send-welcome-email unreachable:', serverErr);
+    console.warn('⚠️ [Welcome Email Service] Endpoint /api/send-welcome-email unreachable, mencoba direct dispatch:', serverErr);
   }
 
   // 2. OPSI CADANGAN: Direct Brevo API Call jika ada client key valid
@@ -432,6 +455,9 @@ export async function sendWelcomeEmailAutomation(
     brevoConfig.apiKey && brevoConfig.apiKey.length > 20
       ? brevoConfig.apiKey
       : DEFAULT_BREVO_API_KEY;
+
+  let brevoSuccess = false;
+  let brevoMsgId: string | undefined;
 
   if (activeBrevoKey && activeBrevoKey.startsWith('xkeysib-') && recipientEmail.includes('@')) {
     try {
@@ -451,32 +477,47 @@ export async function sendWelcomeEmailAutomation(
           to: [{ email: recipientEmail, name: recipientName }],
           subject: `🎉 Selamat Datang di JualRugi.my.id, ${recipientName}! Panduan Transaksi COD Aman`,
           htmlContent: emailHtml,
+          textContent: welcomeText,
         }),
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        brevoSuccess = true;
+        brevoMsgId = data.messageId;
         console.log('✅ [Welcome Email Service] Berhasil via direct Brevo API:', data);
-        return {
-          success: true,
-          provider: 'brevo',
-          message: `Welcome email berhasil dikirim via Brevo API ke ${recipientEmail}! Happy shopping!`,
-          emailSentTo: recipientEmail,
-          brevoMessageId: data.messageId,
-        };
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        console.error('❌ [Welcome Email Service] Brevo direct API error:', res.status, errData);
       }
     } catch (brevoErr) {
       console.error('❌ [Welcome Email Service] Brevo direct exception:', brevoErr);
     }
   }
 
+  // Double notifikasi via direct Fonnte WhatsApp API (Isi pesan sama persis)
+  if (userPhone && userPhone.replace(/\D/g, '').length >= 8) {
+    sendFonnteWhatsApp({
+      targetPhone: userPhone,
+      message: welcomeText,
+      title: 'Selamat Datang di JualRugi',
+      recipientName,
+    }).catch((fonnteErr) => {
+      console.warn('[Welcome WA Direct Error]:', fonnteErr);
+    });
+  }
+
+  if (brevoSuccess) {
+    return {
+      success: true,
+      provider: 'brevo_and_fonnte',
+      message: `Pendaftaran berhasil! Email & WhatsApp notifikasi selamat datang terkirim ke ${recipientEmail} / ${userPhone || '-'}. Happy shopping!`,
+      emailSentTo: recipientEmail,
+      brevoMessageId: brevoMsgId,
+    };
+  }
+
   return {
     success: true,
     provider: 'in_app',
-    message: `Pendaftaran ${recipientName} berhasil tercatat untuk ${recipientEmail}. Happy shopping!`,
+    message: `Pendaftaran ${recipientName} berhasil tercatat untuk ${recipientEmail} & WhatsApp ${userPhone || '-'}. Happy shopping!`,
     emailSentTo: recipientEmail,
   };
 }

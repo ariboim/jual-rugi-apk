@@ -201,7 +201,21 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
 </html>
     `.trim();
 
-    const welcomeText = `Halo ${userName}!\n\nSelamat datang di JualRugi.my.id.\nAkun Anda mendapatkan bonus 1 Kuota Pasang Iklan Gratis.\nPasang iklan barang BU Anda sekarang melalui: https://jualrugi.my.id/#pasangiklan\n\nYuk, gabung juga di Grup WhatsApp Komunitas JualRugi.my.id:\nhttps://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2\n\nIngat selalu: Wajib transaksi COD tatap muka di tempat ramai tanpa transfer DP!`;
+    const pesanWa =
+      `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
+      `Akun Anda dengan email *${targetEmail}* sudah aktif dan siap digunakan.\n\n` +
+      `🎁 *Bonus Pendaftaran:* Anda mendapatkan *1 Slot Kuota Pasang Iklan Gratis*!\n\n` +
+      `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
+      `https://jualrugi.my.id/?action=post\n\n` +
+      `🛡️ *Tips Aman Transaksi COD JualRugi:*\n` +
+      `1. Selalu bertransaksi dengan COD tatap muka di tempat ramai.\n` +
+      `2. Jangan pernah transfer DP / uang muka sebelum cek fisik barang.\n` +
+      `3. Cek kondisi fisik & fungsi barang sebelum pembayaran.\n\n` +
+      `💬 Gabung Grup WhatsApp Resmi JualRugi:\n` +
+      `https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi\n\n` +
+      `Happy Shopping!\n- Tim JualRugi.my.id`;
+
+    const welcomeText = pesanWa;
 
     // C. Kirim via Brevo v3 Transactional SMTP Email API
     console.log('[CF Pages - Welcome Email] Mengirim payload ke https://api.brevo.com/v3/smtp/email...');
@@ -233,18 +247,12 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     const brevoSuccess = brevoRes.ok;
     console.log(`[CF Pages - Welcome Email] Brevo Response Status: ${brevoRes.status}`, brevoData);
 
-    // D. Kirim Pesan WhatsApp Selamat Datang Otomatis via Fonnte API (Selalu dieksekusi)
+    // D. Kirim Pesan WhatsApp Selamat Datang Otomatis via Fonnte API (Isi Sama Persis)
     let fonnteResult: any = null;
     let fonnteSuccess = false;
     if (userPhone && userPhone.length >= 9) {
       try {
         const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
-        const pesanWa =
-          `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
-          `Akun Anda dengan email *${targetEmail}* sudah aktif dan siap digunakan.\n\n` +
-          `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
-          `https://jualrugi.my.id/?action=post\n\n` +
-          `Happy Shopping!\n- Tim JualRugi`;
 
         const fonnteFormData = new FormData();
         fonnteFormData.append('target', userPhone);
