@@ -51,7 +51,7 @@ const BREVO_CC = [120, 107, 101, 121, 115, 105, 98, 45, 97, 56, 101, 57, 98, 52,
 const SYSTEM_BREVO_KEY = String.fromCharCode(...BREVO_CC);
 
 export const DEFAULT_BREVO_API_KEY = SYSTEM_BREVO_KEY;
-export const DEFAULT_BREVO_SENDER_EMAIL = 'admin@jualrugi.my.id';
+export const DEFAULT_BREVO_SENDER_EMAIL = 'info@jualrugi.my.id';
 export const DEFAULT_BREVO_SENDER_NAME = 'JualRugi.my.id';
 
 /**
@@ -201,7 +201,7 @@ export function getWelcomeEmailHtml(name: string, email: string): string {
     </div>
 
     <p style="text-align: center; font-size: 14px; font-weight: 700; color: #0284c7; margin: 24px 0 12px;">
-      Selamat berbelanja & happy shopping! 🎉
+      Selamat berbelanja & happy shopping! 🥳
     </p>
 
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 20px;" />
@@ -471,13 +471,17 @@ export async function sendWelcomeEmailAutomation(
         },
         body: JSON.stringify({
           sender: {
-            name: senderName,
-            email: senderEmail,
+            name: 'JualRugi.my.id',
+            email: 'info@jualrugi.my.id',
           },
           to: [{ email: recipientEmail, name: recipientName }],
-          subject: `🎉 Selamat Datang di JualRugi.my.id, ${recipientName}! Panduan Transaksi COD Aman`,
+          subject: `Selamat Datang di JualRugi.my.id! 👋 - Panduan Transaksi COD Aman`,
           htmlContent: emailHtml,
           textContent: welcomeText,
+          params: {
+            FIRSTNAME: recipientName,
+            EMAIL: recipientEmail,
+          },
         }),
       });
 

@@ -1416,7 +1416,14 @@ Team Admin jualrugi.my.id`;
       </div>
     </div>
 
-    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0 20px;" />
+    <p style="text-align: center; font-size: 14px; font-weight: 700; color: #0284c7; margin: 24px 0 12px;">
+      Selamat berbelanja & happy shopping! 🥳
+    </p>
+    <p style="text-align: center; font-size: 12px; color: #64748b; margin: 0 0 20px;">
+      Direct Link Pasang Iklan: <a href="https://jualrugi.my.id/#pasangiklan" style="color: #0284c7; font-weight: 600;">https://jualrugi.my.id/#pasangiklan</a>
+    </p>
+
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 20px;" />
     <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
       Email otomatis ini dikirimkan khusus untuk ${email} atas pendaftaran di JualRugi.my.id.<br/>
       Jika Anda tidak merasa mendaftar, Anda dapat mengabaikan email ini.
@@ -1446,12 +1453,8 @@ Team Admin jualrugi.my.id`;
         serverConfig.brevoApiKey ||
         SYSTEM_BREVO_KEY;
 
-      const DEFAULT_BREVO_SENDER =
-        process.env.BREVO_SENDER_EMAIL ||
-        serverConfig.brevoSenderEmail ||
-        'admin@jualrugi.my.id';
-      const DEFAULT_BREVO_NAME =
-        process.env.BREVO_SENDER_NAME || 'JualRugi.my.id';
+      const LOCKED_BREVO_SENDER_EMAIL = 'info@jualrugi.my.id';
+      const LOCKED_BREVO_SENDER_NAME = 'JualRugi.my.id';
 
       // ========================================================================
       // OPSI 1: BREVO API DIRECT INTEGRATION (Authenticated Domain: jualrugi.my.id)
@@ -1479,13 +1482,7 @@ Team Admin jualrugi.my.id`;
             console.warn('[Brevo Contacts Warning]:', contactErr);
           }
 
-          // B. Kirim Welcome Email Transactional via Brevo SMTP API dengan branded sender
-          let senderEmail = req.body.senderEmail || DEFAULT_BREVO_SENDER;
-          if (!senderEmail || senderEmail.includes('gmail.com') || senderEmail.startsWith('support@')) {
-            senderEmail = DEFAULT_BREVO_SENDER;
-          }
-          const senderName = req.body.senderName || DEFAULT_BREVO_NAME;
-
+          // B. Kirim Welcome Email Transactional via Brevo SMTP API dengan sender name lock
           const pesanWa =
             `Halo *${userName}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
             `Akun Anda dengan email *${email}* sudah aktif dan siap digunakan.\n\n` +
@@ -1508,13 +1505,17 @@ Team Admin jualrugi.my.id`;
             },
             body: JSON.stringify({
               sender: {
-                name: senderName,
-                email: senderEmail,
+                name: LOCKED_BREVO_SENDER_NAME,
+                email: LOCKED_BREVO_SENDER_EMAIL,
               },
               to: [{ email, name: userName }],
               subject: welcomeSubject,
               htmlContent: welcomeHtml,
               textContent: pesanWa,
+              params: {
+                FIRSTNAME: userName,
+                EMAIL: email,
+              },
             }),
           });
 

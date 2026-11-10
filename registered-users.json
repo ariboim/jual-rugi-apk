@@ -1,5 +1,17 @@
 [
   {
+    "id": "user-1794337348646",
+    "name": "Budi Santoso",
+    "email": "test.user.jualrugi@example.com",
+    "whatsapp": "6281284091414",
+    "phone": "6281284091414",
+    "role": "buyer",
+    "registeredAt": "2026-11-10T19:02:28.646Z",
+    "city": "Jakarta Selatan",
+    "status": "active",
+    "count": 0
+  },
+  {
     "id": "user-84091414",
     "name": "Ahmad Fauzi",
     "email": "ahmad.fauzi@gmail.com",
