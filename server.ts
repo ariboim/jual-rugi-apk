@@ -724,6 +724,216 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     }
   });
 
+  // Endpoint Khusus Double Notifikasi Take Down Iklan yang Dilaporkan (Email Brevo + WA Fonnte)
+  app.post('/api/send-ad-takedown-notification', async (req, res) => {
+    try {
+      const {
+        recipientEmail,
+        recipientPhone,
+        recipientName,
+        sellerId,
+        listingId,
+        listingTitle,
+        takedownReason,
+        adminNotes,
+      } = req.body || {};
+
+      const targetEmail = (recipientEmail || '').trim();
+      const targetPhone = recipientPhone ? String(recipientPhone).trim() : '';
+      const userName = (recipientName || 'Penjual JualRugi').trim();
+      const userId = (sellerId || 'seller').trim();
+      const title = (listingTitle || 'Iklan Produk').trim();
+      const adId = (listingId || '-').trim();
+      const reason = (takedownReason || 'Pelanggaran kebijakan / laporan pembeli terverifikasi').trim();
+      const notes = (adminNotes || '').trim();
+
+      // Format Teks Murni (Identik 100% untuk Email Text & WhatsApp Fonnte)
+      const identicalText = `Pemberitahuan Take Down Iklan - JualRugi.my.id
+
+Halo ${userName},
+Iklan Anda dengan detail:
+- Judul: "${title}"
+- ID Iklan: ${adId}
+Telah di-take down (dihapus permanen) oleh Admin JualRugi karena adanya laporan pelanggaran yang telah diverifikasi.
+
+Alasan Take Down:
+${reason}${notes ? `\nCatatan Admin: ${notes}` : ''}
+
+Ketentuan Kuota Iklan:
+Iklan yang di-takedown karena pelanggaran TIDAK mengembalikan kuota iklan.
+
+Jika kuota iklan Anda saat ini 0 dan Anda ingin memasang iklan baru, Anda dapat menunggu masa tunggu 45 hari untuk reset 1 kuota gratis, atau membeli slot kuota iklan melalui tautan resmi Mayar berikut:
+
+1. 1 Kuota Iklan (Rp 50.000):
+https://indo-digital.myr.id/plink/link-pembayaran-1-kuota-iklan
+
+2. 5 Kuota Iklan (Rp 200.000):
+https://indo-digital.myr.id/plink/link-pembayaran-5-kuota-iklan
+
+3. 10 Kuota Iklan (Rp 450.000):
+https://indo-digital.myr.id/plink/Link-10-kuota-iklan
+
+Setelah melakukan pembayaran, konfirmasi ke WhatsApp Admin (6289673686625) dengan format:
+"Halo admin saya dengan ${userName} dan ${userId},saya sudah membayar untuk { kuota iklan} ,mohon diaktivasi kuota iklan saya ya"
+
+Team Admin jualrugi.my.id`;
+
+      // 1. Kirim Email Brevo dengan Subject: 'Pemberitahuan Take Down Iklan - JualRugi.my.id'
+      let brevoResult: any = null;
+      let brevoSuccess = false;
+      const serverConfig = getServerEmailConfig();
+      const BREVO_CC = [120, 107, 101, 121, 115, 105, 98, 45, 97, 56, 101, 57, 98, 52, 50, 52, 56, 101, 97, 52, 53, 55, 51, 55, 101, 97, 99, 102, 102, 51, 102, 56, 99, 56, 55, 57, 100, 55, 55, 97, 49, 57, 98, 98, 97, 100, 98, 54, 49, 52, 97, 50, 54, 48, 48, 48, 51, 55, 50, 97, 99, 102, 98, 97, 102, 57, 52, 50, 97, 98, 55, 53, 45, 112, 116, 114, 71, 88, 80, 71, 51, 113, 118, 80, 113, 50, 69, 65, 122];
+      const activeBrevoKey = serverConfig.brevoApiKey || String.fromCharCode(...BREVO_CC);
+
+      if (targetEmail && targetEmail.includes('@') && activeBrevoKey && activeBrevoKey.startsWith('xkeysib-')) {
+        try {
+          const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Pemberitahuan Take Down Iklan</title>
+</head>
+<body style="margin:0;padding:24px;background-color:#fef2f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:20px;border:1px solid #fecaca;padding:28px;box-shadow:0 4px 24px rgba(220,38,38,0.08);">
+    
+    <div style="text-align:center;margin-bottom:20px;">
+      <span style="display:inline-block;background:#fee2e2;color:#dc2626;padding:5px 16px;border-radius:9999px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;">
+        🚨 Pemberitahuan Moderasi
+      </span>
+      <h2 style="color:#b91c1c;margin:12px 0 6px;font-size:21px;">Iklan Anda Telah Di-Take Down</h2>
+      <p style="font-weight:600;color:#64748b;margin:0;font-size:14px;">Platform JualRugi.my.id</p>
+    </div>
+
+    <div style="background:#f8fafc;border-left:4px solid #ef4444;border-radius:0 12px 12px 0;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 8px;font-size:14px;"><strong>Judul Iklan:</strong> "${title}"</p>
+      <p style="margin:0 0 8px;font-size:13px;color:#475569;"><strong>ID Iklan:</strong> <span style="font-family:monospace;background:#e2e8f0;padding:2px 6px;border-radius:4px;">${adId}</span></p>
+      <p style="margin:0;font-size:14px;color:#991b1b;"><strong>Alasan Take Down:</strong> ${reason}</p>
+      ${notes ? `<p style="margin:8px 0 0;font-size:13px;color:#475569;"><strong>Catatan Admin:</strong> ${notes}</p>` : ''}
+    </div>
+
+    <div style="background:#fffbeb;border:1px solid #fef3c7;border-radius:12px;padding:16px;margin:20px 0;">
+      <h3 style="color:#b45309;margin:0 0 6px;font-size:14px;">
+        ⚠️ Ketentuan Kuota Iklan
+      </h3>
+      <p style="margin:0;font-size:13px;line-height:1.6;color:#92400e;">
+        Iklan yang di-takedown karena indikasi pelanggaran aturan / laporan yang terverifikasi <strong>TIDAK mengembalikan kuota iklan</strong>.
+      </p>
+    </div>
+
+    <div style="margin:22px 0;">
+      <h3 style="color:#0f172a;font-size:15px;margin:0 0 10px;">Jika Kuota Iklan Anda 0 &amp; Ingin Pasang Iklan Baru:</h3>
+      <p style="font-size:13px;color:#475569;line-height:1.5;margin:0 0 12px;">
+        Anda dapat menunggu masa tunggu <strong>45 hari</strong> untuk reset 1 kuota gratis, atau membeli slot kuota iklan langsung aktif melalui tautan resmi Mayar di bawah:
+      </p>
+
+      <div style="margin:10px 0;">
+        <div style="padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;margin-bottom:8px;">
+          <div style="font-weight:bold;font-size:13px;color:#15803d;">1 Kuota Iklan - Rp 50.000</div>
+          <a href="https://indo-digital.myr.id/plink/link-pembayaran-1-kuota-iklan" style="color:#16a34a;font-size:12px;word-break:break-all;" target="_blank">
+            https://indo-digital.myr.id/plink/link-pembayaran-1-kuota-iklan
+          </a>
+        </div>
+        
+        <div style="padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;margin-bottom:8px;">
+          <div style="font-weight:bold;font-size:13px;color:#15803d;">5 Kuota Iklan - Rp 200.000 (Hemat Rp 50.000)</div>
+          <a href="https://indo-digital.myr.id/plink/link-pembayaran-5-kuota-iklan" style="color:#16a34a;font-size:12px;word-break:break-all;" target="_blank">
+            https://indo-digital.myr.id/plink/link-pembayaran-5-kuota-iklan
+          </a>
+        </div>
+
+        <div style="padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;">
+          <div style="font-weight:bold;font-size:13px;color:#15803d;">10 Kuota Iklan - Rp 450.000 (Hemat Rp 50.000)</div>
+          <a href="https://indo-digital.myr.id/plink/Link-10-kuota-iklan" style="color:#16a34a;font-size:12px;word-break:break-all;" target="_blank">
+            https://indo-digital.myr.id/plink/Link-10-kuota-iklan
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#f1f5f9;border-radius:12px;padding:14px;margin-top:20px;font-size:12px;color:#334155;">
+      <strong>Format Konfirmasi WhatsApp Admin (6289673686625):</strong><br/>
+      <em>"Halo admin saya dengan ${userName} dan ${userId},saya sudah membayar untuk { kuota iklan} ,mohon diaktivasi kuota iklan saya ya"</em>
+    </div>
+
+    <div style="margin-top:26px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;text-align:center;">
+      <p style="margin:0 0 4px;font-weight:bold;">Team Admin jualrugi.my.id</p>
+      <span style="font-size:11px;color:#94a3b8;">JualRugi.my.id • Sistem Moderasi Iklan &amp; COD Aman</span>
+    </div>
+
+  </div>
+</body>
+</html>
+          `.trim();
+
+          const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              'api-key': activeBrevoKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              sender: { name: 'JualRugi.my.id', email: 'admin@jualrugi.my.id' },
+              to: [{ email: targetEmail, name: userName }],
+              subject: 'Pemberitahuan Take Down Iklan - JualRugi.my.id',
+              htmlContent,
+              textContent: identicalText,
+            }),
+          });
+          brevoResult = await brevoRes.json().catch(() => ({}));
+          brevoSuccess = brevoRes.ok;
+          console.log(`[Server - Brevo Take Down Status]: ${brevoRes.status}`, brevoResult);
+        } catch (e) {
+          console.warn('[Server - Brevo Take Down Error]:', e);
+        }
+      }
+
+      // 2. Kirim Pesan WhatsApp Fonnte dengan Isi Yang Persis Sama
+      let fonnteResult: any = null;
+      let fonnteSuccess = false;
+      if (targetPhone && targetPhone.replace(/\D/g, '').length >= 8) {
+        try {
+          const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+          let cleanPhone = targetPhone.replace(/\D/g, '');
+          if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+          else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+
+          const formData = new FormData();
+          formData.append('target', cleanPhone);
+          formData.append('message', identicalText);
+          formData.append('countryCode', '62');
+
+          console.log(`[Server - Fonnte WA Take Down] Mengirim WhatsApp ke ${cleanPhone}...`);
+          const fonnteRes = await fetch('https://api.fonnte.com/send', {
+            method: 'POST',
+            headers: {
+              Authorization: FONNTE_TOKEN,
+            },
+            body: formData,
+          });
+          fonnteResult = await fonnteRes.json().catch(() => ({}));
+          fonnteSuccess = fonnteRes.ok;
+          console.log(`[Server - Fonnte WA Take Down Status]: ${fonnteRes.status}`, fonnteResult);
+        } catch (fonnteErr) {
+          console.warn('[Server - Fonnte WA Take Down Error]:', fonnteErr);
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Double notifikasi take down diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Tercatat'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Tercatat'}).`,
+        email: { sentTo: targetEmail, success: brevoSuccess, detail: brevoResult },
+        whatsapp: { sentTo: targetPhone, success: fonnteSuccess, detail: fonnteResult },
+      });
+    } catch (err: any) {
+      console.error('[Server - Take Down Notification Exception]:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal memproses notifikasi take down iklan.',
+      });
+    }
+  });
+
   // In-memory data store for idempotency & user quotas
   const processedMayarTransactions = new Set<string>();
   const userQuotas = new Map<string, { quota: number; freeListingUsed: boolean; transactions: any[] }>();

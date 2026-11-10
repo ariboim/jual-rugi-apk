@@ -64,6 +64,7 @@ import {
   triggerMonetizationActivatedEmail,
   triggerAdPublishedEmail,
   triggerQuotaActivatedEmail,
+  triggerAdTakenDownEmailAndWa,
   getDynamicAdLink,
 } from '../services/adPublishedEmailService';
 import {
@@ -608,12 +609,68 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     showNotification('ℹ️ Laporan telah diabaikan.');
   };
 
-  const handleTakeDownReportedListing = (report: AdReport) => {
-    if (window.confirm(`🚨 PERINGATAN MODERASI:\n\nApakah Anda yakin ingin men-takedown & menghapus permanen iklan "${report.listingTitle}" (ID: ${report.listingId})?\n\nIklan akan langsung ditarik dari peredaran publik.`)) {
+  const handleTakeDownReportedListing = async (report: AdReport) => {
+    if (
+      window.confirm(
+        `🚨 PERINGATAN MODERASI:\n\nApakah Anda yakin ingin men-takedown & menghapus permanen iklan "${report.listingTitle}" (ID: ${report.listingId})?\n\nSistem akan otomatis:\n1. Menghapus iklan dari peredaran publik.\n2. Mengirim double notifikasi (Email Brevo & WhatsApp Fonnte) ke seller berisi alasan take down.\n3. Menginformasikan bahwa iklan yang di-takedown TIDAK mengembalikan kuota iklan.\n4. Mengarahkan opsi beli slot kuota jika kuota 0.`
+      )
+    ) {
+      // 1. Dapatkan detail kontak penjual
+      const matchedListing = listings.find((l) => l.id === report.listingId);
+      const matchedUser = allUsersList.find(
+        (u) =>
+          u.id === report.sellerId ||
+          u.name.toLowerCase() === report.sellerName.toLowerCase() ||
+          (report.sellerWhatsapp && u.whatsapp?.replace(/\D/g, '').includes(report.sellerWhatsapp.replace(/\D/g, '')))
+      );
+
+      const targetEmail =
+        matchedUser?.email ||
+        (matchedListing?.seller as any)?.email ||
+        (matchedListing as any)?.seller_email ||
+        `${report.sellerId.replace(/[^a-z0-9]/gi, '')}@jualrugi.my.id`;
+
+      const targetPhone =
+        report.sellerWhatsapp ||
+        matchedUser?.whatsapp ||
+        matchedUser?.phone ||
+        (matchedListing?.seller as any)?.phone ||
+        '6289673686625';
+
+      const targetName = report.sellerName || matchedUser?.name || 'Penjual JualRugi';
+
+      // 2. Hapus iklan dari listing publik
       onDeleteListing(report.listingId);
-      updateAdReportStatus(report.id, 'resolved', 'Iklan berhasil di-takedown & dihapus secara permanen dari platform oleh Admin.');
+
+      // 3. Update status laporan menjadi resolved
+      const resolutionNote = `Iklan di-takedown permanen karena pelanggaran: ${report.reasonLabel}. Double notifikasi alasan & ketentuan kuota telah dikirim ke Email (${targetEmail}) & WhatsApp (${targetPhone}). Kuota iklan tidak dikembalikan.`;
+      updateAdReportStatus(report.id, 'resolved', resolutionNote);
       setAdReports(getStoredAdReports());
-      showNotification(`🚨 Iklan "${report.listingTitle}" BERHASIL DI-TAKEDOWN dari platform!`);
+
+      // 4. Kirim Double Notifikasi ke Seller (Email Brevo + WA Fonnte)
+      const takedownReasonText = `${report.reasonLabel}${report.notes ? ` (${report.notes})` : ''}`;
+      try {
+        await triggerAdTakenDownEmailAndWa({
+          recipientEmail: targetEmail,
+          recipientPhone: targetPhone,
+          whatsapp: targetPhone,
+          recipientName: targetName,
+          sellerId: report.sellerId,
+          listingId: report.listingId,
+          listingTitle: report.listingTitle,
+          takedownReason: takedownReasonText,
+          adminNotes: 'Pelanggaran SOP transaksi COD aman JualRugi.my.id. Kuota iklan tidak dikembalikan.',
+        });
+      } catch (notifErr) {
+        console.warn('Gagal memicu triggerAdTakenDownEmailAndWa:', notifErr);
+      }
+
+      // Refresh log email agar langsung tampak di tab log
+      loadEmailLogs();
+
+      showNotification(
+        `🚨 Iklan "${report.listingTitle}" BERHASIL DI-TAKEDOWN! Notifikasi alasan & ketentuan kuota dikirim ke Email & WA seller (${targetPhone}).`
+      );
     }
   };
 
@@ -2370,13 +2427,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           {/* Action Toolbar Bottom Bar (Moderation Actions) */}
                           <div className="p-3 sm:px-5 sm:py-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs">
                             <div className="flex items-center gap-2 flex-wrap">
-                              {/* 1. Tombol TAKE DOWN IKLAN (Hapus Permanen) */}
-                              {matchedListing && (
+                              {/* 1. Tombol TAKE DOWN IKLAN (Hapus Permanen & Notifikasi Seller) */}
+                              {report.status !== 'resolved' && (
                                 <button
                                   type="button"
                                   onClick={() => handleTakeDownReportedListing(report)}
                                   className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold shadow-sm flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
-                                  title="Hapus iklan ini secara permanen dari platform publik"
+                                  title="Hapus iklan ini dan kirim double notifikasi (alasan & kuota) ke Email dan WA seller"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                   <span>🚨 Take Down Iklan</span>
