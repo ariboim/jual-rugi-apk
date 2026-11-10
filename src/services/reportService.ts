@@ -85,27 +85,75 @@ export interface AdReport {
 const STORAGE_KEY_REPORTS = 'jualrugi_ad_reports';
 
 // Contoh data laporan awal agar Admin Dashboard langsung siap diverifikasi
-const INITIAL_DEMO_REPORTS: AdReport[] = [
+export const INITIAL_DEMO_REPORTS: AdReport[] = [
   {
-    id: 'rep-demo-001',
-    listingId: 'bu-003',
-    listingTitle: 'MacBook Air M1 2020 8/256GB Space Grey',
-    listingPrice: 7200000,
-    listingImageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80',
+    id: 'rep-sim-001',
+    listingId: 'bu-001',
+    listingTitle: 'iPhone 14 Pro 128GB Deep Purple - BU Beli Susu Anak',
+    listingPrice: 8900000,
+    listingImageUrl: 'https://images.unsplash.com/photo-1678685888221-cda773a3dcdb?auto=format&fit=crop&w=1000&q=80',
     listingLocation: 'Jakarta Selatan',
     sellerId: 'seller-agus',
-    sellerName: 'Agus Setiawan',
-    sellerWhatsapp: '081288991234',
-    reporterName: 'Budi Pembeli',
-    reporterContact: '081299887766',
+    sellerName: 'Agus Setiawan (Seller)',
+    sellerWhatsapp: '6289673686625',
+    reporterName: 'Budi Pembeli (Pelapor)',
+    reporterContact: '6281299887766',
     reporterUserId: 'buyer-rian',
     reason: 'dp_scam',
     reasonLabel: 'Penipuan / Meminta Transfer DP sebelum COD',
-    notes: 'Penjual meminta transfer uang tanda jadi Rp 300.000 dengan alasan banyak yang antri, padahal aturan platform dilarang keras transfer DP.',
+    notes: 'Penjual memaksa saya transfer uang tanda jadi (DP) Rp 300.000 dengan alasan barang banyak yang minat, padahal melanggar SOP JualRugi yang mewajibkan COD tanpa DP.',
     status: 'pending',
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
   },
 ];
+
+/**
+ * Membuat simulasi 1 laporan baru untuk keperluan uji coba visualisasi admin
+ */
+export function generateDemoReport(customListing?: {
+  id: string;
+  title: string;
+  price: number;
+  imageUrl?: string;
+  location?: string;
+  sellerId?: string;
+  sellerName?: string;
+  sellerWhatsapp?: string;
+}): AdReport {
+  const demo: AdReport = {
+    id: `rep-sim-${Date.now().toString().slice(-4)}`,
+    listingId: customListing?.id || 'bu-001',
+    listingTitle: customListing?.title || 'iPhone 14 Pro 128GB Deep Purple - BU Beli Susu Anak',
+    listingPrice: customListing?.price || 8900000,
+    listingImageUrl:
+      customListing?.imageUrl ||
+      'https://images.unsplash.com/photo-1678685888221-cda773a3dcdb?auto=format&fit=crop&w=1000&q=80',
+    listingLocation: customListing?.location || 'Jakarta Selatan',
+    sellerId: customListing?.sellerId || 'seller-agus',
+    sellerName: customListing?.sellerName || 'Agus Setiawan (Seller)',
+    sellerWhatsapp: customListing?.sellerWhatsapp || '6289673686625',
+    reporterName: 'Budi Santoso (Pembeli)',
+    reporterContact: '6281299887766',
+    reporterUserId: 'buyer-budi',
+    reason: 'dp_scam',
+    reasonLabel: 'Penipuan / Meminta Transfer DP sebelum COD',
+    notes:
+      'Penjual memaksa transfer uang tanda jadi (DP) Rp 300.000 via transfer bank sebelum COD dengan dalih banyak calon pembeli yang antre. Melanggar aturan COD tanpa DP.',
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+
+  const current = getStoredAdReports();
+  // Pastikan simulasi ini berada di paling atas
+  const updated = [demo, ...current.filter((r) => r.id !== demo.id)];
+  try {
+    localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('jualrugi_new_ad_report', { detail: demo }));
+    }
+  } catch {}
+  return demo;
+}
 
 /**
  * Mengambil seluruh daftar laporan dari penyimpanan lokal
@@ -116,7 +164,22 @@ export function getStoredAdReports(): AdReport[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        // Upgrade data demo lama (bu-003) ke listing bu-001 yang aktif
+        let needsSave = false;
+        const upgraded = parsed.map((item) => {
+          if ((item.id === 'rep-demo-001' && item.listingId === 'bu-003') || item.id === 'rep-sim-001') {
+            needsSave = true;
+            return {
+              ...INITIAL_DEMO_REPORTS[0],
+              id: item.id || INITIAL_DEMO_REPORTS[0].id,
+            };
+          }
+          return item;
+        });
+        if (needsSave) {
+          localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(upgraded));
+        }
+        return upgraded;
       }
     }
   } catch (e) {

@@ -47,6 +47,7 @@ import {
   updateAdReportStatus,
   deleteAdReport,
   getPendingReportCount,
+  generateDemoReport,
 } from '../services/reportService';
 import {
   RegisteredUser,
@@ -637,6 +638,28 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       setAdReports(getStoredAdReports());
       showNotification('🗑️ Laporan berhasil dihapus dari arsip.');
     }
+  };
+
+  // Handler Uji Coba: Muat Simulasi 1 Laporan Iklan (Live Demo)
+  const handleTriggerDemoReport = () => {
+    const targetListing = listings.find((l) => l.id === 'bu-001') || listings[0];
+    const newDemo = generateDemoReport(
+      targetListing
+        ? {
+            id: targetListing.id,
+            title: targetListing.title,
+            price: targetListing.sellingPrice,
+            imageUrl: targetListing.imageUrl,
+            location: targetListing.location,
+            sellerId: targetListing.seller?.id || 'seller-agus',
+            sellerName: targetListing.seller?.name || 'Agus Setiawan (Seller)',
+            sellerWhatsapp: (targetListing.seller?.phoneMasked || '6289673686625').replace(/\D/g, '') || '6289673686625',
+          }
+        : undefined
+    );
+    setAdReports(getStoredAdReports());
+    setReportFilter('pending');
+    showNotification(`⚡ Simulasi 1 laporan iklan untuk "${newDemo.listingTitle}" berhasil dimuat! Anda dapat langsung menguji Take Down, Blokir Penjual, Chat WA, dll.`);
   };
 
   // Action: Toggle Sundul with Automatic Email Notification
@@ -1354,6 +1377,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     >
                       Diabaikan ({adReports.filter((r) => r.status === 'dismissed').length})
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTriggerDemoReport}
+                      className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs shadow-xs active:scale-95 transition flex items-center gap-1 cursor-pointer shrink-0 ml-1"
+                      title="Klik untuk memuat 1 simulasi iklan terlapor untuk diuji coba langsung"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-white" />
+                      <span>+ Simulasi Laporan</span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -2053,90 +2086,87 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             {/* TAB 5: LAPORAN IKLAN OLEH PEMBELI (PUSAT MODERASI ANTI-FRAUD) */}
             {activeTab === 'reports' && (
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 min-h-0 bg-slate-50/50">
-                {/* Header Banner Moderasi */}
-                <div className="p-5 rounded-3xl bg-gradient-to-br from-rose-600 via-rose-700 to-red-800 text-white shadow-lg border-2 border-rose-400">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-start gap-3.5">
-                      <div className="w-12 h-12 rounded-2xl bg-white text-rose-700 flex items-center justify-center shrink-0 shadow-md">
-                        <ShieldAlert className="w-7 h-7 text-rose-700" />
+              <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 min-h-0 bg-slate-50/50">
+                {/* Header Banner Moderasi (Compact & Tactile) */}
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-rose-600 via-rose-700 to-red-800 text-white shadow-md border border-rose-400">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white text-rose-700 flex items-center justify-center shrink-0 shadow-xs">
+                        <ShieldAlert className="w-5 h-5 text-rose-700" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="text-lg font-black text-white">
-                            PUSAT MODERASI &amp; PELAPORAN IKLAN (ANTI-FRAUD)
+                          <h4 className="text-sm sm:text-base font-black text-white">
+                            MODERASI &amp; PELAPORAN IKLAN ANTI-FRAUD
                           </h4>
                           {pendingReportCount > 0 ? (
-                            <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-amber-400 text-amber-950 flex items-center gap-1 shadow-xs animate-pulse">
-                              <AlertTriangle className="w-3.5 h-3.5 text-amber-950" />
-                              <span>{pendingReportCount} Laporan Butuh Tindakan</span>
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-300 text-amber-950 flex items-center gap-1 shadow-2xs animate-pulse">
+                              <AlertTriangle className="w-3 h-3 text-amber-950" />
+                              <span>{pendingReportCount} Butuh Tindakan</span>
                             </span>
                           ) : (
-                            <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-400 text-emerald-950 flex items-center gap-1 shadow-xs">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-950" />
-                              <span>Antrean Bersih</span>
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-400 text-emerald-950 flex items-center gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-950" />
+                              <span>Bersih</span>
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-white/95 mt-1 leading-relaxed">
-                          Menangani pelaporan pembeli atas indikasi <strong>Penipuan Transfer DP sebelum COD</strong>, <strong>Barang Palsu/KW</strong>, atau <strong>Harga Jebakan</strong>. Anda dapat melakukan Take Down iklan atau Memblokir penjual secara instan.
+                        <p className="text-[11px] text-white/90 mt-0.5 line-clamp-1 sm:line-clamp-none">
+                          Kelola laporan pembeli atas indikasi penipuan transfer DP, barang palsu, atau seller curang.
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-start sm:self-center shrink-0 bg-white/10 backdrop-blur-xs p-2 rounded-2xl border border-white/20 text-xs">
-                      <div className="px-3 py-1.5 rounded-xl bg-white text-rose-900 font-black text-center shadow-xs">
-                        <div className="text-base font-black leading-none">{adReports.length}</div>
-                        <div className="text-[9px] text-rose-700 uppercase mt-0.5">Total</div>
-                      </div>
-                      <div className="px-3 py-1.5 rounded-xl bg-rose-500/80 text-white font-black text-center">
-                        <div className="text-base font-black leading-none">{pendingReportCount}</div>
-                        <div className="text-[9px] uppercase mt-0.5 text-rose-100">Pending</div>
-                      </div>
-                      <div className="px-3 py-1.5 rounded-xl bg-emerald-500/80 text-white font-black text-center">
-                        <div className="text-base font-black leading-none">
-                          {adReports.filter((r) => r.status === 'resolved').length}
-                        </div>
-                        <div className="text-[9px] uppercase mt-0.5 text-emerald-100">Tuntas</div>
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleTriggerDemoReport}
+                      className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-amber-950 font-black text-xs shadow-md active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 self-stretch sm:self-center"
+                      title="Klik untuk memunculkan 1 data simulasi laporan iklan untuk uji coba tombol aksi"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-950" />
+                      <span>⚡ Simulasi 1 Iklan Terlaporkan</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* SOP Penanganan Fraud Callout */}
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-xs flex items-start gap-3 shadow-2xs">
-                  <AlertOctagon className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="font-black text-amber-900">
-                      SOP Perlindungan Pembeli JualRugi.my.id:
-                    </p>
-                    <p className="text-amber-900/90 leading-relaxed">
-                      Aturan baku platform melarang keras transfer DP/ongkir dalam bentuk apapun sebelum bertemu langsung (COD). Jika penjual terbukti memaksa transfer uang tanda jadi atau mengarahkan ke link phishing, <strong>segera klik tombol Take Down Iklan dan Blokir Penjual</strong> untuk melindungi pembeli lainnya.
-                    </p>
+                {/* SOP Penanganan Fraud Callout Singkat */}
+                <div className="px-3.5 py-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <AlertOctagon className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span className="text-[11px] font-semibold text-amber-900 leading-tight">
+                      <strong>SOP COD 100% Aman:</strong> Dilarang keras transfer DP sebelum COD. Jika penjual memaksa transfer DP, segera klik tombol <strong>Take Down Iklan</strong> dan <strong>Blokir Penjual</strong>.
+                    </span>
                   </div>
                 </div>
 
                 {/* Daftar Kartu Laporan Iklan */}
                 {filteredReportsList.length === 0 ? (
-                  <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-3">
-                    <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center">
-                      <CheckCircle2 className="w-8 h-8" />
+                  <div className="p-8 sm:p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center">
+                      <CheckCircle2 className="w-6 h-6" />
                     </div>
-                    <h5 className="font-black text-slate-800 text-base">Tidak Ada Laporan Ditemukan</h5>
+                    <h5 className="font-black text-slate-800 text-sm sm:text-base">Belum Ada Laporan Aktif</h5>
                     <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
                       {reportSearchQuery
                         ? `Tidak ada laporan yang cocok dengan kata kunci "${reportSearchQuery}".`
-                        : reportFilter === 'pending'
-                        ? 'Semua laporan telah selesai ditindaklanjuti. Platform saat ini dalam status aman!'
-                        : 'Belum ada riwayat laporan iklan pada kategori filter ini.'}
+                        : 'Semua laporan pembeli telah selesai ditindaklanjuti.'}
                     </p>
+                    <button
+                      type="button"
+                      onClick={handleTriggerDemoReport}
+                      className="mt-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md transition active:scale-95 flex items-center gap-2 mx-auto cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>Muat Simulasi 1 Iklan Terlaporkan</span>
+                    </button>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3.5">
                     {filteredReportsList.map((report) => {
                       const matchedListing = listings.find((l) => l.id === report.listingId);
                       const isSellerBlocked = blockedUserIds.includes(report.sellerId);
                       const isPending = report.status === 'pending' || report.status === 'investigating';
+                      const isDemoSimulation = report.id.startsWith('rep-sim') || report.id === 'rep-demo-001';
 
                       // Format WhatsApp Seller dan Pelapor
                       const sellerCleanPhone = (report.sellerWhatsapp || '').replace(/\D/g, '');
@@ -2157,7 +2187,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       return (
                         <div
                           key={report.id}
-                          className={`bg-white rounded-3xl border transition-all shadow-xs overflow-hidden ${
+                          className={`bg-white rounded-2xl sm:rounded-3xl border transition-all shadow-sm overflow-hidden ${
                             isPending
                               ? 'border-rose-400 ring-2 ring-rose-200'
                               : report.status === 'resolved'
@@ -2166,15 +2196,23 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           }`}
                         >
                           {/* Top Card Bar: ID, Tanggal, Severity & Status */}
-                          <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-2 text-xs border-b ${
+                          <div className={`px-3.5 sm:px-4 py-2.5 flex items-center justify-between flex-wrap gap-2 text-xs border-b ${
                             isPending ? 'bg-rose-50/80 border-rose-200' : 'bg-slate-50 border-slate-200'
                           }`}>
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-mono font-bold text-slate-600 bg-white px-2 py-0.5 rounded-lg border border-slate-200 text-[11px]">
                                 {report.id}
                               </span>
+
+                              {isDemoSimulation && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-300 text-amber-950 font-black text-[10px] flex items-center gap-1 shadow-2xs">
+                                  <Sparkles className="w-3 h-3 text-amber-950" />
+                                  <span>SIMULASI UJI COBA</span>
+                                </span>
+                              )}
+
                               <span className="text-[11px] text-slate-500 font-medium">
-                                Dilaporkan: {formatIndoDate(report.createdAt)}
+                                {formatIndoDate(report.createdAt)}
                               </span>
 
                               {/* Badge Alasan / Severity */}
