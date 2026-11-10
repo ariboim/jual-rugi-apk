@@ -16,7 +16,6 @@ import {
   LogIn,
   Database,
   FileText,
-  Mail,
   Calendar,
   Pencil,
   Zap,
@@ -174,35 +173,6 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         </div>
       </div>
 
-
-      {/* Kartu Surat Sambutan & Welcome Email Zapier */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 p-4 rounded-3xl shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-3 text-center sm:text-left">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-            <Mail className="w-5 h-5" />
-          </div>
-          <div>
-            <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 flex items-center gap-2 justify-center sm:justify-start">
-              <span>Surat Selamat Datang &amp; Welcome Email</span>
-              <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black">
-                Aktif
-              </span>
-            </h4>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Cek panduan transaksi aman dan kelola integrasi otomatisasi email Zapier Anda.
-            </p>
-          </div>
-        </div>
-        {onOpenWelcomeEmailSetup && (
-          <button
-            type="button"
-            onClick={onOpenWelcomeEmailSetup}
-            className="w-full sm:w-auto shrink-0 py-2 px-3.5 rounded-xl bg-white hover:bg-amber-100/80 border border-amber-300 text-amber-950 font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-2xs"
-          >
-            <span>Buka Surat / Setup Zapier</span>
-          </button>
-        )}
-      </div>
 
       {/* Banner Unduh Aplikasi Android APK Langsung */}
       <div className="bg-gradient-to-r from-sky-600 to-blue-700 text-white p-4 sm:p-5 rounded-3xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
