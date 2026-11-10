@@ -15,6 +15,8 @@ import {
   AlertCircle,
   Pencil,
   ArrowUp,
+  Flag,
+  ShieldAlert,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { getListingPhotos } from '../data/initialData';
@@ -25,6 +27,8 @@ import {
   getSellerWhatsAppNumber,
   buildSellerWhatsAppChatUrl,
 } from '../services/userService';
+import { hasUserReportedListing } from '../services/reportService';
+import { ReportListingModal } from './ReportListingModal';
 
 export const WhatsAppIcon: React.FC<{ className?: string }> = ({
   className = 'w-4 h-4',
@@ -71,6 +75,15 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   onUpgradeMayar,
 }) => {
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [hasReported, setHasReported] = useState(() => {
+    return hasUserReportedListing(listing.id, currentUser?.id || currentUser?.email);
+  });
+
+  // Sinkronkan status pelaporan jika pengguna atau listing berubah
+  useEffect(() => {
+    setHasReported(hasUserReportedListing(listing.id, currentUser?.id || currentUser?.email));
+  }, [listing.id, currentUser]);
 
   // Auto increment counter view saat halaman detail listing dibuka pengunjung
   useEffect(() => {
@@ -221,6 +234,23 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
               >
                 <Pencil className="w-3.5 h-3.5 text-white" />
                 <span className="text-[11px]">Edit Iklan</span>
+              </button>
+            )}
+
+            {/* Laporkan Iklan Button (Header Shortcut) */}
+            {!isOwner && (
+              <button
+                type="button"
+                onClick={() => setIsReportModalOpen(true)}
+                className={`p-2 rounded-full cursor-pointer transition-all flex items-center justify-center ${
+                  hasReported
+                    ? 'bg-rose-100 text-rose-700'
+                    : 'bg-rose-50 hover:bg-rose-100 text-rose-600'
+                }`}
+                title={hasReported ? 'Iklan ini telah Anda laporkan' : 'Laporkan Iklan (Curang / Minta DP)'}
+                aria-label="Laporkan Iklan"
+              >
+                <Flag className="w-4 h-4 text-rose-600" />
               </button>
             )}
 
@@ -627,6 +657,34 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
               3. Bayar tunai / QRIS saat barang sudah di tangan Anda. Dilarang transfer DP!
             </p>
           </div>
+
+          {/* Laporkan Iklan Curang / Penipuan Action Box */}
+          {!isOwner && (
+            <div className="p-3.5 rounded-2xl bg-white border border-rose-200 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                  <ShieldAlert className="w-4 h-4 text-rose-600" />
+                </div>
+                <div className="text-xs">
+                  <span className="font-bold text-slate-800 block">Menemukan indikasi curang atau minta DP?</span>
+                  <span className="text-[11px] text-slate-500">Laporkan langsung ke Admin agar iklan ini segera ditindaklanjuti.</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReportModalOpen(true)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 shadow-2xs active:scale-95 ${
+                  hasReported
+                    ? 'bg-rose-100 text-rose-800 border-rose-300'
+                    : 'bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border-rose-300'
+                }`}
+                title="Laporkan iklan ini ke Admin JualRugi.my.id"
+              >
+                <Flag className="w-3.5 h-3.5 text-rose-600" />
+                <span>{hasReported ? 'Iklan Telah Dilaporkan' : 'Laporkan Iklan'}</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Sticky Action Footer - WhatsApp Share Deep Link & Chat Penjual */}
@@ -710,6 +768,17 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Modal Pelaporan Iklan oleh Pembeli */}
+      <ReportListingModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        listing={listing}
+        currentUser={currentUser}
+        onReportSubmitted={() => {
+          setHasReported(true);
+        }}
+      />
     </div>
   );
 };

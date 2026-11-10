@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Search, PlusCircle, MessageSquare, User } from 'lucide-react';
+import { Home, Search, PlusCircle, User } from 'lucide-react';
 
 export type TabType = 'home' | 'search' | 'post' | 'chat' | 'account';
 
@@ -13,15 +13,14 @@ interface BottomNavProps {
 export const BottomNav: React.FC<BottomNavProps> = ({
   activeTab,
   onSelectTab,
-  unreadCount = 0,
 }) => {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-lg border-t border-sky-100 pb-[env(safe-area-inset-bottom,0px)] shadow-lg">
-      <div className="max-w-lg mx-auto flex items-center justify-around px-2 py-1.5">
+      <div className="max-w-lg mx-auto flex items-center justify-around px-3 py-1.5">
         {/* Beranda */}
         <button
           onClick={() => onSelectTab('home')}
-          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition cursor-pointer ${
             activeTab === 'home'
               ? 'text-sky-600 font-black'
               : 'text-slate-400 hover:text-sky-600'
@@ -34,7 +33,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         {/* Cari & Filter */}
         <button
           onClick={() => onSelectTab('search')}
-          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition cursor-pointer ${
             activeTab === 'search'
               ? 'text-sky-600 font-black'
               : 'text-slate-400 hover:text-sky-600'
@@ -57,32 +56,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           </span>
         </button>
 
-        {/* Chat P2P */}
-        <button
-          onClick={() => onSelectTab('chat')}
-          className={`relative flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition cursor-pointer ${
-            activeTab === 'chat'
-              ? 'text-sky-600 font-black'
-              : 'text-slate-400 hover:text-sky-600'
-          }`}
-        >
-          <div className="relative">
-            <MessageSquare
-              className={`w-5 h-5 ${activeTab === 'chat' ? 'stroke-[2.5]' : ''}`}
-            />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1.5 w-4 h-4 rounded-full bg-sky-500 text-white text-[9px] font-black flex items-center justify-center ring-2 ring-white">
-                {unreadCount}
-              </span>
-            )}
-          </div>
-          <span className="text-[10px] mt-0.5">Chat COD</span>
-        </button>
-
         {/* Akun & Dashboard Penjual */}
         <button
           onClick={() => onSelectTab('account')}
-          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition cursor-pointer ${
             activeTab === 'account'
               ? 'text-sky-600 font-black'
               : 'text-slate-400 hover:text-sky-600'

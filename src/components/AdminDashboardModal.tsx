@@ -34,9 +34,20 @@ import {
   FileText,
   Printer,
   PhoneCall,
+  Flag,
+  ShieldAlert,
+  AlertOctagon,
+  MapPin,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { WA_ADMIN_PHONE } from '../data/mayarConfig';
+import {
+  AdReport,
+  getStoredAdReports,
+  updateAdReportStatus,
+  deleteAdReport,
+  getPendingReportCount,
+} from '../services/reportService';
 import {
   RegisteredUser,
   getStoredUsers,
@@ -100,11 +111,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [loginError, setLoginError] = useState('');
 
   // Tab & Filters
-  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'emailLogs' | 'brevoConfig'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'emailLogs' | 'brevoConfig' | 'reports'>('listings');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'sundul' | 'superbu'>('all');
   const [userFilter, setUserFilter] = useState<'all' | 'blocked' | 'active'>('all');
   const [userSearchQuery, setUserSearchQuery] = useState('');
+
+  // Ad Reports State (Laporan Iklan Curang / Melanggar dari Pembeli)
+  const [adReports, setAdReports] = useState<AdReport[]>(() => getStoredAdReports());
+  const [reportFilter, setReportFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all');
+  const [reportSearchQuery, setReportSearchQuery] = useState('');
 
   // Persistent Registered Users State (Disinkronkan dari localStorage & Server)
   const [persistentUsers, setPersistentUsers] = useState<RegisteredUser[]>(() => getStoredUsers());
@@ -155,6 +171,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     if (isOpen) {
       loadEmailLogs();
       setPersistentUsers(getStoredUsers());
+      setAdReports(getStoredAdReports());
 
       // Sinkronisasi data pengguna dari server & Supabase
       syncUsersFromServer().then((latest) => {
@@ -172,20 +189,34 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   }, [isOpen, activeTab]);
 
-  // Listener event pendaftaran user baru agar langsung muncul seketika di dashboard admin
+  // Listener event pendaftaran user baru & laporan iklan baru
   useEffect(() => {
     const handleUserRegistered = () => {
       setPersistentUsers(getStoredUsers());
+    };
+    const handleNewReport = () => {
+      setAdReports(getStoredAdReports());
+      showNotification('🚨 Laporan iklan baru masuk dari pembeli!');
+    };
+    const handleReportUpdated = () => {
+      setAdReports(getStoredAdReports());
     };
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'jualrugi_registered_users') {
         setPersistentUsers(getStoredUsers());
       }
+      if (e.key === 'jualrugi_ad_reports') {
+        setAdReports(getStoredAdReports());
+      }
     };
     window.addEventListener('jualrugi_user_registered', handleUserRegistered);
+    window.addEventListener('jualrugi_new_ad_report', handleNewReport);
+    window.addEventListener('jualrugi_ad_report_updated', handleReportUpdated);
     window.addEventListener('storage', handleStorageChange);
     return () => {
       window.removeEventListener('jualrugi_user_registered', handleUserRegistered);
+      window.removeEventListener('jualrugi_new_ad_report', handleNewReport);
+      window.removeEventListener('jualrugi_ad_report_updated', handleReportUpdated);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
@@ -531,6 +562,83 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     });
   }, [allUsersList, blockedUserIds, userFilter, userSearchQuery]);
 
+  // Perhitungan Jumlah Laporan yang Perlu Ditindaklanjuti
+  const pendingReportCount = useMemo(() => {
+    return adReports.filter((r) => r.status === 'pending' || r.status === 'investigating').length;
+  }, [adReports]);
+
+  // Filtered Ad Reports based on reportFilter and reportSearchQuery
+  const filteredReportsList = useMemo(() => {
+    return adReports.filter((rep) => {
+      if (reportFilter === 'pending') {
+        if (rep.status !== 'pending' && rep.status !== 'investigating') return false;
+      } else if (reportFilter === 'resolved') {
+        if (rep.status !== 'resolved') return false;
+      } else if (reportFilter === 'dismissed') {
+        if (rep.status !== 'dismissed') return false;
+      }
+
+      if (reportSearchQuery.trim()) {
+        const q = reportSearchQuery.toLowerCase().trim();
+        const matchTitle = (rep.listingTitle || '').toLowerCase().includes(q);
+        const matchReporter = (rep.reporterName || '').toLowerCase().includes(q) || (rep.reporterContact || '').toLowerCase().includes(q);
+        const matchSeller = (rep.sellerName || '').toLowerCase().includes(q) || (rep.sellerWhatsapp || '').toLowerCase().includes(q);
+        const matchReason = (rep.reasonLabel || '').toLowerCase().includes(q) || (rep.notes || '').toLowerCase().includes(q);
+        const matchId = (rep.id || '').toLowerCase().includes(q) || (rep.listingId || '').toLowerCase().includes(q);
+        if (!matchTitle && !matchReporter && !matchSeller && !matchReason && !matchId) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [adReports, reportFilter, reportSearchQuery]);
+
+  // Handlers Tindakan Moderasi Laporan Iklan oleh Admin
+  const handleResolveReport = (reportId: string, notes?: string) => {
+    updateAdReportStatus(reportId, 'resolved', notes || 'Telah ditindaklanjuti dan diverifikasi tuntas oleh Admin.');
+    setAdReports(getStoredAdReports());
+    showNotification('✅ Laporan iklan ditandai sebagai TUNTAS/SELESAI.');
+  };
+
+  const handleDismissReport = (reportId: string) => {
+    updateAdReportStatus(reportId, 'dismissed', 'Laporan tidak ditemukan indikasi pelanggaran / diabaikan.');
+    setAdReports(getStoredAdReports());
+    showNotification('ℹ️ Laporan telah diabaikan.');
+  };
+
+  const handleTakeDownReportedListing = (report: AdReport) => {
+    if (window.confirm(`🚨 PERINGATAN MODERASI:\n\nApakah Anda yakin ingin men-takedown & menghapus permanen iklan "${report.listingTitle}" (ID: ${report.listingId})?\n\nIklan akan langsung ditarik dari peredaran publik.`)) {
+      onDeleteListing(report.listingId);
+      updateAdReportStatus(report.id, 'resolved', 'Iklan berhasil di-takedown & dihapus secara permanen dari platform oleh Admin.');
+      setAdReports(getStoredAdReports());
+      showNotification(`🚨 Iklan "${report.listingTitle}" BERHASIL DI-TAKEDOWN dari platform!`);
+    }
+  };
+
+  const handleBlockReportedSeller = (report: AdReport) => {
+    const isCurrentlyBlocked = blockedUserIds.includes(report.sellerId);
+    if (isCurrentlyBlocked) {
+      onToggleBlockUser(report.sellerId, true);
+      showNotification(`✅ Blokir akun ${report.sellerName} telah dibuka.`);
+    } else {
+      if (window.confirm(`⛔ KONFIRMASI PEMBLOKIRAN:\n\nApakah Anda yakin ingin MEMBLOKIR penjual "${report.sellerName}" (ID: ${report.sellerId})?\n\nPenjual ini tidak akan bisa login, membalas chat, atau memasang iklan baru.`)) {
+        onToggleBlockUser(report.sellerId, false);
+        updateAdReportStatus(report.id, 'investigating', `Penjual ${report.sellerName} telah diblokir/dicekal oleh Admin.`);
+        setAdReports(getStoredAdReports());
+        showNotification(`⛔ Akun penjual ${report.sellerName} BERHASIL DIBLOKIR!`);
+      }
+    }
+  };
+
+  const handleDeleteReportArchive = (reportId: string) => {
+    if (window.confirm('Hapus riwayat laporan ini dari arsip dashboard?')) {
+      deleteAdReport(reportId);
+      setAdReports(getStoredAdReports());
+      showNotification('🗑️ Laporan berhasil dihapus dari arsip.');
+    }
+  };
+
   // Action: Toggle Sundul with Automatic Email Notification
   const handleToggleSundulWithEmail = async (listing: Listing) => {
     const currentStatus = !!listing.sundulAt;
@@ -735,8 +843,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         ) : (
           /* DASHBOARD VIEW */
           <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            {/* Quick Metrics Bar - 4 Fully Clickable Interactive Buttons */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 sm:p-4 bg-slate-50 border-b border-slate-200 text-xs shrink-0">
+            {/* Quick Metrics Bar - 5 Fully Clickable Interactive Buttons */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-2.5 p-3 sm:p-4 bg-slate-50 border-b border-slate-200 text-xs shrink-0">
               {/* Metric 1: Total Iklan */}
               <button
                 type="button"
@@ -860,7 +968,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <span className={`text-[10px] font-black flex items-center gap-1 ${
                     activeTab === 'users' && userFilter === 'blocked' ? 'text-rose-100' : 'text-rose-600'
                   }`}>
-                    <UserX className="w-3 h-3" /> PENGGUNA DIBLOKIR
+                    <UserX className="w-3 h-3" /> DIBLOKIR
                   </span>
                 </div>
                 <div className="flex items-baseline justify-between mt-1.5">
@@ -873,6 +981,54 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     activeTab === 'users' && userFilter === 'blocked' ? 'text-rose-100' : 'text-rose-600'
                   }`}>
                     Kelola &rarr;
+                  </span>
+                </div>
+              </button>
+
+              {/* Metric 5: Laporan Iklan (Sistem Keamanan & Moderasi Anti-Fraud) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('reports');
+                  setReportFilter('pending');
+                }}
+                className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border col-span-2 sm:col-span-1 ${
+                  activeTab === 'reports'
+                    ? 'bg-rose-700 text-white border-rose-700 shadow-md ring-2 ring-rose-300'
+                    : pendingReportCount > 0
+                    ? 'bg-rose-50 hover:bg-rose-100 text-rose-950 border-rose-300 shadow-2xs animate-pulse'
+                    : 'bg-white hover:bg-slate-100/90 text-slate-800 border-slate-200 shadow-2xs hover:shadow-xs'
+                }`}
+                title="Klik untuk membuka antrean laporan iklan dari pembeli"
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-black flex items-center gap-1 ${
+                    activeTab === 'reports'
+                      ? 'text-rose-100'
+                      : pendingReportCount > 0
+                      ? 'text-rose-700 font-black'
+                      : 'text-slate-500'
+                  }`}>
+                    <ShieldAlert className="w-3.5 h-3.5" /> LAPORAN
+                  </span>
+                  {pendingReportCount > 0 && (
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-rose-600 text-white">
+                      PERLU TINDAKAN
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline justify-between mt-1.5">
+                  <span className="text-xl font-black">
+                    {pendingReportCount > 0 ? pendingReportCount : adReports.length}
+                  </span>
+                  <span className={`text-[10px] font-bold ${
+                    activeTab === 'reports'
+                      ? 'text-rose-100'
+                      : pendingReportCount > 0
+                      ? 'text-rose-700'
+                      : 'text-slate-500'
+                  }`}>
+                    {pendingReportCount > 0 ? 'Tindak! &rarr;' : 'Lihat &rarr;'}
                   </span>
                 </div>
               </button>
@@ -940,7 +1096,32 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </span>
                 </button>
 
-                {/* Tab 3: Log Notifikasi Email */}
+                {/* Tab 3: Laporan Iklan (Sistem Notifikasi & Moderasi Pelaporan Pembeli) */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('reports')}
+                  className={`px-4 py-2.5 rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-2 whitespace-nowrap min-h-[40px] ${
+                    activeTab === 'reports'
+                      ? 'bg-rose-700 text-white font-black shadow-md ring-2 ring-rose-300'
+                      : 'bg-white hover:bg-rose-50 text-slate-700 border border-slate-200 font-bold shadow-2xs'
+                  }`}
+                >
+                  <Flag className={`w-4 h-4 ${activeTab === 'reports' ? 'text-white' : 'text-rose-600'}`} />
+                  <span>Laporan Iklan</span>
+                  {pendingReportCount > 0 ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                      {pendingReportCount} Baru
+                    </span>
+                  ) : (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      activeTab === 'reports' ? 'bg-rose-800 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {adReports.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* Tab 4: Log Notifikasi Email */}
                 <button
                   type="button"
                   onClick={() => setActiveTab('emailLogs')}
@@ -959,7 +1140,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </span>
                 </button>
 
-                {/* Tab 4: API Key Brevo */}
+                {/* Tab 5: API Key Brevo */}
                 <button
                   type="button"
                   onClick={() => setActiveTab('brevoConfig')}
@@ -1106,6 +1287,72 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     >
                       <Printer className="w-3.5 h-3.5 text-rose-600" />
                       <span>PDF</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Controls Khusus Tab Laporan Iklan: Pencarian & Filter Status */}
+              {activeTab === 'reports' && (
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
+                  <div className="relative flex-1 sm:w-60">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={reportSearchQuery}
+                      onChange={(e) => setReportSearchQuery(e.target.value)}
+                      placeholder="Cari Judul / Pelapor / Alasan / ID..."
+                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setReportFilter('all')}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        reportFilter === 'all'
+                          ? 'bg-white text-slate-900 shadow-xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Semua ({adReports.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportFilter('pending')}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                        reportFilter === 'pending'
+                          ? 'bg-rose-600 text-white shadow-xs font-black'
+                          : 'text-rose-700 hover:bg-rose-50'
+                      }`}
+                    >
+                      <span>Perlu Tindakan</span>
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 font-black">
+                        {pendingReportCount}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportFilter('resolved')}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        reportFilter === 'resolved'
+                          ? 'bg-emerald-600 text-white shadow-xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Tuntas ({adReports.filter((r) => r.status === 'resolved').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportFilter('dismissed')}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        reportFilter === 'dismissed'
+                          ? 'bg-slate-700 text-white shadow-xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Diabaikan ({adReports.filter((r) => r.status === 'dismissed').length})
                     </button>
                   </div>
                 </div>
@@ -1801,6 +2048,398 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* TAB 5: LAPORAN IKLAN OLEH PEMBELI (PUSAT MODERASI ANTI-FRAUD) */}
+            {activeTab === 'reports' && (
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 min-h-0 bg-slate-50/50">
+                {/* Header Banner Moderasi */}
+                <div className="p-5 rounded-3xl bg-gradient-to-br from-rose-600 via-rose-700 to-red-800 text-white shadow-lg border-2 border-rose-400">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-12 h-12 rounded-2xl bg-white text-rose-700 flex items-center justify-center shrink-0 shadow-md">
+                        <ShieldAlert className="w-7 h-7 text-rose-700" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-lg font-black text-white">
+                            PUSAT MODERASI &amp; PELAPORAN IKLAN (ANTI-FRAUD)
+                          </h4>
+                          {pendingReportCount > 0 ? (
+                            <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-amber-400 text-amber-950 flex items-center gap-1 shadow-xs animate-pulse">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-950" />
+                              <span>{pendingReportCount} Laporan Butuh Tindakan</span>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-400 text-emerald-950 flex items-center gap-1 shadow-xs">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-950" />
+                              <span>Antrean Bersih</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-white/95 mt-1 leading-relaxed">
+                          Menangani pelaporan pembeli atas indikasi <strong>Penipuan Transfer DP sebelum COD</strong>, <strong>Barang Palsu/KW</strong>, atau <strong>Harga Jebakan</strong>. Anda dapat melakukan Take Down iklan atau Memblokir penjual secara instan.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-start sm:self-center shrink-0 bg-white/10 backdrop-blur-xs p-2 rounded-2xl border border-white/20 text-xs">
+                      <div className="px-3 py-1.5 rounded-xl bg-white text-rose-900 font-black text-center shadow-xs">
+                        <div className="text-base font-black leading-none">{adReports.length}</div>
+                        <div className="text-[9px] text-rose-700 uppercase mt-0.5">Total</div>
+                      </div>
+                      <div className="px-3 py-1.5 rounded-xl bg-rose-500/80 text-white font-black text-center">
+                        <div className="text-base font-black leading-none">{pendingReportCount}</div>
+                        <div className="text-[9px] uppercase mt-0.5 text-rose-100">Pending</div>
+                      </div>
+                      <div className="px-3 py-1.5 rounded-xl bg-emerald-500/80 text-white font-black text-center">
+                        <div className="text-base font-black leading-none">
+                          {adReports.filter((r) => r.status === 'resolved').length}
+                        </div>
+                        <div className="text-[9px] uppercase mt-0.5 text-emerald-100">Tuntas</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SOP Penanganan Fraud Callout */}
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-xs flex items-start gap-3 shadow-2xs">
+                  <AlertOctagon className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-black text-amber-900">
+                      SOP Perlindungan Pembeli JualRugi.my.id:
+                    </p>
+                    <p className="text-amber-900/90 leading-relaxed">
+                      Aturan baku platform melarang keras transfer DP/ongkir dalam bentuk apapun sebelum bertemu langsung (COD). Jika penjual terbukti memaksa transfer uang tanda jadi atau mengarahkan ke link phishing, <strong>segera klik tombol Take Down Iklan dan Blokir Penjual</strong> untuk melindungi pembeli lainnya.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Daftar Kartu Laporan Iklan */}
+                {filteredReportsList.length === 0 ? (
+                  <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-3">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center">
+                      <CheckCircle2 className="w-8 h-8" />
+                    </div>
+                    <h5 className="font-black text-slate-800 text-base">Tidak Ada Laporan Ditemukan</h5>
+                    <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                      {reportSearchQuery
+                        ? `Tidak ada laporan yang cocok dengan kata kunci "${reportSearchQuery}".`
+                        : reportFilter === 'pending'
+                        ? 'Semua laporan telah selesai ditindaklanjuti. Platform saat ini dalam status aman!'
+                        : 'Belum ada riwayat laporan iklan pada kategori filter ini.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredReportsList.map((report) => {
+                      const matchedListing = listings.find((l) => l.id === report.listingId);
+                      const isSellerBlocked = blockedUserIds.includes(report.sellerId);
+                      const isPending = report.status === 'pending' || report.status === 'investigating';
+
+                      // Format WhatsApp Seller dan Pelapor
+                      const sellerCleanPhone = (report.sellerWhatsapp || '').replace(/\D/g, '');
+                      const reporterCleanPhone = (report.reporterContact || '').replace(/\D/g, '');
+
+                      const waSellerUrl = sellerCleanPhone
+                        ? `https://wa.me/${sellerCleanPhone.startsWith('0') ? '62' + sellerCleanPhone.slice(1) : sellerCleanPhone}?text=${encodeURIComponent(
+                            `Halo kak ${report.sellerName}, kami dari Tim Admin Resmi JualRugi.my.id. Terkait iklan "${report.listingTitle}" (ID: ${report.listingId}), kami menerima laporan pembeli mengenai indikasi pelanggaran aturan transaksi: ${report.reasonLabel}. Mohon konfirmasi.`
+                          )}`
+                        : undefined;
+
+                      const waReporterUrl = reporterCleanPhone && reporterCleanPhone.length >= 8
+                        ? `https://wa.me/${reporterCleanPhone.startsWith('0') ? '62' + reporterCleanPhone.slice(1) : reporterCleanPhone}?text=${encodeURIComponent(
+                            `Halo kak ${report.reporterName}, terima kasih atas laporannya di JualRugi.my.id mengenai iklan "${report.listingTitle}". Tim Admin telah menindaklanjuti laporan Anda demi keamanan bersama.`
+                          )}`
+                        : undefined;
+
+                      return (
+                        <div
+                          key={report.id}
+                          className={`bg-white rounded-3xl border transition-all shadow-xs overflow-hidden ${
+                            isPending
+                              ? 'border-rose-400 ring-2 ring-rose-200'
+                              : report.status === 'resolved'
+                              ? 'border-emerald-300'
+                              : 'border-slate-200 opacity-90'
+                          }`}
+                        >
+                          {/* Top Card Bar: ID, Tanggal, Severity & Status */}
+                          <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-2 text-xs border-b ${
+                            isPending ? 'bg-rose-50/80 border-rose-200' : 'bg-slate-50 border-slate-200'
+                          }`}>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono font-bold text-slate-600 bg-white px-2 py-0.5 rounded-lg border border-slate-200 text-[11px]">
+                                {report.id}
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-medium">
+                                Dilaporkan: {formatIndoDate(report.createdAt)}
+                              </span>
+
+                              {/* Badge Alasan / Severity */}
+                              <span
+                                className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                  report.reason === 'dp_scam' || report.reason === 'fake_goods' || report.reason === 'stolen_illegal'
+                                    ? 'bg-red-600 text-white'
+                                    : report.reason === 'fake_price'
+                                    ? 'bg-amber-500 text-amber-950'
+                                    : 'bg-slate-600 text-white'
+                                }`}
+                              >
+                                {report.reasonLabel}
+                              </span>
+                            </div>
+
+                            {/* Status Laporan Badge */}
+                            <div>
+                              {report.status === 'pending' ? (
+                                <span className="px-2.5 py-1 rounded-full bg-rose-600 text-white font-black text-[11px] flex items-center gap-1 shadow-2xs animate-pulse">
+                                  <AlertTriangle className="w-3 h-3 text-white" />
+                                  <span>PERLU TINDAKAN</span>
+                                </span>
+                              ) : report.status === 'investigating' ? (
+                                <span className="px-2.5 py-1 rounded-full bg-amber-500 text-amber-950 font-black text-[11px] flex items-center gap-1 shadow-2xs">
+                                  <Search className="w-3 h-3 text-amber-950" />
+                                  <span>SEDANG DIINVESTIGASI</span>
+                                </span>
+                              ) : report.status === 'resolved' ? (
+                                <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center gap-1 shadow-2xs">
+                                  <CheckCircle2 className="w-3 h-3 text-white" />
+                                  <span>SELESAI / DITINDAK</span>
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-full bg-slate-200 text-slate-700 font-bold text-[11px] flex items-center gap-1">
+                                  <EyeOff className="w-3 h-3 text-slate-500" />
+                                  <span>DIABAIKAN</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Body Card: Grid 2 Kolom (Info Iklan vs Info Pelapor & Penjual) */}
+                          <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-4 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+                            {/* Kolom 1: Produk yang Dilaporkan */}
+                            <div className="space-y-3">
+                              <div className="flex items-start gap-3">
+                                {report.listingImageUrl ? (
+                                  <img
+                                    src={report.listingImageUrl}
+                                    alt={report.listingTitle}
+                                    className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shrink-0 bg-slate-100"
+                                  />
+                                ) : (
+                                  <div className="w-16 h-16 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-400">
+                                    <Layers className="w-8 h-8" />
+                                  </div>
+                                )}
+
+                                <div className="min-w-0 flex-1">
+                                  <h6 className="font-black text-sm text-slate-900 leading-snug line-clamp-2">
+                                    {report.listingTitle}
+                                  </h6>
+                                  <div className="text-emerald-700 font-black text-xs mt-1">
+                                    Rp {report.listingPrice.toLocaleString('id-ID')}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500">
+                                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <span>{report.listingLocation || 'Lokasi tidak dicantumkan'}</span>
+                                    <span>•</span>
+                                    <span className="font-mono text-slate-600 font-bold">ID: {report.listingId}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Status Iklan di Platform saat ini */}
+                              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center justify-between">
+                                <span className="text-slate-600 font-bold">Status Tayang Platform:</span>
+                                {matchedListing ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[11px] flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                                    <span>Aktif Tayang</span>
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-bold text-[11px]">
+                                    Iklan Sudah Dihapus / Di-takedown
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Tombol Lihat Iklan Langsung */}
+                              {matchedListing && onViewListingDetail && (
+                                <button
+                                  type="button"
+                                  onClick={() => onViewListingDetail(matchedListing)}
+                                  className="w-full py-2 px-3 rounded-xl border border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-sky-600" />
+                                  <span>Buka &amp; Periksa Detail Iklan Ini</span>
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Kolom 2: Kronologi Pelapor & Detail Penjual */}
+                            <div className="pt-3 md:pt-0 md:pl-4 space-y-3">
+                              {/* Kronologi yang disampaikan pembeli */}
+                              <div>
+                                <label className="text-[10px] font-black uppercase text-slate-500 tracking-wide flex items-center gap-1 mb-1">
+                                  <Flag className="w-3 h-3 text-rose-600" />
+                                  <span>Kronologi / Catatan Pembeli:</span>
+                                </label>
+                                <div className="p-3 rounded-2xl bg-rose-50/70 border border-rose-200 text-xs text-rose-950 font-medium leading-relaxed">
+                                  {report.notes ? `"${report.notes}"` : 'Pembeli tidak menyertakan catatan kronologi tambahan.'}
+                                </div>
+                              </div>
+
+                              {/* Detail Kontak Pelapor & Penjual */}
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                                  <div className="text-[10px] font-black uppercase text-slate-400">Pelapor (Pembeli)</div>
+                                  <div className="font-extrabold text-slate-800 mt-0.5 truncate">{report.reporterName}</div>
+                                  <div className="text-[11px] text-slate-500 font-mono mt-0.5 truncate">
+                                    {report.reporterContact || '-'}
+                                  </div>
+                                </div>
+
+                                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                                  <div className="text-[10px] font-black uppercase text-slate-400">Penjual Terlapor</div>
+                                  <div className="font-extrabold text-slate-800 mt-0.5 truncate">{report.sellerName}</div>
+                                  <div className="text-[11px] font-mono mt-0.5 truncate flex items-center gap-1">
+                                    <span className="text-slate-500">{report.sellerWhatsapp || '-'}</span>
+                                    {isSellerBlocked && (
+                                      <span className="text-[9px] px-1 rounded bg-rose-200 text-rose-800 font-black">
+                                        DIBLOKIR
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Catatan Penyelesaian (Jika Ada) */}
+                              {report.resolutionNotes && (
+                                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950">
+                                  <div className="font-black text-[10px] uppercase text-emerald-700">
+                                    Catatan Admin:
+                                  </div>
+                                  <div className="mt-0.5 font-medium leading-relaxed">
+                                    {report.resolutionNotes}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Action Toolbar Bottom Bar (Moderation Actions) */}
+                          <div className="p-3 sm:px-5 sm:py-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* 1. Tombol TAKE DOWN IKLAN (Hapus Permanen) */}
+                              {matchedListing && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleTakeDownReportedListing(report)}
+                                  className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold shadow-sm flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
+                                  title="Hapus iklan ini secara permanen dari platform publik"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>🚨 Take Down Iklan</span>
+                                </button>
+                              )}
+
+                              {/* 2. Tombol BLOKIR / CEKAL PENJUAL */}
+                              <button
+                                type="button"
+                                onClick={() => handleBlockReportedSeller(report)}
+                                className={`px-3 py-2 rounded-xl font-extrabold shadow-2xs flex items-center gap-1.5 active:scale-95 transition cursor-pointer ${
+                                  isSellerBlocked
+                                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                                    : 'bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300'
+                                }`}
+                                title={isSellerBlocked ? 'Buka blokir akun penjual ini' : 'Blokir akun penjual ini agar tidak bisa login'}
+                              >
+                                {isSellerBlocked ? (
+                                  <>
+                                    <UserCheck className="w-3.5 h-3.5 text-amber-700" />
+                                    <span>Buka Blokir Penjual</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserX className="w-3.5 h-3.5 text-rose-700" />
+                                    <span>⛔ Blokir Penjual</span>
+                                  </>
+                                )}
+                              </button>
+
+                              {/* 3. Tombol Chat WhatsApp ke Penjual */}
+                              {waSellerUrl && (
+                                <a
+                                  href={waSellerUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1.5 shadow-2xs active:scale-95 transition"
+                                  title="Kirim pesan peringatan / klarifikasi ke nomor WhatsApp penjual"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  <span>Chat Penjual</span>
+                                </a>
+                              )}
+
+                              {/* 4. Tombol Chat WhatsApp ke Pelapor */}
+                              {waReporterUrl && (
+                                <a
+                                  href={waReporterUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold flex items-center gap-1.5 shadow-2xs active:scale-95 transition"
+                                  title="Beri kabar tindak lanjut ke nomor WhatsApp pelapor"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5 text-slate-600" />
+                                  <span>Chat Pelapor</span>
+                                </a>
+                              )}
+                            </div>
+
+                            {/* Tombol Status Resolusi */}
+                            <div className="flex items-center gap-2 ml-auto">
+                              {report.status !== 'resolved' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolveReport(report.id)}
+                                  className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
+                                  title="Tandai laporan ini selesai ditindaklanjuti"
+                                >
+                                  <Check className="w-3.5 h-3.5 text-emerald-700" />
+                                  <span>Tandai Tuntas</span>
+                                </button>
+                              )}
+
+                              {report.status !== 'dismissed' && report.status !== 'resolved' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDismissReport(report.id)}
+                                  className="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 font-bold flex items-center gap-1 active:scale-95 transition cursor-pointer"
+                                  title="Abaikan laporan ini jika tidak ada indikasi pelanggaran"
+                                >
+                                  <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>Abaikan</span>
+                                </button>
+                              )}
+
+                              {/* Hapus Arsip */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteReportArchive(report.id)}
+                                className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                title="Hapus laporan dari arsip"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
