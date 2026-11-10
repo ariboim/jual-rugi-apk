@@ -295,30 +295,6 @@ export const QRISModal: React.FC<QRISModalProps> = ({
               </pre>
             </div>
           </div>
-
-          {/* 3. Demo / Simulasi Interaktif Bukti Transfer Mayar */}
-          <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center gap-2">
-            <button
-              onClick={() => setShowReceiptModal(true)}
-              className="w-full sm:flex-1 py-2 px-3 rounded-xl border border-sky-300 hover:bg-sky-50 text-sky-800 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
-            >
-              <Receipt className="w-3.5 h-3.5 text-sky-600" />
-              <span>Lihat Bukti Transfer Mayar (Demo)</span>
-            </button>
-
-            <button
-              onClick={handleSimulateInstant}
-              disabled={isSimulatingInstantSuccess}
-              className="w-full sm:flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>
-                {isSimulatingInstantSuccess
-                  ? 'Mengaktifkan...'
-                  : 'Simulasi Instan (Tanpa Keluar)'}
-              </span>
-            </button>
-          </div>
         </div>
       </div>
 
