@@ -433,10 +433,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   <button
                     onClick={() => onOpenQRIS(item, 'sundul')}
                     className="grow sm:grow-0 py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-xs"
-                    title="Sundul Iklan (Rp 5.000) - Naikkan ke posisi paling atas feed"
+                    title="Sundul Iklan (Rp 25.000) - Naikkan ke posisi paling atas feed"
                   >
                     <ArrowUp className="w-3.5 h-3.5 text-sky-600" />
-                    <span>Sundul (Rp 5.000)</span>
+                    <span>Sundul (Rp 25.000)</span>
                   </button>
 
                   {/* Paling BU Button */}
@@ -448,10 +448,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                         ? 'bg-amber-200 text-amber-950/70 border border-amber-300 cursor-default'
                         : 'bg-amber-400 hover:bg-amber-500 text-amber-950 border border-amber-500 font-black shadow-xs'
                     }`}
-                    title="Pasang Highlight Kuning & Badge PALING BU (Rp 15.000)"
+                    title="Pasang Highlight Kuning & Badge PALING BU (Rp 75.000)"
                   >
                     <Flame className="w-3.5 h-3.5 fill-red-600 text-red-600" />
-                    <span>{item.isSuperBU ? 'Paling BU Aktif' : 'Paling BU (Rp 15.000)'}</span>
+                    <span>{item.isSuperBU ? 'Paling BU Aktif' : 'Paling BU (Rp 75.000)'}</span>
                   </button>
 
                   {/* Delete Button */}
