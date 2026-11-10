@@ -38,6 +38,14 @@ import {
   ShieldAlert,
   AlertOctagon,
   MapPin,
+  Plus,
+  Phone,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
+  ListFilter,
+  SlidersHorizontal,
+  UserPlus,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { WA_ADMIN_PHONE } from '../data/mayarConfig';
@@ -54,6 +62,7 @@ import {
   getStoredUsers,
   syncUsersFromServer,
   updateStoredUserQuota,
+  getUserQuota,
   exportUsersToCSV,
   exportUsersToXLS,
   exportUsersToPDF,
@@ -116,8 +125,40 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'emailLogs' | 'brevoConfig' | 'reports'>('listings');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'sundul' | 'superbu'>('all');
-  const [userFilter, setUserFilter] = useState<'all' | 'blocked' | 'active'>('all');
+  const [userFilter, setUserFilter] = useState<'all' | 'new' | 'blocked' | 'active'>('all');
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userViewMode, setUserViewMode] = useState<'card' | 'table'>('card');
+  const [isMetricsCollapsed, setIsMetricsCollapsed] = useState(false);
+
+  // Helper mendeteksi pendaftar baru (dalam 7 hari terakhir)
+  const isNewUser = (registeredAt?: string): boolean => {
+    if (!registeredAt) return false;
+    const t = new Date(registeredAt).getTime();
+    if (isNaN(t)) return false;
+    const diffHours = (Date.now() - t) / (1000 * 60 * 60);
+    return diffHours <= 168; // dalam 7 hari
+  };
+
+  // Helper format waktu relatif untuk pendaftar baru
+  const formatRelativeTime = (dateStr?: string): string => {
+    if (!dateStr) return '-';
+    try {
+      const t = new Date(dateStr).getTime();
+      if (isNaN(t)) return dateStr;
+      const diffMs = Date.now() - t;
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      if (diffMins < 1) return 'Baru saja';
+      if (diffMins < 60) return `${diffMins} menit lalu`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours} jam lalu`;
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return 'Kemarin';
+      if (diffDays < 7) return `${diffDays} hari lalu`;
+      return formatIndoDate(dateStr);
+    } catch {
+      return dateStr;
+    }
+  };
 
   // Ad Reports State (Laporan Iklan Curang / Melanggar dari Pembeli)
   const [adReports, setAdReports] = useState<AdReport[]>(() => getStoredAdReports());
@@ -478,8 +519,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     // 1. Masukkan pendaftar persisten (termasuk yang baru mendaftar dari Form Registrasi)
     persistentUsers.forEach((u) => {
       const isBlocked = blockedUserIds.includes(u.id);
+      const quota = typeof u.listingQuota === 'number' ? u.listingQuota : getUserQuota(u.id);
       userMap.set(u.email.toLowerCase(), {
         ...u,
+        listingQuota: quota,
         status: isBlocked ? 'blocked' : (u.status || 'active'),
         count: u.count || 0,
       });
@@ -490,6 +533,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       const emailKey = (u.email || `${u.id}@jualrugi.my.id`).toLowerCase();
       if (!userMap.has(emailKey)) {
         const isBlocked = blockedUserIds.includes(u.id);
+        const quota = (u as any).listingQuota ?? getUserQuota(u.id);
         userMap.set(emailKey, {
           id: u.id,
           name: u.name,
@@ -501,6 +545,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           city: u.city || 'Jakarta Selatan',
           status: isBlocked ? 'blocked' : 'active',
           count: 0,
+          listingQuota: quota,
         });
       }
     });
@@ -524,6 +569,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         matchedUser.count = (matchedUser.count || 0) + 1;
       } else {
         const isBlocked = blockedUserIds.includes(sellerId);
+        const quota = getUserQuota(sellerId);
         userMap.set(sellerEmail, {
           id: sellerId,
           name: l.seller?.name || 'Pengiklan',
@@ -535,29 +581,89 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           city: l.location || 'Jakarta Selatan',
           status: isBlocked ? 'blocked' : 'active',
           count: 1,
+          listingQuota: quota,
         });
       }
     });
 
-    return Array.from(userMap.values());
+    // Urutkan pendaftar terbaru di posisi paling atas (Newest First)
+    const list = Array.from(userMap.values());
+    list.sort((a, b) => {
+      const timeA = new Date(a.registeredAt || 0).getTime();
+      const timeB = new Date(b.registeredAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    return list;
   }, [persistentUsers, users, listings, blockedUserIds]);
 
-  // Filtered users based on userFilter and userSearchQuery
+  // Statistik Pengguna
+  const newUsersCount = useMemo(() => {
+    return allUsersList.filter((u) => isNewUser(u.registeredAt)).length;
+  }, [allUsersList]);
+
+  const activeUsersCount = useMemo(() => {
+    return allUsersList.filter((u) => !blockedUserIds.includes(u.id) && u.status !== 'blocked').length;
+  }, [allUsersList, blockedUserIds]);
+
+  const blockedUsersCount = useMemo(() => {
+    return allUsersList.filter((u) => blockedUserIds.includes(u.id) || u.status === 'blocked').length;
+  }, [allUsersList, blockedUserIds]);
+
+  // Filtered users based on userFilter and userSearchQuery with Smart Phone Matching
   const filteredUsersList = useMemo(() => {
     return allUsersList.filter((u) => {
       const isBlocked = blockedUserIds.includes(u.id) || u.status === 'blocked';
       if (userFilter === 'blocked' && !isBlocked) return false;
       if (userFilter === 'active' && isBlocked) return false;
+      if (userFilter === 'new' && !isNewUser(u.registeredAt)) return false;
 
-      const q = userSearchQuery.toLowerCase().trim();
+      const q = userSearchQuery.trim().toLowerCase();
       if (q) {
-        const matchSearch =
+        // 1. Text match (ID, Nama, Email, Kota, Role)
+        const textMatch =
           (u.id || '').toLowerCase().includes(q) ||
           (u.name || '').toLowerCase().includes(q) ||
           (u.email || '').toLowerCase().includes(q) ||
-          (u.whatsapp || '').toLowerCase().includes(q) ||
-          (u.phone || '').toLowerCase().includes(q);
-        if (!matchSearch) return false;
+          (u.city || '').toLowerCase().includes(q) ||
+          (u.role || '').toLowerCase().includes(q);
+
+        if (textMatch) return true;
+
+        // 2. Pencarian Cerdas Nomor WhatsApp / Telepon (Mendukung format 628..., 08..., tanda hubung, spasi)
+        const qDigits = q.replace(/\D/g, '');
+        if (qDigits.length >= 3) {
+          const uWaDigits = (u.whatsapp || '').replace(/\D/g, '');
+          const uPhoneDigits = (u.phone || '').replace(/\D/g, '');
+
+          // Ekstrak inti nomor tanpa kode 62 atau 0 di depan
+          const qCore = qDigits.startsWith('62')
+            ? qDigits.slice(2)
+            : qDigits.startsWith('0')
+            ? qDigits.slice(1)
+            : qDigits;
+
+          const waCore = uWaDigits.startsWith('62')
+            ? uWaDigits.slice(2)
+            : uWaDigits.startsWith('0')
+            ? uWaDigits.slice(1)
+            : uWaDigits;
+
+          const phoneCore = uPhoneDigits.startsWith('62')
+            ? uPhoneDigits.slice(2)
+            : uPhoneDigits.startsWith('0')
+            ? uPhoneDigits.slice(1)
+            : uPhoneDigits;
+
+          const phoneMatch =
+            uWaDigits.includes(qDigits) ||
+            uPhoneDigits.includes(qDigits) ||
+            (qCore.length >= 3 && (waCore.includes(qCore) || phoneCore.includes(qCore)));
+
+          if (phoneMatch) return true;
+        }
+
+        return false;
       }
 
       return true;
@@ -923,195 +1029,212 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         ) : (
           /* DASHBOARD VIEW */
           <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            {/* Quick Metrics Bar - 5 Fully Clickable Interactive Buttons */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-2.5 p-3 sm:p-4 bg-slate-50 border-b border-slate-200 text-xs shrink-0">
-              {/* Metric 1: Total Iklan */}
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('listings');
-                  setFilterType('all');
-                  setSearchQuery('');
-                }}
-                className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
-                  activeTab === 'listings' && filterType === 'all'
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-400'
-                    : 'bg-white hover:bg-slate-100/90 text-slate-800 border-slate-200 shadow-2xs hover:shadow-xs'
-                }`}
-                title="Klik untuk melihat semua daftar iklan"
-              >
-                <div className="flex items-center justify-between">
-                  <span className={`text-[10px] font-black tracking-wide ${
-                    activeTab === 'listings' && filterType === 'all' ? 'text-slate-300' : 'text-slate-500'
-                  }`}>
-                    TOTAL IKLAN
-                  </span>
-                  <Layers className={`w-3.5 h-3.5 ${
-                    activeTab === 'listings' && filterType === 'all' ? 'text-slate-300' : 'text-slate-400'
-                  }`} />
-                </div>
-                <div className="flex items-baseline justify-between mt-1.5">
-                  <span className="text-xl font-black">{listings.length}</span>
-                  <span className={`text-[10px] font-bold ${
-                    activeTab === 'listings' && filterType === 'all' ? 'text-slate-300' : 'text-sky-600'
-                  }`}>
-                    Lihat &rarr;
-                  </span>
-                </div>
-              </button>
+            {/* Quick Metrics Bar - 5 Fully Clickable Interactive Buttons (Dapat Diciutkan di Mobile) */}
+            <div className="bg-slate-50 border-b border-slate-200 shrink-0">
+              <div className="px-3.5 py-1.5 flex items-center justify-between sm:hidden border-b border-slate-200/60 bg-slate-100/70">
+                <span className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                  Ringkasan Statistik
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsMetricsCollapsed(!isMetricsCollapsed)}
+                  className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-sky-700 text-[10px] font-black flex items-center gap-1 shadow-2xs cursor-pointer"
+                >
+                  <span>{isMetricsCollapsed ? 'Tampilkan ▾' : 'Sembunyikan ▴'}</span>
+                </button>
+              </div>
 
-              {/* Metric 2: Sundul Aktif */}
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('listings');
-                  setFilterType('sundul');
-                }}
-                className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
-                  activeTab === 'listings' && filterType === 'sundul'
-                    ? 'bg-sky-600 text-white border-sky-600 shadow-md ring-2 ring-sky-300'
-                    : 'bg-white hover:bg-sky-50/80 text-slate-800 border-sky-200 shadow-2xs hover:shadow-xs'
-                }`}
-                title="Klik untuk filter iklan sundul aktif"
-              >
-                <div className="flex items-center justify-between">
-                  <span className={`text-[10px] font-black flex items-center gap-1 ${
-                    activeTab === 'listings' && filterType === 'sundul' ? 'text-sky-100' : 'text-sky-600'
-                  }`}>
-                    <ArrowUp className="w-3 h-3 stroke-[3]" /> SUNDUL AKTIF
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between mt-1.5">
-                  <span className={`text-xl font-black ${
-                    activeTab === 'listings' && filterType === 'sundul' ? 'text-white' : 'text-sky-800'
-                  }`}>
-                    {listings.filter((l) => !!l.sundulAt).length}
-                  </span>
-                  <span className={`text-[10px] font-bold ${
-                    activeTab === 'listings' && filterType === 'sundul' ? 'text-sky-100' : 'text-sky-600'
-                  }`}>
-                    Filter &rarr;
-                  </span>
-                </div>
-              </button>
+              {!isMetricsCollapsed && (
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-2.5 p-3 sm:p-4 text-xs">
+                  {/* Metric 1: Total Iklan */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('listings');
+                      setFilterType('all');
+                      setSearchQuery('');
+                    }}
+                    className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
+                      activeTab === 'listings' && filterType === 'all'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-400'
+                        : 'bg-white hover:bg-slate-100/90 text-slate-800 border-slate-200 shadow-2xs hover:shadow-xs'
+                    }`}
+                    title="Klik untuk melihat semua daftar iklan"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-black tracking-wide ${
+                        activeTab === 'listings' && filterType === 'all' ? 'text-slate-300' : 'text-slate-500'
+                      }`}>
+                        TOTAL IKLAN
+                      </span>
+                      <Layers className={`w-3.5 h-3.5 ${
+                        activeTab === 'listings' && filterType === 'all' ? 'text-slate-300' : 'text-slate-400'
+                      }`} />
+                    </div>
+                    <div className="flex items-baseline justify-between mt-1.5">
+                      <span className="text-xl font-black">{listings.length}</span>
+                      <span className={`text-[10px] font-bold ${
+                        activeTab === 'listings' && filterType === 'all' ? 'text-slate-300' : 'text-sky-600'
+                      }`}>
+                        Lihat &rarr;
+                      </span>
+                    </div>
+                  </button>
 
-              {/* Metric 3: BU Prioritas */}
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('listings');
-                  setFilterType('superbu');
-                }}
-                className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
-                  activeTab === 'listings' && filterType === 'superbu'
-                    ? 'bg-amber-500 text-amber-950 border-amber-500 shadow-md ring-2 ring-amber-300'
-                    : 'bg-white hover:bg-amber-50/80 text-slate-800 border-amber-200 shadow-2xs hover:shadow-xs'
-                }`}
-                title="Klik untuk filter iklan BU Prioritas (Super BU)"
-              >
-                <div className="flex items-center justify-between">
-                  <span className={`text-[10px] font-black flex items-center gap-1 ${
-                    activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-600'
-                  }`}>
-                    <Flame className="w-3 h-3 fill-current" /> BU PRIORITAS
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between mt-1.5">
-                  <span className={`text-xl font-black ${
-                    activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-800'
-                  }`}>
-                    {listings.filter((l) => !!l.isSuperBU).length}
-                  </span>
-                  <span className={`text-[10px] font-bold ${
-                    activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-700'
-                  }`}>
-                    Filter &rarr;
-                  </span>
-                </div>
-              </button>
+                  {/* Metric 2: Sundul Aktif */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('listings');
+                      setFilterType('sundul');
+                    }}
+                    className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
+                      activeTab === 'listings' && filterType === 'sundul'
+                        ? 'bg-sky-600 text-white border-sky-600 shadow-md ring-2 ring-sky-300'
+                        : 'bg-white hover:bg-sky-50/80 text-slate-800 border-sky-200 shadow-2xs hover:shadow-xs'
+                    }`}
+                    title="Klik untuk filter iklan sundul aktif"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-black flex items-center gap-1 ${
+                        activeTab === 'listings' && filterType === 'sundul' ? 'text-sky-100' : 'text-sky-600'
+                      }`}>
+                        <ArrowUp className="w-3 h-3 stroke-[3]" /> SUNDUL AKTIF
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between mt-1.5">
+                      <span className={`text-xl font-black ${
+                        activeTab === 'listings' && filterType === 'sundul' ? 'text-white' : 'text-sky-800'
+                      }`}>
+                        {listings.filter((l) => !!l.sundulAt).length}
+                      </span>
+                      <span className={`text-[10px] font-bold ${
+                        activeTab === 'listings' && filterType === 'sundul' ? 'text-sky-100' : 'text-sky-600'
+                      }`}>
+                        Filter &rarr;
+                      </span>
+                    </div>
+                  </button>
 
-              {/* Metric 4: Pengguna Diblokir */}
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('users');
-                  setUserFilter('blocked');
-                }}
-                className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
-                  activeTab === 'users' && userFilter === 'blocked'
-                    ? 'bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-300'
-                    : 'bg-white hover:bg-rose-50/80 text-slate-800 border-rose-200 shadow-2xs hover:shadow-xs'
-                }`}
-                title="Klik untuk melihat pengguna yang diblokir"
-              >
-                <div className="flex items-center justify-between">
-                  <span className={`text-[10px] font-black flex items-center gap-1 ${
-                    activeTab === 'users' && userFilter === 'blocked' ? 'text-rose-100' : 'text-rose-600'
-                  }`}>
-                    <UserX className="w-3 h-3" /> DIBLOKIR
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between mt-1.5">
-                  <span className={`text-xl font-black ${
-                    activeTab === 'users' && userFilter === 'blocked' ? 'text-white' : 'text-rose-700'
-                  }`}>
-                    {blockedUserIds.length}
-                  </span>
-                  <span className={`text-[10px] font-bold ${
-                    activeTab === 'users' && userFilter === 'blocked' ? 'text-rose-100' : 'text-rose-600'
-                  }`}>
-                    Kelola &rarr;
-                  </span>
-                </div>
-              </button>
+                  {/* Metric 3: BU Prioritas */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('listings');
+                      setFilterType('superbu');
+                    }}
+                    className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
+                      activeTab === 'listings' && filterType === 'superbu'
+                        ? 'bg-amber-500 text-amber-950 border-amber-500 shadow-md ring-2 ring-amber-300'
+                        : 'bg-white hover:bg-amber-50/80 text-slate-800 border-amber-200 shadow-2xs hover:shadow-xs'
+                    }`}
+                    title="Klik untuk filter iklan BU Prioritas (Super BU)"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-black flex items-center gap-1 ${
+                        activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-600'
+                      }`}>
+                        <Flame className="w-3 h-3 fill-current" /> BU PRIORITAS
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between mt-1.5">
+                      <span className={`text-xl font-black ${
+                        activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-800'
+                      }`}>
+                        {listings.filter((l) => !!l.isSuperBU).length}
+                      </span>
+                      <span className={`text-[10px] font-bold ${
+                        activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-700'
+                      }`}>
+                        Filter &rarr;
+                      </span>
+                    </div>
+                  </button>
 
-              {/* Metric 5: Laporan Iklan (Sistem Keamanan & Moderasi Anti-Fraud) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('reports');
-                  setReportFilter('pending');
-                }}
-                className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border col-span-2 sm:col-span-1 ${
-                  activeTab === 'reports'
-                    ? 'bg-rose-700 text-white border-rose-700 shadow-md ring-2 ring-rose-300'
-                    : pendingReportCount > 0
-                    ? 'bg-rose-50 hover:bg-rose-100 text-rose-950 border-rose-300 shadow-2xs animate-pulse'
-                    : 'bg-white hover:bg-slate-100/90 text-slate-800 border-slate-200 shadow-2xs hover:shadow-xs'
-                }`}
-                title="Klik untuk membuka antrean laporan iklan dari pembeli"
-              >
-                <div className="flex items-center justify-between">
-                  <span className={`text-[10px] font-black flex items-center gap-1 ${
-                    activeTab === 'reports'
-                      ? 'text-rose-100'
-                      : pendingReportCount > 0
-                      ? 'text-rose-700 font-black'
-                      : 'text-slate-500'
-                  }`}>
-                    <ShieldAlert className="w-3.5 h-3.5" /> LAPORAN
-                  </span>
-                  {pendingReportCount > 0 && (
-                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-rose-600 text-white">
-                      PERLU TINDAKAN
-                    </span>
-                  )}
+                  {/* Metric 4: Pengguna Diblokir */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('users');
+                      setUserFilter('blocked');
+                    }}
+                    className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border ${
+                      activeTab === 'users' && userFilter === 'blocked'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-300'
+                        : 'bg-white hover:bg-rose-50/80 text-slate-800 border-rose-200 shadow-2xs hover:shadow-xs'
+                    }`}
+                    title="Klik untuk melihat pengguna yang diblokir"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-black flex items-center gap-1 ${
+                        activeTab === 'users' && userFilter === 'blocked' ? 'text-rose-100' : 'text-rose-600'
+                      }`}>
+                        <UserX className="w-3 h-3" /> DIBLOKIR
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between mt-1.5">
+                      <span className={`text-xl font-black ${
+                        activeTab === 'users' && userFilter === 'blocked' ? 'text-white' : 'text-rose-700'
+                      }`}>
+                        {blockedUserIds.length}
+                      </span>
+                      <span className={`text-[10px] font-bold ${
+                        activeTab === 'users' && userFilter === 'blocked' ? 'text-rose-100' : 'text-rose-600'
+                      }`}>
+                        Kelola &rarr;
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Metric 5: Laporan Iklan (Sistem Keamanan & Moderasi Anti-Fraud) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('reports');
+                      setReportFilter('pending');
+                    }}
+                    className={`p-3 rounded-2xl text-left transition-all active:scale-95 cursor-pointer border col-span-2 sm:col-span-1 ${
+                      activeTab === 'reports'
+                        ? 'bg-rose-700 text-white border-rose-700 shadow-md ring-2 ring-rose-300'
+                        : pendingReportCount > 0
+                        ? 'bg-rose-50 hover:bg-rose-100 text-rose-950 border-rose-300 shadow-2xs animate-pulse'
+                        : 'bg-white hover:bg-slate-100/90 text-slate-800 border-slate-200 shadow-2xs hover:shadow-xs'
+                    }`}
+                    title="Klik untuk membuka antrean laporan iklan dari pembeli"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-black flex items-center gap-1 ${
+                        activeTab === 'reports'
+                          ? 'text-rose-100'
+                          : pendingReportCount > 0
+                          ? 'text-rose-700 font-black'
+                          : 'text-slate-500'
+                      }`}>
+                        <ShieldAlert className="w-3.5 h-3.5" /> LAPORAN
+                      </span>
+                      {pendingReportCount > 0 && (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-rose-600 text-white">
+                          PERLU TINDAKAN
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-baseline justify-between mt-1.5">
+                      <span className="text-xl font-black">
+                        {pendingReportCount > 0 ? pendingReportCount : adReports.length}
+                      </span>
+                      <span className={`text-[10px] font-bold ${
+                        activeTab === 'reports'
+                          ? 'text-rose-100'
+                          : pendingReportCount > 0
+                          ? 'text-rose-700'
+                          : 'text-slate-500'
+                      }`}>
+                        {pendingReportCount > 0 ? 'Tindak! &rarr;' : 'Lihat &rarr;'}
+                      </span>
+                    </div>
+                  </button>
                 </div>
-                <div className="flex items-baseline justify-between mt-1.5">
-                  <span className="text-xl font-black">
-                    {pendingReportCount > 0 ? pendingReportCount : adReports.length}
-                  </span>
-                  <span className={`text-[10px] font-bold ${
-                    activeTab === 'reports'
-                      ? 'text-rose-100'
-                      : pendingReportCount > 0
-                      ? 'text-rose-700'
-                      : 'text-slate-500'
-                  }`}>
-                    {pendingReportCount > 0 ? 'Tindak! &rarr;' : 'Lihat &rarr;'}
-                  </span>
-                </div>
-              </button>
+              )}
             </div>
 
             {/* Compact Warning Bar jika Brevo API Key belum disetting (Hanya tampil jika belum diisi dan bukan di tab Brevo) */}
@@ -1264,113 +1387,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               )}
 
-              {/* Controls Khusus Tab Pengguna: Pencarian, Filter Status & Download Data CSV/XLS/PDF */}
-              {activeTab === 'users' && (
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
-                  {/* Pencarian Pengguna */}
-                  <div className="relative flex-1 sm:w-56">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={userSearchQuery}
-                      onChange={(e) => setUserSearchQuery(e.target.value)}
-                      placeholder="Cari Nama / Email / WA / ID..."
-                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                    />
-                  </div>
-
-                  {/* Filter Status: Semua, Diblokir, Aktif */}
-                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setUserFilter('all')}
-                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                        userFilter === 'all'
-                          ? 'bg-white text-slate-900 shadow-xs font-black'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Semua ({allUsersList.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUserFilter('blocked')}
-                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                        userFilter === 'blocked'
-                          ? 'bg-rose-600 text-white shadow-xs font-black'
-                          : 'text-rose-600 hover:text-rose-800'
-                      }`}
-                    >
-                      Diblokir ({blockedUserIds.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUserFilter('active')}
-                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                        userFilter === 'active'
-                          ? 'bg-emerald-600 text-white shadow-xs font-black'
-                          : 'text-emerald-700 hover:text-emerald-900'
-                      }`}
-                    >
-                      Aktif ({allUsersList.length - blockedUserIds.length})
-                    </button>
-                  </div>
-
-                  {/* Tombol Refresh Data Pengguna (Real-time Sync) */}
-                  <button
-                    type="button"
-                    onClick={handleRefreshUsers}
-                    disabled={isRefreshingUsers}
-                    className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white text-xs font-black flex items-center gap-1.5 shadow-xs active:scale-95 transition cursor-pointer shrink-0"
-                    title="Segarkan data pendaftar baru dari database Supabase & server secara real-time"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingUsers ? 'animate-spin' : ''}`} />
-                    <span>{isRefreshingUsers ? 'Menyinkronkan...' : 'Refresh Data'}</span>
-                  </button>
-
-                  {/* Tombol Ekspor / Download untuk Kampanye Marketing (CSV, XLS, PDF) */}
-                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        exportUsersToCSV(filteredUsersList);
-                        showNotification(`📥 File CSV (${filteredUsersList.length} pengguna) berhasil diunduh!`);
-                      }}
-                      className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 shadow-2xs active:scale-95 transition cursor-pointer"
-                      title="Download format CSV untuk Google Sheets & CRM"
-                    >
-                      <Download className="w-3.5 h-3.5 text-sky-600" />
-                      <span>CSV</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        exportUsersToXLS(filteredUsersList);
-                        showNotification(`📥 File Excel XLS (${filteredUsersList.length} pengguna) berhasil diunduh!`);
-                      }}
-                      className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-black flex items-center gap-1 shadow-2xs active:scale-95 transition cursor-pointer"
-                      title="Download format Excel (.XLS) dengan kolom rapi & nomor WA utuh"
-                    >
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Excel (XLS)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        exportUsersToPDF(filteredUsersList);
-                        showNotification(`🖨️ Membuka jendela cetak / PDF (${filteredUsersList.length} pengguna)...`);
-                      }}
-                      className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 text-xs font-black flex items-center gap-1 shadow-2xs active:scale-95 transition cursor-pointer"
-                      title="Cetak atau Simpan sebagai PDF Laporan Pengguna Marketing"
-                    >
-                      <Printer className="w-3.5 h-3.5 text-rose-600" />
-                      <span>PDF</span>
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* Controls Khusus Tab Laporan Iklan: Pencarian & Filter Status */}
               {activeTab === 'reports' && (
@@ -1613,41 +1629,491 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               </div>
             )}
 
-            {/* TAB CONTENT 2: TABEL MANAJEMEN PENGGUNA TERDAFTAR */}
+            {/* TAB CONTENT 2: MANAJEMEN PENGGUNA TERDAFTAR & REGISTRASI BARU */}
             {activeTab === 'users' && (
-              <div className="flex-1 overflow-auto p-4 min-h-0">
-                <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs bg-white">
-                  <table className="w-full text-left text-xs text-slate-700 divide-y divide-slate-200">
-                    <thead className="bg-slate-50 text-[11px] font-black uppercase text-slate-500 tracking-wider">
-                      <tr>
-                        <th className="px-3.5 py-3">ID Pengguna</th>
-                        <th className="px-3.5 py-3">Nama Lengkap</th>
-                        <th className="px-3.5 py-3">Alamat Email</th>
-                        <th className="px-3.5 py-3">Nomor WhatsApp</th>
-                        <th className="px-3.5 py-3">Tgl Daftar</th>
-                        <th className="px-3.5 py-3 text-center">Status Akun</th>
-                        <th className="px-3.5 py-3 text-center">Tambah Kuota Manual</th>
-                        <th className="px-3.5 py-3 text-right">Aksi Moderasi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
-                      {filteredUsersList.length === 0 ? (
+              <div className="flex-1 overflow-y-auto p-3 sm:p-5 min-h-0 space-y-4">
+                {/* 1. KONTROL UTAMA: PENCARIAN CERDAS & FILTER STATUS */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 sm:p-4 space-y-3 shadow-2xs">
+                  {/* Baris 1: Kolom Pencarian Cerdas + Tombol Mode Tampilan (Kartu vs Tabel) */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                    {/* Input Pencarian dengan Clear Button ✕ */}
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={userSearchQuery}
+                        onChange={(e) => setUserSearchQuery(e.target.value)}
+                        placeholder="Cari Nama / Email / No. WA (628.. atau 08..) / User ID..."
+                        className="w-full pl-10 pr-9 py-2 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white font-medium shadow-2xs"
+                      />
+                      {userSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setUserSearchQuery('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer"
+                          title="Hapus pencarian"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Mode Tampilan Toggle (Kartu vs Tabel) */}
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl self-end sm:self-auto shrink-0 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setUserViewMode('card')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                          userViewMode === 'card'
+                            ? 'bg-sky-600 text-white shadow-xs font-black'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Tampilan Kartu (Optimal untuk HP & Layar Sentuh)"
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        <span>Kartu</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUserViewMode('table')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                          userViewMode === 'table'
+                            ? 'bg-sky-600 text-white shadow-xs font-black'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Tampilan Tabel (Data Luas untuk Komputer)"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        <span>Tabel</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Baris 2: Filter Status Pills & Action Toolbar (Refresh + Export CSV/XLS/PDF) */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pt-1 border-t border-slate-200/80">
+                    {/* Filter Pills */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setUserFilter('all')}
+                        className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition cursor-pointer font-bold ${
+                          userFilter === 'all'
+                            ? 'bg-slate-900 text-white font-black shadow-xs'
+                            : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                        }`}
+                      >
+                        Semua ({allUsersList.length})
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setUserFilter('new')}
+                        className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition cursor-pointer font-bold flex items-center gap-1 ${
+                          userFilter === 'new'
+                            ? 'bg-emerald-600 text-white font-black shadow-xs ring-2 ring-emerald-300'
+                            : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300'
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Baru Daftar ({newUsersCount})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setUserFilter('active')}
+                        className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition cursor-pointer font-bold ${
+                          userFilter === 'active'
+                            ? 'bg-sky-600 text-white font-black shadow-xs'
+                            : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                        }`}
+                      >
+                        Aktif ({activeUsersCount})
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setUserFilter('blocked')}
+                        className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition cursor-pointer font-bold ${
+                          userFilter === 'blocked'
+                            ? 'bg-rose-600 text-white font-black shadow-xs'
+                            : 'bg-white text-rose-700 hover:bg-rose-50 border border-rose-200'
+                        }`}
+                      >
+                        Diblokir ({blockedUsersCount})
+                      </button>
+                    </div>
+
+                    {/* Toolbar Tombol Aksi: Refresh & Export */}
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleRefreshUsers}
+                        disabled={isRefreshingUsers}
+                        className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white text-xs font-black flex items-center gap-1.5 shadow-2xs active:scale-95 transition cursor-pointer"
+                        title="Segarkan data pendaftar baru dari database Supabase & server"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingUsers ? 'animate-spin' : ''}`} />
+                        <span>{isRefreshingUsers ? 'Menyinkronkan...' : 'Refresh'}</span>
+                      </button>
+
+                      <div className="h-4 w-px bg-slate-300 mx-0.5 hidden sm:block"></div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          exportUsersToCSV(filteredUsersList);
+                          showNotification(`📥 File CSV (${filteredUsersList.length} pengguna) berhasil diunduh!`);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 shadow-2xs active:scale-95 transition cursor-pointer"
+                        title="Download format CSV"
+                      >
+                        <Download className="w-3.5 h-3.5 text-sky-600" />
+                        <span>CSV</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          exportUsersToXLS(filteredUsersList);
+                          showNotification(`📥 File Excel XLS (${filteredUsersList.length} pengguna) berhasil diunduh!`);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-black flex items-center gap-1 shadow-2xs active:scale-95 transition cursor-pointer"
+                        title="Download format Excel (.XLS)"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>XLS</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          exportUsersToPDF(filteredUsersList);
+                          showNotification(`🖨️ Menyiapkan cetak PDF (${filteredUsersList.length} pengguna)...`);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-800 text-xs font-black flex items-center gap-1 shadow-2xs active:scale-95 transition cursor-pointer"
+                        title="Cetak PDF Laporan"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-rose-600" />
+                        <span>PDF</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Indikator Status Pencarian & Hasil Filter */}
+                  {userSearchQuery && (
+                    <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-between text-xs text-sky-950 font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <Search className="w-3.5 h-3.5 text-sky-600" />
+                        <span>
+                          Ditemukan <strong>{filteredUsersList.length}</strong> pengguna cocok untuk pencarian &ldquo;<strong>{userSearchQuery}</strong>&rdquo;
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setUserSearchQuery('')}
+                        className="text-xs text-sky-700 hover:text-sky-900 font-bold underline cursor-pointer"
+                      >
+                        Reset Pencarian
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. DAFTAR DATA PENGGUNA (CARD VIEW & TABLE VIEW) */}
+                {filteredUsersList.length === 0 ? (
+                  /* EMPTY STATE */
+                  <div className="p-8 sm:p-12 text-center bg-white border border-slate-200 rounded-3xl shadow-xs">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                      <Users className="w-7 h-7" />
+                    </div>
+                    <h4 className="text-base font-black text-slate-800">
+                      {userSearchQuery ? 'Pengguna Tidak Ditemukan' : 'Belum Ada Data Pengguna'}
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                      {userSearchQuery
+                        ? `Tidak ada data pengguna atau nomor WhatsApp yang cocok dengan "${userSearchQuery}". Coba ketik sebagian nomor telepon atau nama akun.`
+                        : userFilter === 'new'
+                        ? 'Belum ada pendaftaran akun baru dalam 7 hari terakhir.'
+                        : userFilter === 'blocked'
+                        ? 'Tidak ada pengguna yang sedang diblokir.'
+                        : 'Belum ada pendaftar akun tersimpan.'}
+                    </p>
+                    {userSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setUserSearchQuery('')}
+                        className="mt-4 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold shadow-sm active:scale-95 transition cursor-pointer"
+                      >
+                        Tampilkan Semua Pengguna
+                      </button>
+                    )}
+                  </div>
+                ) : userViewMode === 'card' ? (
+                  /* CARD VIEW (Sangat Rapi, Mudah Dibaca & Praktis untuk Mobile & Desktop) */
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {filteredUsersList.map((user) => {
+                      const isBlocked = blockedUserIds.includes(user.id) || user.status === 'blocked';
+                      const cleanWa = user.whatsapp || user.phone || '';
+                      const isNew = isNewUser(user.registeredAt);
+                      const currentQuota = typeof user.listingQuota === 'number' ? user.listingQuota : getUserQuota(user.id);
+
+                      return (
+                        <div
+                          key={user.id}
+                          className={`p-4 rounded-3xl border transition shadow-xs hover:shadow-md bg-white ${
+                            isNew
+                              ? 'border-emerald-300 ring-2 ring-emerald-100'
+                              : isBlocked
+                              ? 'border-rose-200 bg-rose-50/20'
+                              : 'border-slate-200'
+                          }`}
+                        >
+                          {/* Header Kartu: Avatar, Nama, Status & Badge Baru */}
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div
+                                className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 border ${
+                                  isBlocked
+                                    ? 'bg-rose-100 text-rose-800 border-rose-200'
+                                    : isNew
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                    : 'bg-sky-100 text-sky-800 border-sky-200'
+                                }`}
+                              >
+                                {user.name ? user.name.slice(0, 2).toUpperCase() : 'US'}
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <h4 className="font-black text-slate-900 text-sm truncate">
+                                    {user.name}
+                                  </h4>
+                                  {isNew && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-600 text-white animate-pulse">
+                                      🆕 BARU
+                                    </span>
+                                  )}
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      user.role === 'seller'
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                        : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                    }`}
+                                  >
+                                    {user.role === 'seller' ? 'Penjual' : 'Pembeli'}
+                                  </span>
+                                </div>
+
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                  <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-600">
+                                    {user.id}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyId(user.id)}
+                                    title="Salin ID Pengguna"
+                                    className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                                  >
+                                    {copiedId === user.id ? (
+                                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                  <span>•</span>
+                                  <span title={user.registeredAt}>
+                                    {formatRelativeTime(user.registeredAt)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Status Akun Pill */}
+                            <div>
+                              {isBlocked ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 shrink-0">
+                                  <UserX className="w-3 h-3 text-rose-600" />
+                                  <span>DIBLOKIR</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                  <span>AKTIF</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Kontak Info: WhatsApp & Email */}
+                          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                            {/* WhatsApp & Chat Direct Button */}
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5 truncate">
+                                <PhoneCall className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span className="font-mono font-bold text-slate-900 truncate">
+                                  {cleanWa || '-'}
+                                </span>
+                              </div>
+                              {cleanWa && (
+                                <a
+                                  href={getWhatsAppChatLink(
+                                    cleanWa,
+                                    `Halo kak ${user.name}, salam dari Admin JualRugi.my.id! 🎉`
+                                  )}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black flex items-center gap-1 shrink-0 shadow-2xs active:scale-95 transition cursor-pointer"
+                                  title="Buka Chat WhatsApp Langsung"
+                                >
+                                  <MessageCircle className="w-3 h-3 fill-white" />
+                                  <span>Chat WA</span>
+                                </a>
+                              )}
+                            </div>
+
+                            {/* Email Link */}
+                            <div className="flex items-center gap-1.5 truncate">
+                              <Mail className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                              <a
+                                href={`mailto:${user.email}`}
+                                className="text-slate-700 hover:text-sky-600 font-medium truncate underline decoration-slate-300"
+                                title="Kirim email"
+                              >
+                                {user.email}
+                              </a>
+                            </div>
+                          </div>
+
+                          {/* Detail Ringkas: Kota & Jumlah Iklan */}
+                          <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 px-1">
+                            <span>Lokasi: <strong>{user.city || 'Indonesia'}</strong></span>
+                            <span>Iklan Tayang: <strong>{user.count || 0} Iklan</strong></span>
+                          </div>
+
+                          {/* ACTION SECTION: TAMBAH KUOTA MANUAL & MODERASI BLOKIR */}
+                          <div className="mt-3.5 pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                            {/* Badge Kuota Saat Ini */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                Kuota:
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-lg bg-sky-50 text-sky-900 border border-sky-200 font-mono font-black text-xs">
+                                {currentQuota} Slot
+                              </span>
+                            </div>
+
+                            {/* 3 Tombol Tambah Kuota Manual (+1, +5, +10 Kuota) */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddQuotaManual(
+                                    user.id,
+                                    user.name,
+                                    user.email,
+                                    user.whatsapp || user.phone || '',
+                                    1
+                                  )
+                                }
+                                className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-black text-xs shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                title="Tambah 1 Kuota (Kirim notifikasi otomatis Email & WhatsApp)"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>+1 Kuota</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddQuotaManual(
+                                    user.id,
+                                    user.name,
+                                    user.email,
+                                    user.whatsapp || user.phone || '',
+                                    5
+                                  )
+                                }
+                                className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                title="Tambah 5 Kuota (Kirim notifikasi otomatis Email & WhatsApp)"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>+5 Kuota</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddQuotaManual(
+                                    user.id,
+                                    user.name,
+                                    user.email,
+                                    user.whatsapp || user.phone || '',
+                                    10
+                                  )
+                                }
+                                className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-xs shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                title="Tambah 10 Kuota (Kirim notifikasi otomatis Email & WhatsApp)"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>+10 Kuota</span>
+                              </button>
+
+                              {/* Tombol Blokir / Buka Blokir */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onToggleBlockUser(user.id, !isBlocked);
+                                  showNotification(
+                                    isBlocked
+                                      ? `✅ Blokir untuk ${user.name} telah dibuka.`
+                                      : `⛔ Pengguna ${user.name} berhasil diblokir.`
+                                  );
+                                }}
+                                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer ml-auto sm:ml-1 ${
+                                  isBlocked
+                                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
+                                }`}
+                                title={isBlocked ? 'Buka blokir akun ini' : 'Blokir akun pengguna ini'}
+                              >
+                                {isBlocked ? 'Buka Blokir' : 'Blokir'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* TABLE VIEW (Untuk Monitor Desktop dengan Kolom Sticky & Rapi) */
+                  <div className="overflow-x-auto border border-slate-200 rounded-3xl shadow-xs bg-white">
+                    <table className="w-full text-left text-xs text-slate-700 divide-y divide-slate-200">
+                      <thead className="bg-slate-50 text-[11px] font-black uppercase text-slate-500 tracking-wider">
                         <tr>
-                          <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
-                            {userSearchQuery
-                              ? `Tidak ada pengguna yang cocok dengan pencarian "${userSearchQuery}"`
-                              : userFilter === 'blocked'
-                              ? 'Tidak ada pengguna yang sedang diblokir saat ini.'
-                              : 'Belum ada data pendaftar baru.'}
-                          </td>
+                          <th className="px-3.5 py-3">ID Pengguna</th>
+                          <th className="px-3.5 py-3">Nama Lengkap</th>
+                          <th className="px-3.5 py-3">Alamat Email</th>
+                          <th className="px-3.5 py-3">Nomor WhatsApp</th>
+                          <th className="px-3.5 py-3">Tgl Daftar</th>
+                          <th className="px-3.5 py-3 text-center">Status</th>
+                          <th className="px-3.5 py-3 text-center">Tambah Kuota Manual</th>
+                          <th className="px-3.5 py-3 text-right">Aksi</th>
                         </tr>
-                      ) : (
-                        filteredUsersList.map((user) => {
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {filteredUsersList.map((user) => {
                           const isBlocked = blockedUserIds.includes(user.id) || user.status === 'blocked';
                           const cleanWa = user.whatsapp || user.phone || '';
+                          const isNew = isNewUser(user.registeredAt);
+                          const currentQuota = typeof user.listingQuota === 'number' ? user.listingQuota : getUserQuota(user.id);
 
                           return (
-                            <tr key={user.id} className="hover:bg-slate-50/80 transition">
+                            <tr
+                              key={user.id}
+                              className={`hover:bg-slate-50/80 transition ${
+                                isNew ? 'bg-emerald-50/20' : ''
+                              }`}
+                            >
                               {/* 1. ID Pengguna */}
                               <td className="px-3.5 py-3 whitespace-nowrap">
                                 <div className="flex items-center gap-1.5">
@@ -1671,9 +2137,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                               {/* 2. Nama Lengkap */}
                               <td className="px-3.5 py-3 whitespace-nowrap">
-                                <span className="font-black text-slate-900 block text-xs">
-                                  {user.name}
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-black text-slate-900 text-xs">
+                                    {user.name}
+                                  </span>
+                                  {isNew && (
+                                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-600 text-white animate-pulse">
+                                      BARU
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-[10px] text-slate-400 capitalize">
                                   Role: <strong className="text-slate-600">{user.role || 'buyer'}</strong> • {user.count || 0} Iklan
                                 </span>
@@ -1719,8 +2192,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                               {/* 5. Tanggal Pendaftaran */}
                               <td className="px-3.5 py-3 whitespace-nowrap">
-                                <span className="text-slate-500 font-mono text-[11px] block">
-                                  {formatIndoDate(user.registeredAt)}
+                                <span className="text-slate-700 font-mono text-[11px] block">
+                                  {formatRelativeTime(user.registeredAt)}
                                 </span>
                                 {user.city && (
                                   <span className="text-[10px] text-slate-400">
@@ -1748,14 +2221,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               <td className="px-3.5 py-3 whitespace-nowrap text-center">
                                 <div className="flex flex-col items-center gap-1.5">
                                   <span className="font-mono font-black text-sky-900 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md text-[11px]">
-                                    {typeof user.listingQuota === 'number' ? user.listingQuota : 1} Kuota
+                                    {currentQuota} Kuota
                                   </span>
 
                                   <div className="flex items-center gap-1">
                                     <button
                                       type="button"
                                       onClick={() => handleAddQuotaManual(user.id, user.name, user.email, user.whatsapp || user.phone || '', 1)}
-                                      className="px-2 py-0.5 rounded-md bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
+                                      className="px-2 py-1 rounded-lg bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
                                       title="Tambah 1 Kuota Iklan (Kirim Double Notifikasi Email & WhatsApp)"
                                     >
                                       +1 Kuota
@@ -1763,7 +2236,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => handleAddQuotaManual(user.id, user.name, user.email, user.whatsapp || user.phone || '', 5)}
-                                      className="px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
+                                      className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
                                       title="Tambah 5 Kuota Iklan (Kirim Double Notifikasi Email & WhatsApp)"
                                     >
                                       +5 Kuota
@@ -1771,7 +2244,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => handleAddQuotaManual(user.id, user.name, user.email, user.whatsapp || user.phone || '', 10)}
-                                      className="px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
+                                      className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
                                       title="Tambah 10 Kuota Iklan (Kirim Double Notifikasi Email & WhatsApp)"
                                     >
                                       +10 Kuota
@@ -1789,7 +2262,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                     showNotification(
                                       isBlocked
                                         ? `Blokir untuk ${user.name} telah dibuka.`
-                                        : `Pengguna ${user.name} berhasil diblokir dari posting iklan baru.`
+                                        : `Pengguna ${user.name} berhasil diblokir.`
                                     );
                                   }}
                                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ml-auto ${
@@ -1813,11 +2286,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               </td>
                             </tr>
                           );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 

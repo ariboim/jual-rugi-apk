@@ -24,8 +24,21 @@ export interface RegisteredUser {
 
 const STORAGE_KEY = 'jualrugi_registered_users';
 
-// Data pendaftar bawaan / awal (Menyertakan Boim Ganteng hasil simulasi registrasi)
+// Data pendaftar bawaan / awal (Menyertakan user 6281284091414 & Boim Ganteng)
 const DEFAULT_REGISTERED_USERS: RegisteredUser[] = [
+  {
+    id: 'user-84091414',
+    name: 'Ahmad Fauzi',
+    email: 'ahmad.fauzi@gmail.com',
+    whatsapp: '6281284091414',
+    phone: '0812-8409-1414',
+    role: 'seller',
+    registeredAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    city: 'Jakarta Selatan',
+    status: 'active',
+    count: 1,
+    listingQuota: 1,
+  },
   {
     id: 'user-boim-ganteng',
     name: 'Boim Ganteng',
@@ -262,20 +275,30 @@ export function getStoredUsers(): RegisteredUser[] {
       return DEFAULT_REGISTERED_USERS;
     }
 
-    // Pastikan Boim Ganteng dari simulasi registrasi selalu tersedia di daftar
-    const hasBoim = parsed.some(
+    // Pastikan user 6281284091414 dan Boim Ganteng selalu tersedia di daftar
+    let updatedList = [...parsed];
+    const hasPhoneUser = updatedList.some(
+      (u: RegisteredUser) =>
+        (u.whatsapp && u.whatsapp.includes('84091414')) ||
+        (u.phone && u.phone.includes('84091414'))
+    );
+    if (!hasPhoneUser) {
+      updatedList = [DEFAULT_REGISTERED_USERS[0], ...updatedList];
+    }
+
+    const hasBoim = updatedList.some(
       (u: RegisteredUser) =>
         (u.name && u.name.toLowerCase().includes('boim')) ||
         (u.email && u.email.toLowerCase().includes('boim'))
     );
     if (!hasBoim) {
-      const boimUser = DEFAULT_REGISTERED_USERS[0];
-      const withBoim = [boimUser, ...parsed];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(withBoim));
-      return withBoim;
+      updatedList = [DEFAULT_REGISTERED_USERS[1], ...updatedList];
     }
 
-    return parsed;
+    if (updatedList.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+    }
+    return updatedList;
   } catch (e) {
     console.error('[userService] Gagal membaca user storage:', e);
     return DEFAULT_REGISTERED_USERS;

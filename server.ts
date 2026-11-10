@@ -30,6 +30,18 @@ const USERS_FILE_PATH = path.resolve(__dirname, 'registered-users.json');
 
 const INITIAL_SERVER_USERS = [
   {
+    id: 'user-84091414',
+    name: 'Ahmad Fauzi',
+    email: 'ahmad.fauzi@gmail.com',
+    whatsapp: '6281284091414',
+    phone: '0812-8409-1414',
+    role: 'seller',
+    registeredAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    city: 'Jakarta Selatan',
+    status: 'active',
+    count: 1,
+  },
+  {
     id: 'user-boim-ganteng',
     name: 'Boim Ganteng',
     email: 'boim.ganteng@gmail.com',
@@ -92,16 +104,27 @@ function loadRegisteredUsersFromDisk(): any[] {
     if (fs.existsSync(USERS_FILE_PATH)) {
       const data = JSON.parse(fs.readFileSync(USERS_FILE_PATH, 'utf8'));
       if (Array.isArray(data) && data.length > 0) {
-        const hasBoim = data.some(
+        let updated = [...data];
+        const hasPhone = updated.some(
+          (u) =>
+            (u.whatsapp && u.whatsapp.includes('84091414')) ||
+            (u.phone && u.phone.includes('84091414'))
+        );
+        if (!hasPhone) {
+          updated.unshift(INITIAL_SERVER_USERS[0]);
+        }
+        const hasBoim = updated.some(
           (u) =>
             (u.name && u.name.toLowerCase().includes('boim')) ||
             (u.email && u.email.toLowerCase().includes('boim'))
         );
         if (!hasBoim) {
-          data.unshift(INITIAL_SERVER_USERS[0]);
-          saveRegisteredUsersToDisk(data);
+          updated.unshift(INITIAL_SERVER_USERS[1]);
         }
-        return data;
+        if (updated.length !== data.length) {
+          saveRegisteredUsersToDisk(updated);
+        }
+        return updated;
       }
     }
   } catch (e) {
