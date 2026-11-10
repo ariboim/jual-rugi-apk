@@ -97,3 +97,77 @@ export function buildWhatsAppConfirmationUrl(params: WhatsAppConfirmationParams)
   return `https://wa.me/${WA_ADMIN_PHONE}?text=${encodeURIComponent(message)}`;
 }
 
+/**
+ * =========================================================================
+ * KONFIGURASI PAKET BELI SLOT KUOTA IKLAN (JIKA TIDAK INGIN MENUNGGU 45 HARI)
+ * 1 Kuota Iklan : Rp 50.000
+ * 5 Kuota Iklan : Rp 200.000 (Hemat Rp 50.000)
+ * 10 Kuota Iklan: Rp 450.000 (Hemat Rp 50.000)
+ * =========================================================================
+ */
+export interface QuotaSlotPackage {
+  id: 'quota_1' | 'quota_5' | 'quota_10';
+  amount: 1 | 5 | 10;
+  name: string;
+  label: string;
+  price: number;
+  savings?: string;
+  badge?: string;
+  description: string;
+}
+
+export const QUOTA_SLOT_PACKAGES: QuotaSlotPackage[] = [
+  {
+    id: 'quota_1',
+    amount: 1,
+    name: '1 Kuota Iklan',
+    label: '1 Kuota Iklan',
+    price: 50000,
+    description: 'Buka 1 slot posting iklan baru langsung tayang tanpa menunggu 45 hari.',
+  },
+  {
+    id: 'quota_5',
+    amount: 5,
+    name: '5 Kuota Iklan',
+    label: '5 Kuota Iklan',
+    price: 200000,
+    savings: 'Hemat Rp 50.000',
+    badge: 'Paling Populer',
+    description: 'Hanya Rp 40.000 per iklan. Sangat cocok untuk penjual aktif dengan banyak barang.',
+  },
+  {
+    id: 'quota_10',
+    amount: 10,
+    name: '10 Kuota Iklan',
+    label: '10 Kuota Iklan',
+    price: 450000,
+    savings: 'Hemat Rp 50.000',
+    badge: 'Paling Hemat',
+    description: 'Hanya Rp 45.000 per iklan. Paket kuota terbesar untuk toko/reseller terpercaya.',
+  },
+];
+
+/**
+ * Template konfirmasi WhatsApp wajib sesuai spesifikasi:
+ * 'Halo admin saya dengan {nama} dan {user id},saya sudah membayar untuk { kuota iklan} ,mohon diaktivasi kuota iklan saya ya'
+ */
+export function generateQuotaWhatsAppMessage(
+  nama: string,
+  userId: string,
+  kuotaIklan: string
+): string {
+  return `Halo admin saya dengan ${nama} dan ${userId},saya sudah membayar untuk ${kuotaIklan} ,mohon diaktivasi kuota iklan saya ya`;
+}
+
+/**
+ * URL WhatsApp Admin dengan pesan konfirmasi kuota otomatis
+ */
+export function buildQuotaWhatsAppConfirmationUrl(
+  nama: string,
+  userId: string,
+  kuotaIklan: string
+): string {
+  const msg = generateQuotaWhatsAppMessage(nama, userId, kuotaIklan);
+  return `https://wa.me/${WA_ADMIN_PHONE}?text=${encodeURIComponent(msg)}`;
+}
+

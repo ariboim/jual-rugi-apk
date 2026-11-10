@@ -41,6 +41,7 @@ import {
   RegisteredUser,
   getStoredUsers,
   syncUsersFromServer,
+  updateStoredUserQuota,
   exportUsersToCSV,
   exportUsersToXLS,
   exportUsersToPDF,
@@ -69,6 +70,7 @@ interface AdminDashboardModalProps {
   blockedUserIds: string[];
   onToggleBlockUser: (userId: string, isBlocked: boolean) => void;
   onViewListingDetail?: (listing: Listing) => void;
+  onAddUserQuota?: (userId: string, addedQuota: number) => void;
 }
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
@@ -82,6 +84,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   blockedUserIds,
   onToggleBlockUser,
   onViewListingDetail,
+  onAddUserQuota,
 }) => {
   // Authentication State
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
@@ -220,6 +223,18 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       setIsSavingBrevo(false);
       showNotification('✅ Konfigurasi API Key Brevo berhasil disimpan di sistem & browser!');
     }, 400);
+  };
+
+  const handleAddQuotaManual = (userId: string, userName: string, amount: number) => {
+    const res = updateStoredUserQuota(userId, amount);
+    if (onAddUserQuota) {
+      onAddUserQuota(userId, amount);
+    }
+    // Update local persistentUsers state so UI refreshes immediately
+    setPersistentUsers(getStoredUsers());
+    showNotification(
+      `✅ Berhasil menambahkan +${amount} kuota iklan untuk ${userName}! Total kuota sekarang: ${res.newQuota} slot.`
+    );
   };
 
   const handleSendTestEmail = async () => {
@@ -1246,13 +1261,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         <th className="px-3.5 py-3">Nomor WhatsApp</th>
                         <th className="px-3.5 py-3">Tgl Daftar</th>
                         <th className="px-3.5 py-3 text-center">Status Akun</th>
+                        <th className="px-3.5 py-3 text-center">Tambah Kuota Manual</th>
                         <th className="px-3.5 py-3 text-right">Aksi Moderasi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {filteredUsersList.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                          <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                             {userSearchQuery
                               ? `Tidak ada pengguna yang cocok dengan pencarian "${userSearchQuery}"`
                               : userFilter === 'blocked'
@@ -1363,7 +1379,43 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 )}
                               </td>
 
-                              {/* 7. Aksi Moderasi */}
+                              {/* 7. Kuota Iklan & Tambah Kuota Manual (+1, +5, +10 Kuota) */}
+                              <td className="px-3.5 py-3 whitespace-nowrap text-center">
+                                <div className="flex flex-col items-center gap-1.5">
+                                  <span className="font-mono font-black text-sky-900 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md text-[11px]">
+                                    {typeof user.listingQuota === 'number' ? user.listingQuota : 1} Kuota
+                                  </span>
+
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddQuotaManual(user.id, user.name, 1)}
+                                      className="px-2 py-0.5 rounded-md bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
+                                      title="Tambah 1 Kuota Iklan untuk pengguna ini"
+                                    >
+                                      +1 Kuota
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddQuotaManual(user.id, user.name, 5)}
+                                      className="px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
+                                      title="Tambah 5 Kuota Iklan untuk pengguna ini"
+                                    >
+                                      +5 Kuota
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddQuotaManual(user.id, user.name, 10)}
+                                      className="px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
+                                      title="Tambah 10 Kuota Iklan untuk pengguna ini"
+                                    >
+                                      +10 Kuota
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* 8. Aksi Moderasi */}
                               <td className="px-3.5 py-3 text-right whitespace-nowrap">
                                 <button
                                   type="button"

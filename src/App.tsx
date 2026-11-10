@@ -61,6 +61,8 @@ import { PanduanPDFModal } from './components/PanduanPDFModal';
 import { LiveActivityTicker } from './components/LiveActivityTicker';
 import { WelcomeEmailSetupModal } from './components/WelcomeEmailSetupModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
+import { BuyQuotaModal } from './components/BuyQuotaModal';
+import { updateStoredUserQuota } from './services/userService';
 import { Footer } from './components/Footer';
 import { ADMIN_TEST_PRESETS, AdminTestPreset } from './data/adminTestPresets';
 import {
@@ -442,6 +444,7 @@ export default function App() {
   const [isQRISModalOpen, setIsQRISModalOpen] = useState(false);
   const [qrisListing, setQrisListing] = useState<Listing | null>(null);
   const [qrisType, setQrisType] = useState<MonetizationType>('sundul');
+  const [isBuyQuotaModalOpen, setIsBuyQuotaModalOpen] = useState(false);
 
   // User Profile simulation state
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
@@ -949,6 +952,69 @@ export default function App() {
     setListings((prev) => prev.filter((l) => l.id !== id));
     deleteListingFromSupabase(id);
     showToast('Iklan berhasil dihapus.');
+  };
+
+  const handleMarkListingAsSold = (id: string) => {
+    const now = new Date().toISOString();
+    const cooldownDays = 45;
+    const cooldownMs = cooldownDays * 24 * 60 * 60 * 1000;
+    const freeQuotaAvailableAt = new Date(Date.now() + cooldownMs).toISOString();
+
+    // 1. Update listing status menjadi 'sold'
+    setListings((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, status: 'sold', soldAt: now } : l))
+    );
+    updateListingInSupabase(id, { status: 'sold', sold_at: now });
+
+    // 2. Update currentUser: TIDAK menambah kuota, aktifkan aturan cooldown 45 hari
+    setCurrentUser((prev) => {
+      const nextQuota = Math.max(0, (prev.listingQuota || 0) - 1);
+      const updated: UserProfile = {
+        ...prev,
+        freeListingUsed: true,
+        listingQuota: nextQuota,
+        freeQuotaAvailableAt,
+        lastSoldAt: now,
+      };
+      try {
+        localStorage.setItem('jualrugi_current_user', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    showToast(
+      '🎉 Iklan ditandai Terjual! Sesuai aturan, iklan terjual TIDAK menambah kuota. Menunggu 45 hari untuk kuota gratis berikutnya.'
+    );
+
+    // 3. Langsung tawarkan opsi beli kuota instan
+    setTimeout(() => {
+      setIsBuyQuotaModalOpen(true);
+    }, 600);
+  };
+
+  const handleAddUserQuota = (userId: string, addedQuota: number) => {
+    const res = updateStoredUserQuota(userId, addedQuota);
+
+    // Sinkronkan currentUser jika user yang ditambahkan sedang login
+    if (
+      currentUser.id === userId ||
+      (currentUser.email && currentUser.email.toLowerCase() === userId.toLowerCase())
+    ) {
+      setCurrentUser((prev) => {
+        const nextTotal = (prev.listingQuota || 0) + addedQuota;
+        const updated: UserProfile = {
+          ...prev,
+          listingQuota: nextTotal,
+          freeQuotaAvailableAt: undefined, // Kuota telah aktif, reset periode tunggu
+        };
+        try {
+          localStorage.setItem('jualrugi_current_user', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+    }
+
+    showToast(`✅ Berhasil menambahkan +${addedQuota} kuota iklan! (Total: ${res.newQuota} slot)`);
   };
 
   const handleToggleBlockUser = (userId: string, isBlocked: boolean) => {
@@ -1924,6 +1990,8 @@ export default function App() {
             onOpenAdmin={() => setIsAdminModalOpen(true)}
             onQuickTestAd={handleQuickTestAd}
             onPrefillTestAd={handlePrefillTestAd}
+            onMarkAsSold={handleMarkListingAsSold}
+            onOpenBuyQuotaModal={() => setIsBuyQuotaModalOpen(true)}
           />
         )}
       </main>
@@ -2012,6 +2080,7 @@ export default function App() {
               },
             }));
           }}
+          onOpenBuyQuotaModal={() => setIsBuyQuotaModalOpen(true)}
         />
       )}
 
@@ -2039,6 +2108,14 @@ export default function App() {
         />
       )}
 
+      {/* MODAL BELI SLOT KUOTA IKLAN (1, 5, 10 KUOTA) */}
+      <BuyQuotaModal
+        isOpen={isBuyQuotaModalOpen}
+        onClose={() => setIsBuyQuotaModalOpen(false)}
+        currentUser={currentUser}
+        onSimulateAdminApproval={(amount) => handleAddUserQuota(currentUser.id, amount)}
+      />
+
       {/* DASHBOARD KONTROL ADMIN TERPROTEKSI */}
       {isAdminModalOpen && (
         <AdminDashboardModal
@@ -2052,6 +2129,7 @@ export default function App() {
           blockedUserIds={blockedUserIds}
           onToggleBlockUser={handleToggleBlockUser}
           onViewListingDetail={(listing) => setSelectedListing(listing)}
+          onAddUserQuota={handleAddUserQuota}
         />
       )}
 

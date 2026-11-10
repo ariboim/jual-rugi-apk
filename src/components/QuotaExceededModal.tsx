@@ -18,6 +18,7 @@ interface QuotaExceededModalProps {
   onClose: () => void;
   currentUser: UserProfile;
   onSelectPromotion: (packageType: MonetizationPackage) => void;
+  onOpenBuyQuotaModal?: () => void;
 }
 
 export const QuotaExceededModal: React.FC<QuotaExceededModalProps> = ({
@@ -25,6 +26,7 @@ export const QuotaExceededModal: React.FC<QuotaExceededModalProps> = ({
   onClose,
   currentUser,
   onSelectPromotion,
+  onOpenBuyQuotaModal,
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<MonetizationPackage>('sundul');
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -155,6 +157,25 @@ export const QuotaExceededModal: React.FC<QuotaExceededModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Opsi Beli Slot Kuota Iklan (1, 5, 10 Kuota) */}
+        {onOpenBuyQuotaModal && (
+          <div className="mb-4 p-3 rounded-2xl bg-amber-50 border border-amber-300 text-center">
+            <p className="text-xs text-amber-950 font-bold mb-1.5">
+              Atau beli slot kuota iklan langsung (1 Kuota 50rb, 5 Kuota 200rb, 10 Kuota 450rb):
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenBuyQuotaModal();
+              }}
+              className="w-full py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-xs transition active:scale-95 cursor-pointer"
+            >
+              🛒 Beli Slot Kuota Iklan (1, 5, atau 10 Kuota)
+            </button>
+          </div>
+        )}
 
         {/* Security & Mayar Payment Gateway badge */}
         <div className="flex items-center justify-center gap-2 text-[11px] text-slate-500 mb-4 bg-slate-50 p-2.5 rounded-xl border border-slate-100">

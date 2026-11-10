@@ -17,6 +17,9 @@ export interface RegisteredUser {
   city: string;
   status: 'active' | 'blocked';
   count?: number;
+  listingQuota?: number;
+  freeQuotaAvailableAt?: string;
+  lastSoldAt?: string;
 }
 
 const STORAGE_KEY = 'jualrugi_registered_users';
@@ -352,6 +355,72 @@ export function saveNewRegisteredUser(userData: {
   }
 
   return newUser;
+}
+
+/**
+ * Update kuota posting iklan pengguna secara manual (oleh Admin pada Tab Manajemen Pengguna)
+ * Mendukung penambahan +1, +5, atau +10 kuota
+ */
+export function updateStoredUserQuota(
+  userId: string,
+  addedQuota: number
+): { success: boolean; newQuota: number; user?: RegisteredUser } {
+  try {
+    const list = getStoredUsers();
+    let targetUser: RegisteredUser | undefined;
+    let computedQuota = addedQuota;
+
+    const updated = list.map((u) => {
+      const match =
+        u.id === userId ||
+        u.email.toLowerCase() === userId.toLowerCase() ||
+        (u.name && u.name.toLowerCase() === userId.toLowerCase());
+
+      if (match) {
+        const cur = typeof u.listingQuota === 'number' ? u.listingQuota : 1;
+        computedQuota = Math.max(0, cur + addedQuota);
+        targetUser = {
+          ...u,
+          listingQuota: computedQuota,
+          // Jika admin menambah kuota, reset periode cooldown jika kuota sekarang > 0
+          freeQuotaAvailableAt: computedQuota > 0 ? undefined : u.freeQuotaAvailableAt,
+        };
+        return targetUser;
+      }
+      return u;
+    });
+
+    if (targetUser) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      return { success: true, newQuota: computedQuota, user: targetUser };
+    }
+
+    return { success: false, newQuota: addedQuota };
+  } catch (err) {
+    console.error('[userService] Gagal menambah kuota pengguna:', err);
+    return { success: false, newQuota: addedQuota };
+  }
+}
+
+/**
+ * Mengambil kuota aktif pengguna tersimpan
+ */
+export function getUserQuota(userId: string): number {
+  try {
+    const list = getStoredUsers();
+    const found = list.find(
+      (u) =>
+        u.id === userId ||
+        u.email.toLowerCase() === userId.toLowerCase() ||
+        (u.name && u.name.toLowerCase() === userId.toLowerCase())
+    );
+    if (found && typeof found.listingQuota === 'number') {
+      return found.listingQuota;
+    }
+    return 1; // Default bonus 1 kuota
+  } catch {
+    return 1;
+  }
 }
 
 /**

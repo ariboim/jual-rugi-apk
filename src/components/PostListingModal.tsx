@@ -29,6 +29,7 @@ interface PostListingModalProps {
   onUpdatePermissions?: (perms: { cameraGalleryGranted: boolean }) => void;
   initialPreset?: AdminTestPreset | null;
   isBlocked?: boolean;
+  onOpenBuyQuotaModal?: () => void;
 }
 
 export const PostListingModal: React.FC<PostListingModalProps> = ({
@@ -39,6 +40,7 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
   onUpdatePermissions,
   initialPreset,
   isBlocked = false,
+  onOpenBuyQuotaModal,
 }) => {
   const [title, setTitle] = useState(initialPreset ? initialPreset.title : '');
   const [category, setCategory] = useState<Category>(
@@ -605,6 +607,12 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
           setIsQuotaModalOpen(false);
           if (onOpenMayarPromotion) {
             onOpenMayarPromotion(plan);
+          }
+        }}
+        onOpenBuyQuotaModal={() => {
+          setIsQuotaModalOpen(false);
+          if (onOpenBuyQuotaModal) {
+            onOpenBuyQuotaModal();
           }
         }}
       />

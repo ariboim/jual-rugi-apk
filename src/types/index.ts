@@ -111,6 +111,8 @@ export interface UserProfile {
   freeListingUsed: boolean;
   listingQuota: number;
   activeListingCount: number;
+  freeQuotaAvailableAt?: string; // Tanggal kuota gratis 1 iklan kembali tersedia (45 hari sejak sold)
+  lastSoldAt?: string; // Tanggal terakhir kali menandai iklan terjual/sold
   permissions?: UserPermissions;
 }
 

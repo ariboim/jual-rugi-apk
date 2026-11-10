@@ -45,6 +45,8 @@ interface SellerDashboardProps {
   onQuickTestAd?: (presetIndex?: number) => void;
   onPrefillTestAd?: (preset: AdminTestPreset) => void;
   onOpenAdmin?: () => void;
+  onMarkAsSold?: (listingId: string) => void;
+  onOpenBuyQuotaModal?: () => void;
 }
 
 export const SellerDashboard: React.FC<SellerDashboardProps> = ({
@@ -65,7 +67,10 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
   onQuickTestAd,
   onPrefillTestAd,
   onOpenAdmin,
+  onMarkAsSold,
+  onOpenBuyQuotaModal,
 }) => {
+  const [selectedSoldListing, setSelectedSoldListing] = React.useState<Listing | null>(null);
   const hasActiveAccount = isLoggedIn && currentUser.id !== 'guest';
 
   const myListings = React.useMemo(() => {
@@ -203,44 +208,81 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
         </a>
       </div>
 
-      {/* Quota & Monetization Tracker Card */}
-      <div className="bg-gradient-to-r from-sky-50 via-white to-amber-50/60 p-4 rounded-3xl border border-sky-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-sky-500 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
-            {currentUser.listingQuota}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="font-extrabold text-sm text-sky-950">
-                Sisa Kuota Posting: {currentUser.listingQuota} Slot
-              </h4>
-              <span
-                className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+      {/* Quota & Monetization Tracker Card dengan aturan 45 hari cooldown */}
+      {(() => {
+        let cooldownDays = 45;
+        if (currentUser.freeQuotaAvailableAt) {
+          const diffMs = new Date(currentUser.freeQuotaAvailableAt).getTime() - Date.now();
+          cooldownDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+        }
+
+        return (
+          <div className={`p-4 rounded-3xl border shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+            currentUser.listingQuota > 0
+              ? 'bg-gradient-to-r from-sky-50 via-white to-amber-50/60 border-sky-200/80'
+              : 'bg-gradient-to-r from-amber-50 via-orange-50/40 to-amber-50 border-amber-300'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 shadow-xs ${
+                currentUser.listingQuota > 0 ? 'bg-sky-500 text-white' : 'bg-amber-500 text-white'
+              }`}>
+                {currentUser.listingQuota}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-extrabold text-sm text-slate-900">
+                    Sisa Kuota Posting: {currentUser.listingQuota} Slot
+                  </h4>
+                  <span
+                    className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      currentUser.listingQuota > 0
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}
+                  >
+                    {currentUser.listingQuota > 0 ? 'Siap Pasang Iklan' : 'Batas Kuota Habis'}
+                  </span>
+                  {currentUser.listingQuota <= 0 && (
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-200 text-amber-950 border border-amber-400 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-amber-800" />
+                      Tunggu {cooldownDays} Hari (Kuota Gratis)
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {currentUser.listingQuota > 0
+                    ? !currentUser.freeListingUsed
+                      ? '🎁 Termasuk 1x Kuota Iklan Gratis untuk pendaftar baru.'
+                      : '💳 Kuota listing aktif siap ditayangkan.'
+                    : `Iklan yang terjual (sold) tidak menambah kuota. Tunggu ${cooldownDays} hari atau beli kuota instan sekarang.`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
+              {currentUser.listingQuota <= 0 && onOpenBuyQuotaModal && (
+                <button
+                  type="button"
+                  onClick={onOpenBuyQuotaModal}
+                  className="grow sm:grow-0 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs shadow-xs cursor-pointer transition active:scale-95"
+                >
+                  🛒 Beli Slot Kuota (Mulai 50rb)
+                </button>
+              )}
+              <button
+                onClick={currentUser.listingQuota <= 0 && onOpenBuyQuotaModal ? onOpenBuyQuotaModal : onOpenNewListing}
+                className={`w-full sm:w-auto px-3.5 py-2 rounded-xl font-extrabold text-xs shadow-xs cursor-pointer transition active:scale-95 ${
                   currentUser.listingQuota > 0
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-red-100 text-red-800'
+                    ? 'bg-sky-500 hover:bg-sky-600 text-white'
+                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                 }`}
               >
-                {currentUser.listingQuota > 0 ? 'Siap Pasang Iklan' : 'Kuota Habis'}
-              </span>
+                + Pasang Iklan
+              </button>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {!currentUser.freeListingUsed
-                ? '🎁 Termasuk 1x Kuota Iklan Gratis untuk pendaftar baru.'
-                : 'Beli Sundul Iklan atau Prioritas BU Banget untuk membuka +1 slot iklan baru.'}
-            </p>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-stretch sm:self-auto">
-          <button
-            onClick={onOpenNewListing}
-            className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs shadow-xs cursor-pointer transition"
-          >
-            + Pasang Iklan
-          </button>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Monetization Feature Callout Banner with Mayar Pricing */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -417,54 +459,91 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
 
                 {/* Monetization & Edit Action Buttons */}
                 <div className="flex sm:flex-col gap-2 w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-sky-50">
-                  {/* Edit Iklan Button */}
-                  {onEditListing && (
-                    <button
-                      onClick={() => onEditListing(item)}
-                      className="grow sm:grow-0 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm shadow-amber-500/20"
-                      title="Edit rincian, harga BU, atau minus kondisi iklan ini"
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-white" />
-                      <span>Edit Iklan</span>
-                    </button>
+                  {/* Status Sold Badge jika sudah terjual */}
+                  {item.status === 'sold' ? (
+                    <div className="flex flex-col gap-1.5 w-full sm:w-36">
+                      <div className="px-2.5 py-1.5 rounded-xl bg-red-100 text-red-700 font-black text-[11px] text-center border border-red-200">
+                        🔒 PRODUK SOLD
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Hapus riwayat iklan "${item.title}"?`)) {
+                            onDeleteListing(item.id);
+                          }
+                        }}
+                        className="py-1.5 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer"
+                        title="Hapus dari daftar riwayat iklan"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Hapus Riwayat</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Tandai Terjual (Sold) Button */}
+                      {onMarkAsSold && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSoldListing(item)}
+                          className="grow sm:grow-0 py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-xs"
+                          title="Tandai produk ini sudah laku / terjual (Sold)"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Tandai Terjual</span>
+                        </button>
+                      )}
+
+                      {/* Edit Iklan Button */}
+                      {onEditListing && (
+                        <button
+                          onClick={() => onEditListing(item)}
+                          className="grow sm:grow-0 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm shadow-amber-500/20"
+                          title="Edit rincian, harga BU, atau minus kondisi iklan ini"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-white" />
+                          <span>Edit Iklan</span>
+                        </button>
+                      )}
+
+                      {/* Sundul Button - Sky Blue */}
+                      <button
+                        onClick={() => onOpenQRIS(item, 'sundul')}
+                        className="grow sm:grow-0 py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-xs"
+                        title="Sundul Iklan (Rp 25.000) - Naikkan ke posisi paling atas feed"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5 text-sky-600" />
+                        <span>Sundul (Rp 25.000)</span>
+                      </button>
+
+                      {/* Paling BU Button */}
+                      <button
+                        onClick={() => onOpenQRIS(item, 'superbu')}
+                        className={`grow sm:grow-0 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 ${
+                          item.isSuperBU
+                            ? 'bg-amber-300 hover:bg-amber-400 text-amber-950 border border-amber-400 font-black shadow-xs'
+                            : 'bg-amber-400 hover:bg-amber-500 text-amber-950 border border-amber-500 font-black shadow-xs'
+                        }`}
+                        title="Pasang Highlight Kuning & Badge PALING BU (Rp 75.000) via Mayar"
+                      >
+                        <Flame className="w-3.5 h-3.5 fill-red-600 text-red-600" />
+                        <span>Paling BU (Rp 75.000)</span>
+                      </button>
+
+                      {/* Delete Button */}
+                      <button
+                        onClick={() => {
+                          if (confirm(`Hapus iklan "${item.title}" dari peredaran?`)) {
+                            onDeleteListing(item.id);
+                          }
+                        }}
+                        className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-sky-50 transition cursor-pointer self-center"
+                        title="Hapus Iklan (Batal Jual)"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
                   )}
-
-                  {/* Sundul Button - Sky Blue */}
-                  <button
-                    onClick={() => onOpenQRIS(item, 'sundul')}
-                    className="grow sm:grow-0 py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-xs"
-                    title="Sundul Iklan (Rp 25.000) - Naikkan ke posisi paling atas feed"
-                  >
-                    <ArrowUp className="w-3.5 h-3.5 text-sky-600" />
-                    <span>Sundul (Rp 25.000)</span>
-                  </button>
-
-                  {/* Paling BU Button */}
-                  <button
-                    onClick={() => onOpenQRIS(item, 'superbu')}
-                    className={`grow sm:grow-0 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 ${
-                      item.isSuperBU
-                        ? 'bg-amber-300 hover:bg-amber-400 text-amber-950 border border-amber-400 font-black shadow-xs'
-                        : 'bg-amber-400 hover:bg-amber-500 text-amber-950 border border-amber-500 font-black shadow-xs'
-                    }`}
-                    title="Pasang Highlight Kuning & Badge PALING BU (Rp 75.000) via Mayar"
-                  >
-                    <Flame className="w-3.5 h-3.5 fill-red-600 text-red-600" />
-                    <span>Paling BU (Rp 75.000)</span>
-                  </button>
-
-                  {/* Delete Button */}
-                  <button
-                    onClick={() => {
-                      if (confirm('Hapus iklan ini dari peredaran?')) {
-                        onDeleteListing(item.id);
-                      }
-                    }}
-                    className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-sky-50 transition cursor-pointer self-center"
-                    title="Hapus Iklan"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
             </div>
@@ -516,6 +595,66 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           )}
         </div>
       </div>
+
+      {/* Modal Konfirmasi Iklan Terjual (Sold) */}
+      {selectedSoldListing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 overflow-y-auto animate-fade-in">
+          <div className="relative w-full max-w-md rounded-3xl bg-white border border-slate-200 shadow-2xl p-5 sm:p-6 text-slate-800 my-auto">
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 border-2 border-emerald-300 flex items-center justify-center mx-auto mb-2.5 shadow-xs">
+                <CheckCircle2 className="w-6 h-6 stroke-[2.2]" />
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-slate-900">
+                Konfirmasi Barang Terjual (SOLD)
+              </h3>
+              <p className="text-xs text-slate-600 mt-1 font-bold">
+                "{selectedSoldListing.title}"
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-300/80 mb-4 text-xs space-y-2 text-amber-950">
+              <div className="font-extrabold text-amber-900 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>Ketentuan Kuota Iklan Terjual:</span>
+              </div>
+              <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
+                <li>
+                  Iklan yang ditandai <strong>Terjual / Sold</strong> <u>TIDAK menambah kuota iklan otomatis</u>.
+                </li>
+                <li>
+                  Untuk kuota gratis 1 iklan baru berikutnya, sistem menerapkan masa tunggu cooldown <strong>45 hari</strong>.
+                </li>
+                <li>
+                  Jika Anda tidak ingin menunggu 45 hari, Anda dapat langsung membeli <strong>Slot Kuota Iklan</strong> (1, 5, atau 10 kuota).
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onMarkAsSold) {
+                    onMarkAsSold(selectedSoldListing.id);
+                  }
+                  setSelectedSoldListing(null);
+                }}
+                className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-600/25 transition cursor-pointer"
+              >
+                Ya, Tandai Barang Terjual
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedSoldListing(null)}
+                className="w-full py-2.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
