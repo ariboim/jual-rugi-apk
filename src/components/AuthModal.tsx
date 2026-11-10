@@ -64,12 +64,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   /**
-   * Filter WhatsApp hanya menerima digit angka
+   * Filter WhatsApp hanya menerima digit angka & validasi langsung format 628...
    */
   const handleWhatsAppInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const numericOnly = e.target.value.replace(/\D/g, '');
     setWhatsapp(numericOnly);
-    if (errors.whatsapp) {
+
+    // Deteksi instan jika pengguna mengetik angka berawalan 08 atau 0
+    if (numericOnly.startsWith('08') || numericOnly === '0') {
+      setErrors((prev) => ({
+        ...prev,
+        whatsapp: 'Format nomor salah! Wajib diawali 628... (contoh: 6281234567890, jangan gunakan awalan 08).',
+      }));
+    } else if (errors.whatsapp) {
       setErrors((prev) => ({ ...prev, whatsapp: '' }));
     }
   };
@@ -102,11 +109,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       newErrors.password = 'Kata sandi minimal 6 karakter.';
     }
 
-    // 4. Validasi Nomor WhatsApp
-    if (!whatsapp.trim()) {
+    // 4. Validasi Nomor WhatsApp (Wajib diawali 628..., larang keras format 08)
+    const cleanWa = whatsapp.trim();
+    if (!cleanWa) {
       newErrors.whatsapp = 'Nomor WhatsApp wajib diisi.';
-    } else if (!/^(08|628)[0-9]{8,12}$/.test(whatsapp.trim())) {
-      newErrors.whatsapp = 'Format salah. Gunakan awalan 08 atau 628 (total 10-14 angka).';
+    } else if (cleanWa.startsWith('08') || cleanWa.startsWith('0')) {
+      newErrors.whatsapp = 'Format nomor salah! Wajib diawali 628... (contoh: 6281234567890, jangan gunakan awalan 08).';
+    } else if (!cleanWa.startsWith('628')) {
+      newErrors.whatsapp = 'Format nomor salah! Nomor WhatsApp wajib diawali 628... (contoh: 6281234567890).';
+    } else if (cleanWa.length < 10 || cleanWa.length > 15) {
+      newErrors.whatsapp = 'Panjang nomor WhatsApp tidak valid. Format 628... harus terdiri dari 10 hingga 15 digit angka.';
     }
 
     // 5. Validasi Persetujuan Disclaimer
@@ -504,10 +516,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   pattern="[0-9]*"
                   name="whatsapp"
                   required
-                  placeholder="Contoh: 0821xxxxxxxx atau 628xxxxxxx"
+                  placeholder="Contoh: 6281234567890"
                   value={whatsapp}
                   onChange={handleWhatsAppInput}
-                  maxLength={14}
+                  maxLength={15}
                   className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-mono text-slate-900 outline-none transition ${
                     errors.whatsapp
                       ? 'border-rose-400 bg-rose-50/30 focus:ring-2 focus:ring-rose-200'
@@ -521,8 +533,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <span>{errors.whatsapp}</span>
                 </p>
               ) : (
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Hanya angka format 0821xxxxxxxx atau 628xxxxxxx
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Wajib format <strong className="text-emerald-700 font-bold">628...</strong> (contoh: 6281234567890). Jika diawali 08, format dianggap salah.
                 </p>
               )}
             </div>
@@ -612,7 +624,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   type="text"
                   name="loginIdentifier"
                   required
-                  placeholder="nama@email.com atau 0821xxxxxxxx"
+                  placeholder="nama@email.com atau 6281234567890"
                   value={loginIdentifier}
                   onChange={(e) => {
                     setLoginIdentifier(e.target.value);

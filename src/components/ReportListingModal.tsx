@@ -251,7 +251,7 @@ export const ReportListingModal: React.FC<ReportListingModalProps> = ({
                   type="text"
                   value={reporterContact}
                   onChange={(e) => setReporterContact(e.target.value)}
-                  placeholder="0812xxxx / email@..."
+                  placeholder="62812xxxx / email@..."
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-rose-500 text-xs text-slate-800"
                 />
               </div>
