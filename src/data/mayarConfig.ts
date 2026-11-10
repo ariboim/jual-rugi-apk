@@ -111,6 +111,7 @@ export interface QuotaSlotPackage {
   name: string;
   label: string;
   price: number;
+  paymentUrl: string;
   savings?: string;
   badge?: string;
   description: string;
@@ -123,6 +124,7 @@ export const QUOTA_SLOT_PACKAGES: QuotaSlotPackage[] = [
     name: '1 Kuota Iklan',
     label: '1 Kuota Iklan',
     price: 50000,
+    paymentUrl: 'https://indo-digital.myr.id/plink/link-pembayaran-1-kuota-iklan',
     description: 'Buka 1 slot posting iklan baru langsung tayang tanpa menunggu 45 hari.',
   },
   {
@@ -131,6 +133,7 @@ export const QUOTA_SLOT_PACKAGES: QuotaSlotPackage[] = [
     name: '5 Kuota Iklan',
     label: '5 Kuota Iklan',
     price: 200000,
+    paymentUrl: 'https://indo-digital.myr.id/plink/link-pembayaran-5-kuota-iklan',
     savings: 'Hemat Rp 50.000',
     badge: 'Paling Populer',
     description: 'Hanya Rp 40.000 per iklan. Sangat cocok untuk penjual aktif dengan banyak barang.',
@@ -141,6 +144,7 @@ export const QUOTA_SLOT_PACKAGES: QuotaSlotPackage[] = [
     name: '10 Kuota Iklan',
     label: '10 Kuota Iklan',
     price: 450000,
+    paymentUrl: 'https://indo-digital.myr.id/plink/Link-10-kuota-iklan',
     savings: 'Hemat Rp 50.000',
     badge: 'Paling Hemat',
     description: 'Hanya Rp 45.000 per iklan. Paket kuota terbesar untuk toko/reseller terpercaya.',

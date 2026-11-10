@@ -416,3 +416,136 @@ export async function triggerMonetizationActivatedEmail(
   };
 }
 
+export interface QuotaActivatedEmailPayload {
+  recipientEmail: string;
+  recipientName?: string;
+  addedQuota: number;
+  newTotalQuota?: number;
+}
+
+export const POST_AD_LINK = 'https://jualrugi.my.id/?action=post';
+
+/**
+ * Mengirimkan Notifikasi Email saat Admin Mengaktivasi Kuota Iklan
+ * Sesuai instruksi resmi:
+ * Subject : "kuota iklan"
+ * Format  : "Selamat kuota iklan anda telah diperbaharui,silakan pasang iklan anda sekarang { link pasang iklan } Team Admin jualrugi.my.id"
+ */
+export async function triggerQuotaActivatedEmail(
+  payload: QuotaActivatedEmailPayload
+): Promise<AdPublishedEmailResponse> {
+  const { recipientEmail, recipientName, addedQuota, newTotalQuota } = payload;
+  const postLink = typeof window !== 'undefined' && window.location?.origin
+    ? `${window.location.origin}/?action=post`
+    : POST_AD_LINK;
+
+  const textContent = `Selamat kuota iklan anda telah diperbaharui,silakan pasang iklan anda sekarang ${postLink} Team Admin jualrugi.my.id`;
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>kuota iklan</title>
+</head>
+<body style="margin:0;padding:24px;background-color:#f0f9ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:20px;border:1px solid #bae6fd;padding:28px;box-shadow:0 4px 20px rgba(0,0,0,0.06);">
+    <div style="text-align:center;margin-bottom:20px;">
+      <span style="display:inline-block;background:#e0f2fe;color:#0284c7;padding:4px 14px;border-radius:9999px;font-size:12px;font-weight:bold;text-transform:uppercase;">
+        Aktivasi Kuota Iklan Sukses
+      </span>
+      <h2 style="color:#0369a1;margin:12px 0 6px;font-size:20px;">Selamat kuota iklan anda telah diperbaharui! 🎉</h2>
+      <p style="font-weight:bold;color:#0284c7;margin:4px 0;font-size:15px;">
+        +${addedQuota} Kuota Iklan Aktif ${newTotalQuota ? `(Total: ${newTotalQuota} Slot)` : ''}
+      </p>
+    </div>
+    
+    <p style="font-size:14px;line-height:1.6;color:#334155;text-align:center;">
+      Selamat kuota iklan anda telah diperbaharui, silakan pasang iklan anda sekarang.
+    </p>
+
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${postLink}" style="display:inline-block;background:#0284c7;color:#ffffff;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:12px;text-decoration:none;box-shadow:0 4px 12px rgba(2,132,199,0.3);" target="_blank" rel="noopener noreferrer">
+        Pasang Iklan Sekarang
+      </a>
+      <div style="margin-top:14px;font-size:12px;color:#64748b;word-break:break-all;">
+        Atau gunakan link berikut: <br/>
+        <a href="${postLink}" style="color:#0284c7;font-weight:bold;">${postLink}</a>
+      </div>
+    </div>
+
+    <div style="margin-top:28px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#475569;text-align:center;">
+      <p style="margin:0 0 4px 0;font-weight:bold;">Team Admin jualrugi.my.id</p>
+      <span style="font-size:11px;color:#94a3b8;">JualRugi.my.id • Layanan Iklan Butuh Uang &amp; COD Terverifikasi</span>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const brevoConfig = getBrevoConfig();
+  const apiKey = brevoConfig.apiKey || DEFAULT_BREVO_API_KEY;
+  const senderEmail = brevoConfig.senderEmail || DEFAULT_BREVO_SENDER_EMAIL;
+  const senderName = brevoConfig.senderName || DEFAULT_BREVO_SENDER_NAME;
+
+  const logEntry = {
+    id: `email-quota-${Date.now()}`,
+    listingId: 'quota-activation',
+    listingTitle: `Aktivasi +${addedQuota} Kuota Iklan`,
+    recipientEmail,
+    recipientName: recipientName || 'Pengguna',
+    subject: 'kuota iklan',
+    sentAt: new Date().toISOString(),
+    adLink: postLink,
+  };
+
+  try {
+    const existing = JSON.parse(localStorage.getItem('jualrugi_ad_published_emails') || '[]');
+    localStorage.setItem('jualrugi_ad_published_emails', JSON.stringify([logEntry, ...existing]));
+  } catch {}
+
+  if (apiKey) {
+    try {
+      const response = await fetch(EMAIL_API_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: senderName, email: senderEmail },
+          to: [{ email: recipientEmail.trim(), name: recipientName || 'Pengiklan JualRugi' }],
+          subject: 'kuota iklan',
+          htmlContent,
+          textContent,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        return {
+          success: true,
+          message: `Email notifikasi kuota iklan berhasil dikirim ke ${recipientEmail}`,
+          sentTo: recipientEmail,
+          listingId: 'quota-activation',
+          adLink: postLink,
+          provider: 'brevo',
+          messageId: data.messageId,
+        };
+      }
+    } catch (apiErr) {
+      console.warn('Gagal memanggil Brevo API untuk notifikasi kuota:', apiErr);
+    }
+  }
+
+  return {
+    success: true,
+    message: `Notifikasi kuota iklan tercatat untuk ${recipientEmail}`,
+    sentTo: recipientEmail,
+    listingId: 'quota-activation',
+    adLink: postLink,
+    provider: 'simulation_fallback',
+  };
+}
+

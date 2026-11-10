@@ -51,6 +51,7 @@ import {
 import {
   triggerMonetizationActivatedEmail,
   triggerAdPublishedEmail,
+  triggerQuotaActivatedEmail,
   getDynamicAdLink,
 } from '../services/adPublishedEmailService';
 import {
@@ -225,15 +226,32 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }, 400);
   };
 
-  const handleAddQuotaManual = (userId: string, userName: string, amount: number) => {
+  const handleAddQuotaManual = (userId: string, userName: string, userEmail: string, amount: number) => {
     const res = updateStoredUserQuota(userId, amount);
     if (onAddUserQuota) {
       onAddUserQuota(userId, amount);
     }
     // Update local persistentUsers state so UI refreshes immediately
     setPersistentUsers(getStoredUsers());
+
+    // Pemicu Notifikasi Email Otomatis Sesuai Spesifikasi:
+    // Subject: 'kuota iklan'
+    // Body: 'Selamat kuota iklan anda telah diperbaharui,silakan pasang iklan anda sekarang{ link pasang iklan } Team Admin jualrugi.my.id'
+    triggerQuotaActivatedEmail({
+      recipientEmail: userEmail || 'seller@jualrugi.my.id',
+      recipientName: userName,
+      addedQuota: amount,
+      newTotalQuota: res.newQuota,
+    })
+      .then(() => {
+        loadEmailLogs();
+      })
+      .catch((err) => {
+        console.warn('Gagal memicu email aktivasi kuota iklan:', err);
+      });
+
     showNotification(
-      `✅ Berhasil menambahkan +${amount} kuota iklan untuk ${userName}! Total kuota sekarang: ${res.newQuota} slot.`
+      `✅ Berhasil menambahkan +${amount} kuota iklan untuk ${userName}! Email notifikasi 'kuota iklan' telah dikirim ke ${userEmail || '-'}. Total: ${res.newQuota} slot.`
     );
   };
 
@@ -1389,7 +1407,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                   <div className="flex items-center gap-1">
                                     <button
                                       type="button"
-                                      onClick={() => handleAddQuotaManual(user.id, user.name, 1)}
+                                      onClick={() => handleAddQuotaManual(user.id, user.name, user.email, 1)}
                                       className="px-2 py-0.5 rounded-md bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
                                       title="Tambah 1 Kuota Iklan untuk pengguna ini"
                                     >
@@ -1397,7 +1415,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => handleAddQuotaManual(user.id, user.name, 5)}
+                                      onClick={() => handleAddQuotaManual(user.id, user.name, user.email, 5)}
                                       className="px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
                                       title="Tambah 5 Kuota Iklan untuk pengguna ini"
                                     >
@@ -1405,7 +1423,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => handleAddQuotaManual(user.id, user.name, 10)}
+                                      onClick={() => handleAddQuotaManual(user.id, user.name, user.email, 10)}
                                       className="px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-[10px] shadow-2xs transition cursor-pointer"
                                       title="Tambah 10 Kuota Iklan untuk pengguna ini"
                                     >

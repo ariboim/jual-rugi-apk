@@ -9,6 +9,7 @@ import {
   Layers,
   ArrowRight,
   ShieldCheck,
+  ExternalLink,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import {
@@ -222,13 +223,26 @@ export const BuyQuotaModal: React.FC<BuyQuotaModalProps> = ({
           </p>
         </div>
 
-        {/* Tombol Aksi Konfirmasi WhatsApp Admin */}
+        {/* Tombol Aksi Pembayaran Mayar & Konfirmasi WhatsApp */}
         <div className="space-y-2">
+          {/* 1. Tombol Bayar Langsung via Mayar */}
+          <a
+            href={selectedPackage.paymentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 active:scale-98 text-white font-black text-xs sm:text-sm shadow-md shadow-sky-600/25 flex items-center justify-center gap-2 cursor-pointer transition text-center"
+            title={`Buka link pembayaran Mayar untuk ${selectedPackage.name}`}
+          >
+            <ExternalLink className="w-4 h-4 text-white" />
+            <span>Bayar {selectedPackage.name} (Rp {selectedPackage.price.toLocaleString('id-ID')}) via Mayar</span>
+          </a>
+
+          {/* 2. Tombol Konfirmasi WhatsApp Admin */}
           <a
             href={waUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full py-3 px-4 rounded-2xl bg-[#25D366] hover:bg-[#20ba5a] active:scale-98 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer transition text-center"
+            className="w-full py-2.5 px-4 rounded-2xl bg-[#25D366] hover:bg-[#20ba5a] active:scale-98 text-white font-black text-xs shadow-md shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer transition text-center"
           >
             <WhatsAppIcon className="w-4 h-4 fill-white shrink-0" />
             <span>Konfirmasi Transfer via WhatsApp Admin</span>

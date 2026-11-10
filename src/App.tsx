@@ -35,6 +35,7 @@ import {
 } from './services/notificationService';
 import {
   triggerAdPublishedEmail,
+  triggerQuotaActivatedEmail,
   getDynamicAdLink,
 } from './services/adPublishedEmailService';
 import { INITIAL_LISTINGS } from './data/initialData';
@@ -1012,6 +1013,16 @@ export default function App() {
         } catch {}
         return updated;
       });
+
+      // Pemicu Email Otomatis 'kuota iklan' via Brevo API
+      if (currentUser.email) {
+        triggerQuotaActivatedEmail({
+          recipientEmail: currentUser.email,
+          recipientName: currentUser.name,
+          addedQuota,
+          newTotalQuota: res.newQuota,
+        }).catch(() => {});
+      }
     }
 
     showToast(`✅ Berhasil menambahkan +${addedQuota} kuota iklan! (Total: ${res.newQuota} slot)`);
