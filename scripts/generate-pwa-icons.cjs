@@ -155,6 +155,25 @@ const manifestJson = {
     }
   ]
 };
-fs.writeFileSync(path.join(publicDir, 'manifest.json'), JSON.stringify(manifestJson, null, 2), 'utf8');
+console.log('Generating og-image.png (1200x630 with solid white background for WhatsApp Dark Mode)...');
+run('convert', [
+  '-size', '1200x630', 'xc:white',
+  '(', fullLogoFile, '-resize', '960x420', ')',
+  '-gravity', 'center', '-composite',
+  '-quality', '95',
+  path.join(publicDir, 'og-image.png')
+]);
+fs.copyFileSync(path.join(publicDir, 'og-image.png'), path.join(assetsDir, 'og-image.png'));
 
-console.log('All PWA icon assets generated successfully!');
+// Also flatten fullLogoFile so that cached URLs to logo_transparent.png have a solid white background
+run('convert', [
+  fullLogoFile,
+  '-background', 'white',
+  '-flatten',
+  '-alpha', 'off',
+  fullLogoFile
+]);
+fs.copyFileSync(fullLogoFile, path.join(publicDir, 'logo_transparent.png'));
+fs.copyFileSync(fullLogoFile, path.join(publicDir, 'logo.png'));
+
+console.log('All PWA & OpenGraph assets generated successfully!');

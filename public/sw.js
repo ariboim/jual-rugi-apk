@@ -1,8 +1,9 @@
-// Service Worker JualRugi.my.id (Network-First Cache Buster v7)
-const CACHE_NAME = 'jualrugi-v7-pwa-fix';
+// Service Worker JualRugi.my.id (Network-First Cache Buster v8)
+const CACHE_NAME = 'jualrugi-v8-pwa-ogfix';
 
 const PRECACHE_ASSETS = [
   '/manifest.json',
+  '/og-image.png',
   '/logo_icon.png',
   '/logo_transparent.png',
   '/pwa-192x192.png',

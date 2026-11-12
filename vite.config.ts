@@ -23,6 +23,7 @@ export default defineConfig(() => {
           'pwa-maskable-512x512.png',
           'logo_icon.png',
           'logo_transparent.png',
+          'og-image.png',
           'banner-hp-jualrugi.png',
           'image_3.png',
         ],
