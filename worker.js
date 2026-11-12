@@ -238,7 +238,7 @@ export default {
               `Selamat datang di *jualrugi.my.id* — Platform Jual Beli Barang Bekas & Preloved Paling Praktis!\n\n` +
               `Akun Anda dengan email *${targetEmail}* telah berhasil dibuat dan aktif sepenuhnya. Sekarang Anda sudah bisa mulai pasang iklan gratis atau mencari barang impian dengan penawaran terbaik.\n\n` +
               `🔗 *Silakan masuk ke akun Anda di sini:*\n` +
-              `https://jualrugi.my.id/login\n\n` +
+              `https://jualrugi.my.id/login?email=${encodeURIComponent(targetEmail)}\n\n` +
               `Jika butuh bantuan, tim kami siap membantu kapan, saja. \n` +
               `Silakan simpan nomor wa ini sebagai admin Selamat bertransaksi, bro/sis! 🚀\n\n` +
               `---\n` +

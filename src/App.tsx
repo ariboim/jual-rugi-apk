@@ -63,8 +63,8 @@ import { LiveActivityTicker } from './components/LiveActivityTicker';
 import { WelcomeEmailSetupModal } from './components/WelcomeEmailSetupModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { BuyQuotaModal } from './components/BuyQuotaModal';
-import { updateStoredUserQuota } from './services/userService';
 import { Footer } from './components/Footer';
+import { updateStoredUserQuota, getActiveOrLatestUser, findStoredUser, getStoredUsers } from './services/userService';
 import { ADMIN_TEST_PRESETS, AdminTestPreset } from './data/adminTestPresets';
 import {
   fetchListingsFromSupabase,
@@ -272,6 +272,70 @@ export default function App() {
           setIsAdminModalOpen(true);
         }
 
+        // Check direct link login/masuk dari notifikasi WhatsApp (misal: https://jualrugi.my.id/login atau /login?email=...)
+        const isLoginAction =
+          path === '/login' ||
+          path.startsWith('/login/') ||
+          path === '/masuk' ||
+          path.startsWith('/masuk/') ||
+          currentHash === '#login' ||
+          currentHash === '#masuk' ||
+          params.get('action') === 'login' ||
+          params.get('tab') === 'login';
+
+        if (isLoginAction) {
+          const queryUserIdent =
+            params.get('email') ||
+            params.get('nama') ||
+            params.get('name') ||
+            params.get('phone') ||
+            params.get('wa') ||
+            params.get('u');
+
+          let matchedUser = queryUserIdent ? findStoredUser(queryUserIdent) : null;
+          if (!matchedUser) {
+            matchedUser = getActiveOrLatestUser();
+          }
+
+          if (matchedUser) {
+            const userProfile: UserProfile = {
+              id: matchedUser.id,
+              name: matchedUser.name,
+              role: matchedUser.role || 'buyer',
+              avatar:
+                'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+              email: matchedUser.email,
+              phone: matchedUser.whatsapp || matchedUser.phone || '',
+              whatsapp: matchedUser.whatsapp || matchedUser.phone || '',
+              city: matchedUser.city || 'Jakarta Selatan',
+              freeListingUsed: false,
+              listingQuota: matchedUser.listingQuota ?? 1,
+              activeListingCount: 0,
+              permissions: {
+                locationGranted: false,
+                cameraGalleryGranted: false,
+              },
+            };
+            setCurrentUser(userProfile);
+            setIsLoggedIn(true);
+            try {
+              localStorage.setItem('jualrugi_is_logged_in', 'true');
+              localStorage.setItem('jualrugi_current_user', JSON.stringify(userProfile));
+              if (userProfile.email) {
+                localStorage.setItem('jualrugi_last_registered_email', userProfile.email);
+              }
+            } catch (e) {
+              console.error(e);
+            }
+            setActiveTab('account');
+            showToast(`🎉 Halo ${matchedUser.name}! Anda otomatis masuk ke akun.`);
+          } else {
+            setActiveTab('account');
+            setAuthModalMode('login');
+            setIsAuthModalOpen(true);
+          }
+        }
+
         // Resolusi ID Iklan: mendukung ?id=, ?deal=, ?ad=, ?iklan=, #deal-, #iklan-, #ad-, serta path /iklan/:id
         let dealId = params.get('id') || params.get('deal') || params.get('ad') || params.get('iklan') || '';
         if (!dealId && window.location.hash) {
@@ -447,11 +511,43 @@ export default function App() {
   const [qrisType, setQrisType] = useState<MonetizationType>('sundul');
   const [isBuyQuotaModalOpen, setIsBuyQuotaModalOpen] = useState(false);
 
-  // User Profile simulation state
+  // User Profile state (Prioritas: User Login/Registrasi Asli -> Dummy Default)
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     try {
       if (localStorage.getItem('jualrugi_is_logged_in') === 'false') {
         return GUEST_USER;
+      }
+      const savedUserStr = localStorage.getItem('jualrugi_current_user');
+      if (savedUserStr) {
+        const parsed = JSON.parse(savedUserStr);
+        if (parsed && parsed.name && parsed.name !== 'Rian Pratama' && parsed.id !== 'guest') {
+          return parsed;
+        }
+      }
+      // Ambil user riil yang baru didaftarkan (seperti hardjasasmita)
+      const realUser = getActiveOrLatestUser();
+      if (realUser) {
+        return {
+          id: realUser.id,
+          name: realUser.name,
+          role: realUser.role || 'buyer',
+          avatar:
+            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+          email: realUser.email,
+          phone: realUser.whatsapp || realUser.phone || '',
+          whatsapp: realUser.whatsapp || realUser.phone || '',
+          city: realUser.city || 'Jakarta Selatan',
+          freeListingUsed: false,
+          listingQuota: realUser.listingQuota ?? 1,
+          activeListingCount: 0,
+          permissions: {
+            locationGranted: false,
+            cameraGalleryGranted: false,
+          },
+        };
+      }
+      if (savedUserStr) {
+        return JSON.parse(savedUserStr);
       }
     } catch {}
     return BUYER_USER;
@@ -581,6 +677,8 @@ export default function App() {
     setCurrentUser(GUEST_USER);
     try {
       localStorage.setItem('jualrugi_is_logged_in', 'false');
+      localStorage.removeItem('jualrugi_current_user');
+      localStorage.removeItem('jualrugi_last_registered_email');
     } catch (e) {
       console.error(e);
     }
@@ -592,6 +690,10 @@ export default function App() {
     setIsLoggedIn(true);
     try {
       localStorage.setItem('jualrugi_is_logged_in', 'true');
+      localStorage.setItem('jualrugi_current_user', JSON.stringify(user));
+      if (user.email) {
+        localStorage.setItem('jualrugi_last_registered_email', user.email);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -2046,6 +2148,35 @@ export default function App() {
           if (tab === 'post') {
             setIsPostModalOpen(true);
           } else {
+            if (tab === 'account' && currentUser.name === 'Rian Pratama') {
+              const realUser = getActiveOrLatestUser();
+              if (realUser) {
+                const updatedProfile: UserProfile = {
+                  id: realUser.id,
+                  name: realUser.name,
+                  role: realUser.role || 'buyer',
+                  avatar:
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+                  email: realUser.email,
+                  phone: realUser.whatsapp || realUser.phone || '',
+                  whatsapp: realUser.whatsapp || realUser.phone || '',
+                  city: realUser.city || 'Jakarta Selatan',
+                  freeListingUsed: false,
+                  listingQuota: realUser.listingQuota ?? 1,
+                  activeListingCount: 0,
+                  permissions: {
+                    locationGranted: false,
+                    cameraGalleryGranted: false,
+                  },
+                };
+                setCurrentUser(updatedProfile);
+                setIsLoggedIn(true);
+                try {
+                  localStorage.setItem('jualrugi_current_user', JSON.stringify(updatedProfile));
+                  localStorage.setItem('jualrugi_is_logged_in', 'true');
+                } catch (e) {}
+              }
+            }
             setActiveTab(tab);
           }
         }}

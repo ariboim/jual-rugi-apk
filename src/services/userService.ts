@@ -351,6 +351,28 @@ export function saveNewRegisteredUser(userData: {
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+    localStorage.setItem(
+      'jualrugi_current_user',
+      JSON.stringify({
+        id: newUser.id,
+        name: newUser.name,
+        role: newUser.role || 'buyer',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+        email: newUser.email,
+        phone: newUser.whatsapp || newUser.phone,
+        whatsapp: newUser.whatsapp || newUser.phone,
+        city: newUser.city || 'Jakarta Selatan',
+        freeListingUsed: false,
+        listingQuota: newUser.listingQuota ?? 1,
+        activeListingCount: 0,
+        permissions: {
+          locationGranted: false,
+          cameraGalleryGranted: false,
+        },
+      })
+    );
+    localStorage.setItem('jualrugi_is_logged_in', 'true');
+    localStorage.setItem('jualrugi_last_registered_email', cleanEmail);
   } catch (err) {
     console.error('[userService] Gagal menyimpan ke localStorage:', err);
   }
@@ -444,6 +466,75 @@ export function getUserQuota(userId: string): number {
   } catch {
     return 1;
   }
+}
+
+/**
+ * Mengambil profil user yang sedang aktif tersimpan atau pendaftar terbaru yang bukan dummy seed
+ */
+export function getActiveOrLatestUser(): RegisteredUser | null {
+  try {
+    const rawSaved = localStorage.getItem('jualrugi_current_user');
+    if (rawSaved) {
+      const parsed = JSON.parse(rawSaved);
+      if (parsed && parsed.name && parsed.name !== 'Rian Pratama' && parsed.id !== 'guest') {
+        return {
+          id: parsed.id,
+          name: parsed.name,
+          email: parsed.email,
+          whatsapp: parsed.whatsapp || parsed.phone || '',
+          phone: parsed.phone || parsed.whatsapp || '',
+          role: parsed.role || 'buyer',
+          registeredAt: parsed.registeredAt || new Date().toISOString(),
+          city: parsed.city || 'Jakarta Selatan',
+          status: 'active',
+          listingQuota: parsed.listingQuota ?? 1,
+        };
+      }
+    }
+  } catch {}
+
+  const list = getStoredUsers();
+  // Cari user riil yang didaftarkan (bukan dummy seed bawaan sistem)
+  const realUser = list.find(
+    (u) =>
+      u.name &&
+      u.name !== 'Rian Pratama' &&
+      u.name !== 'Agus Setiawan' &&
+      u.name !== 'Bambang Riyadi' &&
+      u.name !== 'Dewi Lestari' &&
+      u.name !== 'Hendra Kurniawan' &&
+      u.name !== 'Siti Rahmawati' &&
+      u.name !== 'Budi Santoso' &&
+      u.name !== 'Maya Indah' &&
+      u.name !== 'Rudi Hermawan' &&
+      u.name !== 'Ahmad Fauzi' &&
+      u.name !== 'Boim Ganteng' &&
+      !u.id.startsWith('seed-')
+  );
+
+  return realUser || null;
+}
+
+/**
+ * Mencari data pengguna berdasarkan email, nomor WhatsApp/telepon, atau nama
+ */
+export function findStoredUser(identifier: string): RegisteredUser | null {
+  if (!identifier) return null;
+  const cleanIdent = identifier.trim().toLowerCase();
+  const numIdent = identifier.replace(/\D/g, '');
+  const list = getStoredUsers();
+
+  return (
+    list.find(
+      (u) =>
+        u.email.toLowerCase() === cleanIdent ||
+        (cleanIdent.length >= 3 && u.name.toLowerCase() === cleanIdent) ||
+        (cleanIdent.length >= 4 && u.name.toLowerCase().includes(cleanIdent)) ||
+        (numIdent.length >= 6 &&
+          ((u.whatsapp && u.whatsapp.replace(/\D/g, '').endsWith(numIdent.slice(-8))) ||
+           (u.phone && u.phone.replace(/\D/g, '').endsWith(numIdent.slice(-8)))))
+    ) || null
+  );
 }
 
 /**

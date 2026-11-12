@@ -15,7 +15,7 @@ import {
 import { UserProfile } from '../types';
 import { sendWelcomeEmailAutomation, sendRegistrationToMakeWebhook } from '../services/welcomeEmail';
 import { registerUserInSupabase, fetchUserByEmailFromSupabase } from '../services/supabase';
-import { saveNewRegisteredUser } from '../services/userService';
+import { saveNewRegisteredUser, findStoredUser, getStoredUsers } from '../services/userService';
 import { BrandLogo } from './BrandLogo';
 
 interface AuthModalProps {
@@ -243,6 +243,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         },
       };
 
+      try {
+        localStorage.setItem('jualrugi_current_user', JSON.stringify(authenticatedUser));
+        localStorage.setItem('jualrugi_is_logged_in', 'true');
+        localStorage.setItem('jualrugi_last_registered_email', regEmail);
+      } catch (storageErr) {
+        console.error('[AuthModal] Storage error:', storageErr);
+      }
+
       // Tampilkan notifikasi "happy shopping" sejenak sebelum modal ditutup
       setTimeout(() => {
         setIsLoading(false);
@@ -259,8 +267,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const ident = loginIdentifier.trim();
       const isEmail = ident.includes('@');
 
-      let userFromDb: any = null;
-      if (isEmail) {
+      // 1. Cari user di penyimpanan lokal terlebih dahulu (misal: hardjasasmita)
+      let userFromDb: any = findStoredUser(ident);
+
+      // 2. Jika belum ditemukan dan berupa email, cek ke database Supabase
+      if (!userFromDb && isEmail) {
         try {
           userFromDb = await fetchUserByEmailFromSupabase(ident);
         } catch (e) {
@@ -268,22 +279,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
       }
 
+      // Fallback nama cerdas: jika tidak ditemukan di DB, gunakan potongan email atau nama pendaftar aktif
+      const resolvedName =
+        userFromDb?.name ||
+        (isEmail ? ident.split('@')[0] : 'Member JualRugi');
+
       const loggedUser: UserProfile = {
         id: userFromDb?.id || `user-${Date.now()}`,
-        name: userFromDb?.name || (isEmail ? ident.split('@')[0] : 'Member JualRugi'),
+        name: resolvedName,
         role: (userFromDb?.role as any) || 'buyer',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
         email: userFromDb?.email || (isEmail ? ident : `${ident.replace(/\D/g, '')}@jualrugi.my.id`),
         phone: userFromDb?.whatsapp || userFromDb?.phone || (!isEmail ? ident : '0812-3344-5566'),
+        whatsapp: userFromDb?.whatsapp || userFromDb?.phone || (!isEmail ? ident : '0812-3344-5566'),
         city: userFromDb?.city || 'Jakarta Selatan',
         freeListingUsed: false,
-        listingQuota: userFromDb?.listing_quota ?? 1,
+        listingQuota: userFromDb?.listingQuota ?? userFromDb?.listing_quota ?? 1,
         activeListingCount: 0,
         permissions: {
           locationGranted: false,
           cameraGalleryGranted: false,
         },
       };
+
+      try {
+        localStorage.setItem('jualrugi_current_user', JSON.stringify(loggedUser));
+        localStorage.setItem('jualrugi_is_logged_in', 'true');
+        if (loggedUser.email) {
+          localStorage.setItem('jualrugi_last_registered_email', loggedUser.email);
+        }
+      } catch (storageErr) {
+        console.error('[AuthModal] Storage error on login:', storageErr);
+      }
 
       setIsLoading(false);
       onLoginSuccess(loggedUser);
