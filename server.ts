@@ -385,19 +385,44 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         listingTitle,
         recipientEmail,
         recipientName,
+        recipientPhone,
+        userPhone,
+        whatsapp,
+        phone,
         sellingPrice,
         category,
         subject,
+        isEdit,
       } = req.body || {};
 
       const targetEmail = (recipientEmail || 'bca.ccpl@gmail.com').trim();
       const targetTitle = listingTitle || 'Produk Butuh Uang JualRugi';
-      const emailSubject = subject || 'Iklan Tayang';
       const cleanListingId = (listingId || 'bu-demo').trim();
       const directAdLink = `https://jualrugi.my.id/?id=${encodeURIComponent(cleanListingId)}`;
       const adLink = directAdLink;
+      const userName = (recipientName || 'Juragan JualRugi').trim();
+      const emailSubject = subject || (isEdit ? 'Pembaruan Iklan Tayang' : 'Iklan Tayang');
 
-      const textContent = `Selamat, iklan Anda telah tayang!\n\nJudul: "${targetTitle}"\nSilakan cek iklan Anda melalui link berikut: ${directAdLink}`;
+      const statusHeadline = isEdit
+        ? 'perubahan iklan Anda telah selesai dimoderasi dan *RESMI KEMBALI TAYANG*'
+        : 'iklan Anda telah selesai dimoderasi dan *RESMI TAYANG*';
+
+      // Pesan WhatsApp Fonnte dengan personalisasi nama, ID iklan, dan link langsung
+      const textContent =
+        `Halo *${userName}*! 🎉\n\n` +
+        `Kabar baik, ${statusHeadline} di *jualrugi.my.id*!\n\n` +
+        `📋 *Detail Iklan:*\n` +
+        `• ID Iklan: *${cleanListingId}*\n` +
+        `• Judul: *"${targetTitle}"*\n\n` +
+        `🔗 *Lihat iklan Anda langsung di sini:*\n` +
+        `${directAdLink}\n\n` +
+        `Iklan Anda kini dapat ditemukan dan dihubungi oleh calon pembeli. Pastikan selalu bertransaksi dengan sistem COD (Cash On Delivery) tatap muka di tempat ramai dan jangan pernah mentransfer DP sebelum cek barang.\n\n` +
+        `Semoga cepat laku, bro/sis! 🚀\n\n` +
+        `---\n` +
+        `*Team Admin jualrugi.my.id*`;
+
+      const headerBadge = isEdit ? 'Moderasi Selesai • Pembaruan Resmi Tayang' : 'Moderasi Selesai • Resmi Tayang';
+      const headerTitle = isEdit ? 'Selamat, pembaruan iklan Anda telah tayang! 🎉' : 'Selamat, iklan Anda telah tayang! 🎉';
 
       const htmlContent = `
 <!DOCTYPE html>
@@ -421,12 +446,14 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
 <body>
   <div class="card">
     <div class="header">
-      <span class="badge">Moderasi Selesai • Resmi Tayang</span>
-      <h2>Selamat, iklan Anda telah tayang! 🎉</h2>
+      <span class="badge">${headerBadge}</span>
+      <h2>${headerTitle}</h2>
       <p style="font-weight: 600; color: #0f172a; margin-top: 4px;">"${targetTitle}"</p>
+      <p style="font-size: 12px; color: #64748b; margin: 2px 0 0;">ID Iklan: <strong>${cleanListingId}</strong></p>
     </div>
 
-    <p>Selamat, iklan Anda telah selesai dimoderasi dan telah resmi tayang di platform <strong>JualRugi.my.id</strong>.</p>
+    <p>Halo <strong>${userName}</strong>,</p>
+    <p>Kabar baik, ${isEdit ? 'perubahan pada iklan Anda' : 'iklan Anda'} telah selesai dimoderasi dan telah resmi tayang di platform <strong>JualRugi.my.id</strong>.</p>
     
     <p>Calon pembeli dapat langsung menemukan produk Anda dan menghubungi Anda via Chat COD tatap muka yang aman.</p>
 
@@ -441,7 +468,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     </div>
 
     <div class="footer">
-      Email otomatis ini dikirimkan oleh <strong>JualRugi.my.id</strong> sebagai notifikasi resmi status penayangan iklan.<br/>
+      Email otomatis ini dikirimkan oleh <strong>JualRugi.my.id</strong> untuk ${userName} sebagai notifikasi resmi status penayangan iklan.<br/>
       Subject: <strong>${emailSubject}</strong> • Penerima: <strong>${targetEmail}</strong>
     </div>
   </div>
@@ -486,7 +513,15 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
 
           // B. Kirim Notifikasi WhatsApp Fonnte Otomatis ke nomor pengguna terdaftar
           let fonnteResult: any = null;
-          const targetPhone = req.body.recipientPhone || req.body.userPhone || req.body.whatsapp || req.body.phone;
+          let targetPhone = req.body.recipientPhone || req.body.userPhone || req.body.whatsapp || req.body.phone;
+          if (!targetPhone && targetEmail) {
+            const foundUser = serverRegisteredUsers.find(
+              (u) => u.email && u.email.toLowerCase() === targetEmail.toLowerCase()
+            );
+            if (foundUser) {
+              targetPhone = foundUser.whatsapp || foundUser.phone;
+            }
+          }
           if (targetPhone && String(targetPhone).replace(/\D/g, '').length >= 8) {
             try {
               const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');

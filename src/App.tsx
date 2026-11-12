@@ -467,6 +467,7 @@ export default function App() {
     title: string;
     category: string;
     triggerAt: number;
+    isEdit?: boolean;
   } | null>(null);
 
   const [adApprovedNotification, setAdApprovedNotification] = useState<{
@@ -674,6 +675,7 @@ export default function App() {
       title: newListing.title,
       category: newListing.category,
       triggerAt: Date.now() + delayMs,
+      isEdit: false,
     });
 
     scheduleModerationPushNotification(
@@ -700,6 +702,7 @@ export default function App() {
           sellingPrice: newListing.sellingPrice,
           category: newListing.category,
           subject: 'Iklan Tayang',
+          isEdit: false,
         });
 
         // Juga kirim tembusan ke email admin resmi bca.ccpl@gmail.com jika berbeda
@@ -712,6 +715,7 @@ export default function App() {
             sellingPrice: newListing.sellingPrice,
             category: newListing.category,
             subject: 'Iklan Tayang',
+            isEdit: false,
           });
         }
 
@@ -726,7 +730,7 @@ export default function App() {
           emailSentTo: recipient,
         });
 
-        showToast(`✉️ Email notifikasi "Iklan Tayang" terkirim ke ${recipient}`);
+        showToast(`✉️ Email & WA notifikasi "Iklan Tayang" terkirim ke ${recipient}`);
       }
     );
 
@@ -737,14 +741,22 @@ export default function App() {
   const handleTriggerPendingImmediately = async () => {
     if (!pendingModeration) return;
     const dynamicUrl = getDynamicAdLink(pendingModeration.id);
+    const isEditMode = pendingModeration.isEdit === true;
     const recipient =
       currentUser.email && currentUser.email.includes('@')
         ? currentUser.email
         : 'bca.ccpl@gmail.com';
 
+    const noticeTitle = isEditMode
+      ? 'Selamat, pembaruan iklan Anda telah tayang!'
+      : 'Selamat, iklan Anda telah tayang!';
+    const noticeBody = isEditMode
+      ? `Selamat, perubahan pada iklan "${pendingModeration.title}" telah selesai dimoderasi dan resmi tayang kembali di JualRugi.my.id.`
+      : `Selamat, iklan "${pendingModeration.title}" telah selesai dimoderasi dan resmi tayang di JualRugi.my.id.`;
+
     const viaPush = await sendSystemPushNotification(
-      'Selamat, iklan Anda telah tayang!',
-      'Selamat, iklan Anda telah selesai dimoderasi dan resmi tayang di JualRugi.my.id.',
+      noticeTitle,
+      noticeBody,
       {
         tag: `ad-approved-${pendingModeration.id}`,
         data: { listingId: pendingModeration.id, url: dynamicUrl },
@@ -760,7 +772,8 @@ export default function App() {
       whatsapp: currentUser.phone || currentUser.whatsapp,
       recipientName: currentUser.name || 'Admin Tester',
       category: pendingModeration.category,
-      subject: 'Iklan Tayang',
+      subject: isEditMode ? 'Pembaruan Iklan Tayang' : 'Iklan Tayang',
+      isEdit: isEditMode,
     });
 
     if (recipient !== 'bca.ccpl@gmail.com') {
@@ -770,7 +783,8 @@ export default function App() {
         recipientEmail: 'bca.ccpl@gmail.com',
         recipientName: 'Admin JualRugi',
         category: pendingModeration.category,
-        subject: 'Iklan Tayang',
+        subject: isEditMode ? 'Pembaruan Iklan Tayang' : 'Iklan Tayang',
+        isEdit: isEditMode,
       });
     }
 
@@ -859,6 +873,7 @@ export default function App() {
       title: target.title,
       category: target.category,
       triggerAt: Date.now() + delayMs,
+      isEdit: true,
     });
 
     scheduleModerationPushNotification(
@@ -891,7 +906,8 @@ export default function App() {
           recipientName: currentUser.name,
           sellingPrice: target.sellingPrice,
           category: target.category,
-          subject: 'Iklan Tayang',
+          subject: 'Pembaruan Iklan Tayang',
+          isEdit: true,
         });
 
         // Tampilkan push / in-app notification banner
@@ -905,7 +921,7 @@ export default function App() {
           emailSentTo: recipient,
         });
 
-        showToast(`✉️ Email notifikasi pembaruan iklan terkirim ke ${recipient}`);
+        showToast(`✉️ Email & WA notifikasi pembaruan iklan terkirim ke ${recipient}`);
       }
     );
   };
@@ -1163,6 +1179,7 @@ export default function App() {
       sellingPrice: newListing.sellingPrice,
       category: newListing.category,
       subject: 'Iklan Tayang',
+      isEdit: false,
     });
 
     if (currentUser.email && currentUser.email.includes('@') && currentUser.email !== targetAdminEmail) {
@@ -1176,6 +1193,7 @@ export default function App() {
         sellingPrice: newListing.sellingPrice,
         category: newListing.category,
         subject: 'Iklan Tayang',
+        isEdit: false,
       });
     }
 

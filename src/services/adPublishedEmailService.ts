@@ -50,6 +50,7 @@ export interface AdPublishedEmailPayload {
   sellingPrice?: number;
   category?: string;
   subject?: string;
+  isEdit?: boolean;
 }
 
 export interface AdPublishedEmailResponse {
@@ -64,18 +65,65 @@ export interface AdPublishedEmailResponse {
 }
 
 /**
- * Format teks & HTML email resmi sesuai spesifikasi:
- * Subject: "Iklan Tayang"
- * Body:
- * "Selamat, iklan Anda telah tayang!
- * Silakan cek iklan Anda melalui link berikut: https://jualrugi.my.id/?id={id_iklan}
- * Team Admin jualrugi.my.id"
+ * Menghasilkan pesan WhatsApp Fonnte resmi untuk Iklan Tayang (Baru & Selesai Edit Moderasi)
+ * dengan personalisasi nama user, ID iklan, dan link langsung yang mengarah ke iklan.
  */
-export function generateAdPublishedEmailContent(listingId: string, listingTitle?: string) {
-  const adLink = getDynamicAdLink(listingId);
+export function getAdPublishedWhatsAppMessage(params: {
+  userName?: string;
+  listingId: string;
+  listingTitle: string;
+  adLink: string;
+  isEdit?: boolean;
+}): string {
+  const name = (params.userName || 'Juragan JualRugi').trim();
+  const title = (params.listingTitle || 'Produk JualRugi').trim();
+  const id = (params.listingId || '').trim();
+  const link = params.adLink;
 
-  // Body Teks Murni (Plain Text) - Format SAMA PERSIS dengan Pesan WhatsApp Fonnte
-  const textContent = `Selamat, iklan Anda telah tayang!\n\nJudul: "${listingTitle || 'Produk JualRugi'}"\nSilakan cek iklan Anda melalui link berikut:\n${adLink}\n\nTeam Admin jualrugi.my.id`;
+  const statusHeadline = params.isEdit
+    ? 'perubahan iklan Anda telah selesai dimoderasi dan *RESMI KEMBALI TAYANG*'
+    : 'iklan Anda telah selesai dimoderasi dan *RESMI TAYANG*';
+
+  return (
+    `Halo *${name}*! 🎉\n\n` +
+    `Kabar baik, ${statusHeadline} di *jualrugi.my.id*!\n\n` +
+    `📋 *Detail Iklan:*\n` +
+    `• ID Iklan: *${id}*\n` +
+    `• Judul: *"${title}"*\n\n` +
+    `🔗 *Lihat iklan Anda langsung di sini:*\n` +
+    `${link}\n\n` +
+    `Iklan Anda kini dapat ditemukan dan dihubungi oleh calon pembeli. Pastikan selalu bertransaksi dengan sistem COD (Cash On Delivery) tatap muka di tempat ramai dan jangan pernah mentransfer DP sebelum cek barang.\n\n` +
+    `Semoga cepat laku, bro/sis! 🚀\n\n` +
+    `---\n` +
+    `*Team Admin jualrugi.my.id*`
+  );
+}
+
+/**
+ * Format teks & HTML email resmi dengan personalisasi nama dan ID iklan
+ */
+export function generateAdPublishedEmailContent(
+  listingId: string,
+  listingTitle?: string,
+  recipientName?: string,
+  isEdit?: boolean
+) {
+  const adLink = getDynamicAdLink(listingId);
+  const userName = (recipientName || 'Juragan JualRugi').trim();
+  const cleanTitle = (listingTitle || 'Produk JualRugi').trim();
+  const cleanId = (listingId || 'demo').trim();
+
+  // Pesan teks WhatsApp & email text
+  const textContent = getAdPublishedWhatsAppMessage({
+    userName,
+    listingId: cleanId,
+    listingTitle: cleanTitle,
+    adLink,
+    isEdit,
+  });
+
+  const headerBadge = isEdit ? 'Moderasi Selesai • Pembaruan Resmi Tayang' : 'Moderasi Selesai • Resmi Tayang';
+  const headerTitle = isEdit ? 'Selamat, pembaruan iklan Anda telah tayang! 🎉' : 'Selamat, iklan Anda telah tayang! 🎉';
 
   // Body HTML Responsif & Modern
   const htmlContent = `
@@ -84,7 +132,7 @@ export function generateAdPublishedEmailContent(listingId: string, listingTitle?
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Iklan Tayang - JualRugi.my.id</title>
+  <title>${isEdit ? 'Pembaruan Iklan Tayang' : 'Iklan Tayang'} - JualRugi.my.id</title>
   <style>
     body { margin: 0; padding: 24px 16px; background-color: #f0f9ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; }
     .card { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #bae6fd; padding: 32px 28px; box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.1); }
@@ -95,18 +143,20 @@ export function generateAdPublishedEmailContent(listingId: string, listingTitle?
     .cta-container { text-align: center; margin: 28px 0; }
     .btn-cta { display: inline-block; background: #0284c7; color: #ffffff !important; font-weight: bold; font-size: 15px; padding: 14px 32px; border-radius: 12px; text-decoration: none; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35); }
     .link-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 12px 14px; word-break: break-all; font-family: monospace; font-size: 13px; color: #0284c7; margin-top: 16px; text-align: center; }
-    .footer { margin-top: 32px; pt: 20px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5; }
+    .footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="header">
-      <span class="badge">Moderasi Selesai • Resmi Tayang</span>
-      <h2>Selamat, iklan Anda telah tayang! 🎉</h2>
-      ${listingTitle ? `<p style="font-weight: 600; color: #0f172a; margin-top: 4px;">"${listingTitle}"</p>` : ''}
+      <span class="badge">${headerBadge}</span>
+      <h2>${headerTitle}</h2>
+      <p style="font-weight: 600; color: #0f172a; margin-top: 4px;">"${cleanTitle}"</p>
+      <p style="font-size: 12px; color: #64748b; margin: 2px 0 0;">ID Iklan: <strong>${cleanId}</strong></p>
     </div>
 
-    <p>Selamat, iklan Anda telah selesai dimoderasi dan telah resmi tayang di platform <strong>JualRugi.my.id</strong>.</p>
+    <p>Halo <strong>${userName}</strong>,</p>
+    <p>Kabar baik, ${isEdit ? 'perubahan pada iklan Anda' : 'iklan Anda'} telah selesai dimoderasi dan resmi tayang di platform <strong>JualRugi.my.id</strong>.</p>
     
     <p>Calon pembeli dapat langsung menemukan produk Anda dan menghubungi Anda via Chat COD tatap muka yang aman.</p>
 
@@ -121,7 +171,7 @@ export function generateAdPublishedEmailContent(listingId: string, listingTitle?
     </div>
 
     <div class="footer">
-      Email otomatis ini dikirimkan oleh <strong>JualRugi.my.id</strong> sebagai notifikasi status penayangan iklan.<br/>
+      Email otomatis ini dikirimkan oleh <strong>JualRugi.my.id</strong> untuk ${userName} atas penayangan iklan.<br/>
       Jangan berikan informasi sensitif seperti OTP atau transfer DP sebelum transaksi COD selesai.
     </div>
   </div>
@@ -139,11 +189,13 @@ export function generateAdPublishedEmailContent(listingId: string, listingTitle?
 export async function triggerAdPublishedEmail(
   payload: AdPublishedEmailPayload
 ): Promise<AdPublishedEmailResponse> {
-  const { listingId, listingTitle, recipientEmail, recipientName, subject } = payload;
-  const emailSubject = subject || 'Iklan Tayang';
+  const { listingId, listingTitle, recipientEmail, recipientName, subject, isEdit } = payload;
+  const emailSubject = subject || (isEdit ? 'Pembaruan Iklan Tayang' : 'Iklan Tayang');
   const { textContent, htmlContent, adLink } = generateAdPublishedEmailContent(
     listingId,
-    listingTitle
+    listingTitle,
+    recipientName,
+    isEdit
   );
 
   // Cari nomor WhatsApp terdaftar pengguna jika belum diberikan langsung
@@ -207,6 +259,7 @@ export async function triggerAdPublishedEmail(
         sellingPrice: payload.sellingPrice,
         category: payload.category,
         subject: emailSubject,
+        isEdit: payload.isEdit,
         brevoApiKey: apiKey && apiKey.startsWith('xkeysib-') ? apiKey : undefined,
         senderEmail,
         senderName,

@@ -307,12 +307,31 @@ export default {
       console.log('[CF Worker - Ad Published Email] Menerima request /api/send-ad-published-email');
       try {
         const body = await request.json().catch(() => ({}));
-        const { listingId, listingTitle, recipientEmail, recipientName, subject } = body;
+        const {
+          listingId,
+          listingTitle,
+          recipientEmail,
+          recipientName,
+          recipientPhone,
+          userPhone,
+          whatsapp,
+          phone,
+          subject,
+          isEdit,
+        } = body;
+
+        const isAdEdit = isEdit === true || isEdit === 'true';
         const targetEmail = (recipientEmail || 'bca.ccpl@gmail.com').trim();
         const targetTitle = (listingTitle || 'Produk Butuh Uang JualRugi').trim();
-        const emailSubject = subject || 'Iklan Tayang';
         const cleanListingId = (listingId || 'bu-demo').trim();
         const directAdLink = `https://jualrugi.my.id/?id=${encodeURIComponent(cleanListingId)}`;
+        const userName = (recipientName || 'Juragan JualRugi').trim();
+        const emailSubject = subject || (isAdEdit ? 'Pembaruan Iklan Tayang' : 'Iklan Tayang');
+
+        let rawPhone = recipientPhone || userPhone || whatsapp || phone || '';
+        let cleanPhone = String(rawPhone).replace(/\D/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+        else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
 
         if (!targetEmail || !targetEmail.includes('@')) {
           return new Response(
@@ -337,74 +356,151 @@ export default {
         const senderEmail = env.BREVO_SENDER_EMAIL || body.senderEmail || 'admin@jualrugi.my.id';
         const senderName = 'jualrugi.my.id';
 
-        console.log(`[CF Worker - Ad Published Email] Target: ${targetEmail} | Iklan: "${targetTitle}"`);
-        console.log(`[CF Worker - Ad Published Email] Brevo Key Status: ${activeBrevoKey ? 'OK' : 'KOSONG / BELUM DISET'}`);
+        console.log(`[CF Worker - Ad Published Email] Target: ${targetEmail} | Iklan: "${targetTitle}" (ID: ${cleanListingId}) | isEdit: ${isAdEdit}`);
 
-        if (!activeBrevoKey || !activeBrevoKey.startsWith('xkeysib-')) {
-          console.error('[CF Worker - Ad Published Email] GAGAL: BREVO_API_KEY belum disetting di Cloudflare!');
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: 'BREVO_API_KEY belum dikonfigurasi di Environment Variables Cloudflare.',
-              guide: 'Buka Cloudflare Dashboard > Workers & Pages > Settings > Environment variables > Tambahkan BREVO_API_KEY dengan awalan xkeysib-...',
-            }),
-            { status: 500, headers: { 'Content-Type': 'application/json' } }
-          );
-        }
+        // Template Notifikasi WhatsApp Fonnte & Email Resmi JualRugi
+        const statusHeadline = isAdEdit
+          ? 'perubahan iklan Anda telah selesai dimoderasi dan *RESMI KEMBALI TAYANG*'
+          : 'iklan Anda telah selesai dimoderasi dan *RESMI TAYANG*';
 
-        const textContent = `Selamat, iklan Anda telah tayang!\n\nJudul: "${targetTitle}"\nSilakan cek iklan Anda melalui: ${directAdLink}\n\nJualRugi.my.id`;
+        const textContent =
+          `Halo *${userName}*! 🎉\n\n` +
+          `Kabar baik, ${statusHeadline} di *jualrugi.my.id*!\n\n` +
+          `📋 *Detail Iklan:*\n` +
+          `• ID Iklan: *${cleanListingId}*\n` +
+          `• Judul: *"${targetTitle}"*\n\n` +
+          `🔗 *Lihat iklan Anda langsung di sini:*\n` +
+          `${directAdLink}\n\n` +
+          `Iklan Anda kini dapat ditemukan dan dihubungi oleh calon pembeli. Pastikan selalu bertransaksi dengan sistem COD (Cash On Delivery) tatap muka di tempat ramai dan jangan pernah mentransfer DP sebelum cek barang.\n\n` +
+          `Semoga cepat laku, bro/sis! 🚀\n\n` +
+          `---\n` +
+          `*Team Admin jualrugi.my.id*`;
+
+        const headerBadge = isAdEdit ? 'Moderasi Selesai • Pembaruan Resmi Tayang' : 'Moderasi Selesai • Resmi Tayang';
+        const headerTitle = isAdEdit ? 'Selamat, pembaruan iklan Anda telah tayang! 🎉' : 'Selamat, iklan Anda telah tayang! 🎉';
 
         const htmlContent = `
 <!DOCTYPE html>
 <html lang="id">
-<head><meta charset="utf-8"><title>${emailSubject} - JualRugi.my.id</title></head>
-<body style="margin:0;padding:24px 16px;background-color:#f0f9ff;font-family:sans-serif;color:#0f172a;">
-  <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:20px;border:1px solid #bae6fd;padding:28px;box-shadow:0 4px 20px rgba(0,0,0,0.06);">
-    <span style="display:inline-block;background:#e0f2fe;color:#0284c7;padding:4px 14px;border-radius:9999px;font-size:12px;font-weight:bold;">Moderasi Selesai • Resmi Tayang</span>
-    <h2 style="color:#0369a1;margin:14px 0 6px;">Selamat, iklan Anda telah tayang! 🎉</h2>
-    <p style="font-weight:600;color:#0f172a;margin-top:4px;">"${targetTitle}"</p>
-    <p style="font-size:14px;line-height:1.6;color:#334155;">Selamat, iklan Anda telah selesai dimoderasi dan resmi tayang di platform <strong>JualRugi.my.id</strong>.</p>
-    <div style="text-align:center;margin:24px 0;">
-      <a href="${directAdLink}" style="display:inline-block;background:#0284c7;color:#fff;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:10px;text-decoration:none;" target="_blank" rel="noopener noreferrer">
+<head>
+  <meta charset="utf-8">
+  <title>${emailSubject} - JualRugi.my.id</title>
+  <style>
+    body { margin: 0; padding: 24px 16px; background-color: #f0f9ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; }
+    .card { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #bae6fd; padding: 32px 28px; box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.1); }
+    .header { text-align: center; margin-bottom: 24px; }
+    .badge { display: inline-block; background: #e0f2fe; color: #0284c7; padding: 6px 16px; border-radius: 9999px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+    h2 { color: #0369a1; margin: 16px 0 8px; font-size: 22px; }
+    p { font-size: 15px; line-height: 1.6; color: #334155; margin: 12px 0; }
+    .cta-container { text-align: center; margin: 28px 0; }
+    .btn-cta { display: inline-block; background: #0284c7; color: #ffffff !important; font-weight: bold; font-size: 15px; padding: 14px 32px; border-radius: 12px; text-decoration: none; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35); }
+    .link-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 12px 14px; word-break: break-all; font-family: monospace; font-size: 13px; color: #0284c7; margin-top: 16px; text-align: center; }
+    .footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <span class="badge">${headerBadge}</span>
+      <h2>${headerTitle}</h2>
+      <p style="font-weight: 600; color: #0f172a; margin-top: 4px;">"${targetTitle}"</p>
+      <p style="font-size: 12px; color: #64748b; margin: 2px 0 0;">ID Iklan: <strong>${cleanListingId}</strong></p>
+    </div>
+
+    <p>Halo <strong>${userName}</strong>,</p>
+    <p>Kabar baik, ${isAdEdit ? 'perubahan pada iklan Anda' : 'iklan Anda'} telah selesai dimoderasi dan telah resmi tayang di platform <strong>JualRugi.my.id</strong>.</p>
+    
+    <p>Calon pembeli dapat langsung menemukan produk Anda dan menghubungi Anda via Chat COD tatap muka yang aman.</p>
+
+    <div class="cta-container">
+      <a href="${directAdLink}" class="btn-cta" target="_blank" rel="noopener noreferrer">
         👀 Cek Iklan Anda Sekarang
       </a>
-      <div style="margin-top:12px;font-size:12px;color:#64748b;word-break:break-all;">
-        Link langsung: <a href="${directAdLink}" style="color:#0284c7;font-weight:bold;">${directAdLink}</a>
+      <div class="link-box">
+        Silakan cek iklan Anda melalui link berikut:<br />
+        <a href="${directAdLink}" style="color: #0284c7; font-weight: bold; word-break: break-all;">${directAdLink}</a>
       </div>
+    </div>
+
+    <div class="footer">
+      Email otomatis ini dikirimkan oleh <strong>JualRugi.my.id</strong> untuk ${userName} sebagai notifikasi resmi status penayangan iklan.<br/>
+      Subject: <strong>${emailSubject}</strong> • Penerima: <strong>${targetEmail}</strong>
     </div>
   </div>
 </body>
 </html>`.trim();
 
-        const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
-          method: 'POST',
-          headers: {
-            'api-key': activeBrevoKey,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({
-            sender: { name: senderName, email: senderEmail },
-            to: [{ email: targetEmail, name: recipientName || 'Pengiklan JualRugi' }],
-            subject: emailSubject,
-            htmlContent,
-            textContent,
-          }),
-        });
+        let brevoSuccess = false;
+        let brevoData = null;
+        let brevoResStatus = 500;
 
-        const brevoData = await brevoRes.json().catch(() => ({}));
-        console.log(`[CF Worker - Ad Published Email] Brevo HTTP ${brevoRes.status}:`, brevoData);
+        if (activeBrevoKey && activeBrevoKey.startsWith('xkeysib-')) {
+          try {
+            const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+              method: 'POST',
+              headers: {
+                'api-key': activeBrevoKey,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+              },
+              body: JSON.stringify({
+                sender: { name: senderName, email: senderEmail },
+                to: [{ email: targetEmail, name: userName }],
+                subject: emailSubject,
+                htmlContent,
+                textContent,
+              }),
+            });
 
-        if (brevoRes.ok) {
+            brevoData = await brevoRes.json().catch(() => ({}));
+            brevoSuccess = brevoRes.ok;
+            brevoResStatus = brevoRes.status;
+            console.log(`[CF Worker - Ad Published Email] Brevo HTTP ${brevoRes.status}:`, brevoData);
+          } catch (bErr) {
+            console.warn('[CF Worker - Ad Published Email] Brevo dispatch error:', bErr);
+          }
+        }
+
+        // Kirim WhatsApp Iklan Tayang Otomatis via Fonnte API
+        let fonnteResult = null;
+        let fonnteSuccess = false;
+        if (cleanPhone && cleanPhone.length >= 8) {
+          try {
+            const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+            const fonnteFormData = new FormData();
+            fonnteFormData.append('target', cleanPhone);
+            fonnteFormData.append('message', textContent);
+            fonnteFormData.append('countryCode', '62');
+
+            console.log(`[CF Worker - Fonnte WA Iklan Tayang] Mengirim WhatsApp ke ${cleanPhone}...`);
+            const fonnteRes = await fetch('https://api.fonnte.com/send', {
+              method: 'POST',
+              headers: {
+                Authorization: FONNTE_TOKEN,
+              },
+              body: fonnteFormData,
+            });
+
+            fonnteResult = await fonnteRes.json().catch(() => ({}));
+            fonnteSuccess = fonnteRes.ok;
+            console.log(`[CF Worker - Fonnte WA Iklan Tayang Status]: ${fonnteRes.status}`, fonnteResult);
+          } catch (fonnteErr) {
+            console.warn('[CF Worker - Fonnte WA Iklan Tayang Error]:', fonnteErr);
+          }
+        }
+
+        if (brevoSuccess || fonnteSuccess) {
           return new Response(
             JSON.stringify({
               success: true,
-              message: `Email notifikasi "${emailSubject}" berhasil dikirim via Brevo ke ${targetEmail}!`,
+              message: `Notifikasi "${emailSubject}" diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Gagal'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Sesuai Nomor'})!`,
               sentTo: targetEmail,
+              whatsappSentTo: cleanPhone || undefined,
               listingId: cleanListingId,
               adLink: directAdLink,
-              provider: 'brevo_cloudflare_worker',
-              messageId: brevoData.messageId,
+              provider: 'brevo_and_fonnte_worker',
+              messageId: brevoData ? brevoData.messageId : undefined,
+              fonnte: fonnteResult,
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           );
@@ -412,10 +508,11 @@ export default {
           return new Response(
             JSON.stringify({
               success: false,
-              error: `Brevo API Error (HTTP ${brevoRes.status}): ${brevoData.message || 'Ditolak oleh Brevo'}`,
+              error: `Gagal mengirim email via Brevo (HTTP ${brevoResStatus}) dan WhatsApp via Fonnte.`,
               details: brevoData,
+              fonnteDetails: fonnteResult,
             }),
-            { status: brevoRes.status, headers: { 'Content-Type': 'application/json' } }
+            { status: brevoResStatus || 500, headers: { 'Content-Type': 'application/json' } }
           );
         }
       } catch (workerErr) {

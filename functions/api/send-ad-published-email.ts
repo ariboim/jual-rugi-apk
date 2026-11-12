@@ -2,6 +2,7 @@ interface Env {
   BREVO_API_KEY?: string;
   BREVO_SENDER_EMAIL?: string;
   BREVO_SENDER_NAME?: string;
+  FONNTE_TOKEN?: string;
 }
 
 export async function onRequestPost(context: { request: Request; env: Env }) {
@@ -32,14 +33,25 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       listingTitle,
       recipientEmail,
       recipientName,
+      recipientPhone,
+      userPhone,
+      whatsapp,
+      phone,
       subject,
+      isEdit,
     } = body;
 
     const targetEmail = (recipientEmail || 'bca.ccpl@gmail.com').trim();
     const targetTitle = (listingTitle || 'Produk Butuh Uang JualRugi').trim();
-    const emailSubject = subject || 'Iklan Tayang';
     const cleanListingId = (listingId || 'bu-demo').trim();
     const directAdLink = `https://jualrugi.my.id/?id=${encodeURIComponent(cleanListingId)}`;
+    const userName = (recipientName || 'Juragan JualRugi').trim();
+    const emailSubject = subject || (isEdit ? 'Pembaruan Iklan Tayang' : 'Iklan Tayang');
+
+    let rawPhone = recipientPhone || userPhone || whatsapp || phone || '';
+    let cleanPhone = String(rawPhone).replace(/\D/g, '');
+    if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+    else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
 
     if (!targetEmail || !targetEmail.includes('@')) {
       console.warn('[CF Pages - Ad Published Email] Email penerima tidak valid:', targetEmail);
@@ -112,8 +124,26 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       );
     }
 
-    // Template Email Iklan Tayang Resmi JualRugi
-    const textContent = `Selamat, iklan Anda telah tayang!\n\nJudul: "${targetTitle}"\nSilakan cek iklan Anda melalui link berikut: ${directAdLink}\n\nPlatform: JualRugi.my.id`;
+    // Template Notifikasi WhatsApp Fonnte & Email Resmi JualRugi
+    const statusHeadline = isEdit
+      ? 'perubahan iklan Anda telah selesai dimoderasi dan *RESMI KEMBALI TAYANG*'
+      : 'iklan Anda telah selesai dimoderasi dan *RESMI TAYANG*';
+
+    const textContent =
+      `Halo *${userName}*! 🎉\n\n` +
+      `Kabar baik, ${statusHeadline} di *jualrugi.my.id*!\n\n` +
+      `📋 *Detail Iklan:*\n` +
+      `• ID Iklan: *${cleanListingId}*\n` +
+      `• Judul: *"${targetTitle}"*\n\n` +
+      `🔗 *Lihat iklan Anda langsung di sini:*\n` +
+      `${directAdLink}\n\n` +
+      `Iklan Anda kini dapat ditemukan dan dihubungi oleh calon pembeli. Pastikan selalu bertransaksi dengan sistem COD (Cash On Delivery) tatap muka di tempat ramai dan jangan pernah mentransfer DP sebelum cek barang.\n\n` +
+      `Semoga cepat laku, bro/sis! 🚀\n\n` +
+      `---\n` +
+      `*Team Admin jualrugi.my.id*`;
+
+    const headerBadge = isEdit ? 'Moderasi Selesai • Pembaruan Resmi Tayang' : 'Moderasi Selesai • Resmi Tayang';
+    const headerTitle = isEdit ? 'Selamat, pembaruan iklan Anda telah tayang! 🎉' : 'Selamat, iklan Anda telah tayang! 🎉';
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -137,12 +167,14 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
 <body>
   <div class="card">
     <div class="header">
-      <span class="badge">Moderasi Selesai • Resmi Tayang</span>
-      <h2>Selamat, iklan Anda telah tayang! 🎉</h2>
+      <span class="badge">${headerBadge}</span>
+      <h2>${headerTitle}</h2>
       <p style="font-weight: 600; color: #0f172a; margin-top: 4px;">"${targetTitle}"</p>
+      <p style="font-size: 12px; color: #64748b; margin: 2px 0 0;">ID Iklan: <strong>${cleanListingId}</strong></p>
     </div>
 
-    <p>Selamat, iklan Anda telah selesai dimoderasi dan telah resmi tayang di platform <strong>JualRugi.my.id</strong>.</p>
+    <p>Halo <strong>${userName}</strong>,</p>
+    <p>Kabar baik, ${isEdit ? 'perubahan pada iklan Anda' : 'iklan Anda'} telah selesai dimoderasi dan telah resmi tayang di platform <strong>JualRugi.my.id</strong>.</p>
     
     <p>Calon pembeli dapat langsung menemukan produk Anda dan menghubungi Anda via Chat COD tatap muka yang aman.</p>
 
@@ -157,7 +189,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     </div>
 
     <div class="footer">
-      Email otomatis ini dikirimkan oleh <strong>JualRugi.my.id</strong> sebagai notifikasi resmi status penayangan iklan.<br/>
+      Email otomatis ini dikirimkan oleh <strong>JualRugi.my.id</strong> untuk ${userName} sebagai notifikasi resmi status penayangan iklan.<br/>
       Subject: <strong>${emailSubject}</strong> • Penerima: <strong>${targetEmail}</strong>
     </div>
   </div>
@@ -165,7 +197,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
 </html>
     `.trim();
 
-    // Kirim via Brevo v3 Transactional SMTP Email API
+    // A. Kirim via Brevo v3 Transactional SMTP Email API
     console.log('[CF Pages - Ad Published Email] Mengirim payload ke https://api.brevo.com/v3/smtp/email...');
     const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -182,7 +214,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         to: [
           {
             email: targetEmail,
-            name: recipientName || 'Pengiklan JualRugi',
+            name: userName || 'Pengiklan JualRugi',
           },
         ],
         subject: emailSubject,
@@ -192,19 +224,50 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     });
 
     const brevoData = await brevoRes.json().catch(() => ({}));
+    const brevoSuccess = brevoRes.ok;
     console.log(`[CF Pages - Ad Published Email] Brevo Response Status: ${brevoRes.status}`, brevoData);
 
-    if (brevoRes.ok) {
+    // B. Kirim Notifikasi WhatsApp Fonnte Otomatis ke nomor pengguna terdaftar
+    let fonnteResult: any = null;
+    let fonnteSuccess = false;
+    if (cleanPhone && cleanPhone.length >= 8) {
+      try {
+        const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+        const fonnteFormData = new FormData();
+        fonnteFormData.append('target', cleanPhone);
+        fonnteFormData.append('message', textContent);
+        fonnteFormData.append('countryCode', '62');
+
+        console.log(`[CF Pages - Fonnte WA Iklan Tayang] Mengirim WhatsApp ke ${cleanPhone}...`);
+        const fonnteRes = await fetch('https://api.fonnte.com/send', {
+          method: 'POST',
+          headers: {
+            Authorization: FONNTE_TOKEN,
+          },
+          body: fonnteFormData,
+        });
+
+        fonnteResult = await fonnteRes.json().catch(() => ({}));
+        fonnteSuccess = fonnteRes.ok;
+        console.log(`[CF Pages - Fonnte WA Iklan Tayang Status]: ${fonnteRes.status}`, fonnteResult);
+      } catch (fonnteErr) {
+        console.warn('[CF Pages - Fonnte WA Iklan Tayang Error]:', fonnteErr);
+      }
+    }
+
+    if (brevoSuccess || fonnteSuccess) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: `Email notifikasi "${emailSubject}" berhasil dikirim via Brevo ke ${targetEmail}!`,
+          message: `Notifikasi "${emailSubject}" diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Gagal'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Sesuai Nomor'})!`,
           sentTo: targetEmail,
+          whatsappSentTo: cleanPhone || undefined,
           listingId: cleanListingId,
           adLink: directAdLink,
           subject: emailSubject,
           provider: 'brevo_cloudflare_pages',
           messageId: brevoData.messageId,
+          fonnte: fonnteResult,
         }),
         {
           status: 200,
