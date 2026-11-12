@@ -29,8 +29,8 @@ app.use(express.json());
 
 // 1. KONFIGURASI PENGIRIM RESMI (SENDER NAME LOCK)
 const SENDER_CONFIG = {
-  name: 'JualRugi.my.id',
-  email: 'info@jualrugi.my.id',
+  name: 'jualrugi.my.id',
+  email: 'admin@jualrugi.my.id',
 };
 
 // Ambil API Key Brevo dari Environment Variable
@@ -159,7 +159,7 @@ export function generateWelcomeEmailHtml() {
 
               <!-- Penutup & Footer Branded -->
               <p style="text-align: center; font-size: 14px; font-weight: 800; color: #0284c7; margin: 24px 0 6px 0;">
-                Selamat berbelanja & happy shopping! 🥳
+                Selamat berbelanja & happy shopping! 🎉
               </p>
               <p style="text-align: center; font-size: 12px; color: #64748b; margin: 0 0 20px 0;">
                 Direct Link Pasang Iklan: <a href="https://jualrugi.my.id/#pasangiklan" target="_blank" style="color: #0284c7; font-weight: 600; text-decoration: underline;">https://jualrugi.my.id/#pasangiklan</a>

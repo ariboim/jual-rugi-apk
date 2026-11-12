@@ -1,5 +1,17 @@
 [
   {
+    "id": "user-1794456589432",
+    "name": "Rizky jarnizal",
+    "email": "tesyuk007@gmail.com",
+    "whatsapp": "6281284091414",
+    "phone": "6281284091414",
+    "role": "buyer",
+    "registeredAt": "2026-11-12T04:09:49.432Z",
+    "city": "Jakarta Selatan",
+    "status": "active",
+    "count": 0
+  },
+  {
     "id": "user-1794337348646",
     "name": "Budi Santoso",
     "email": "test.user.jualrugi@example.com",

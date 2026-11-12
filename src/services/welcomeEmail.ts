@@ -51,8 +51,8 @@ const BREVO_CC = [120, 107, 101, 121, 115, 105, 98, 45, 97, 56, 101, 57, 98, 52,
 const SYSTEM_BREVO_KEY = String.fromCharCode(...BREVO_CC);
 
 export const DEFAULT_BREVO_API_KEY = SYSTEM_BREVO_KEY;
-export const DEFAULT_BREVO_SENDER_EMAIL = 'info@jualrugi.my.id';
-export const DEFAULT_BREVO_SENDER_NAME = 'JualRugi.my.id';
+export const DEFAULT_BREVO_SENDER_EMAIL = 'admin@jualrugi.my.id';
+export const DEFAULT_BREVO_SENDER_NAME = 'jualrugi.my.id';
 
 /**
  * Konfigurasi Brevo API (Sendinblue) - Branded & Authenticated Domain jualrugi.my.id
@@ -159,25 +159,29 @@ export function getWelcomeEmailHtml(name: string, email: string): string {
     </div>
 
     <p>Halo <strong>${name}</strong>,</p>
-    <p>Terima kasih telah mendaftar di <strong>JualRugi.my.id</strong> menggunakan email <code>${email}</code>. Akun Anda telah aktif dan siap digunakan untuk mencari barang diskon sadis atau menjual barang BU Anda!</p>
+    <p>Terima kasih telah mendaftar di <strong style="color: #0284c7;">JualRugi.my.id</strong> menggunakan email <a href="mailto:${email}" style="color: #0284c7; text-decoration: none;">${email}</a>. Akun Anda telah aktif dan siap digunakan untuk mencari barang diskon sadis atau menjual barang BU Anda!</p>
 
-    <div class="tip-box">
-      <strong>🛡️ 3 Tips Aman Transaksi di JualRugi.my.id:</strong>
-      <ul style="margin: 6px 0 0; padding-left: 18px;">
-        <li>Selalu bertransaksi dengan <strong>COD (Cash On Delivery) tatap muka</strong> di tempat ramai (Mall, Minimarket, Stasiun).</li>
-        <li><strong>Jangan pernah mentransfer DP / uang muka</strong> sebelum memegang dan menguji langsung fisik barang.</li>
+    <div class="tip-box" style="background: #fffbeb; border: 1px solid #fef08a; border-left: 4px solid #f59e0b; padding: 14px 18px; border-radius: 12px; margin: 20px 0;">
+      <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">
+        <span style="color: #0f172a;">🛡️ 3 Tips Aman Transaksi di </span><span style="color: #0284c7;">JualRugi.my.id:</span>
+      </div>
+      <ul style="margin: 6px 0 0; padding-left: 18px; color: #78350f; font-size: 13px; line-height: 1.6;">
+        <li style="margin-bottom: 6px;">Selalu bertransaksi dengan <strong>COD (Cash On Delivery) tatap muka</strong> di tempat ramai (Mall, Minimarket, Stasiun).</li>
+        <li style="margin-bottom: 6px;"><strong>Jangan pernah mentransfer DP / uang muka</strong> sebelum memegang dan menguji langsung fisik barang.</li>
         <li>Cek kelengkapan, fungsi tombol, baterai, dan IMEI sebelum melakukan pembayaran.</li>
       </ul>
     </div>
 
-    <p>🎁 <strong>Bonus Pendaftaran:</strong> Anda mendapatkan <strong>1 Slot Kuota Pasang Iklan Gratis</strong> untuk mulai memasang iklan barang butuh uang hari ini!</p>
+    <p style="margin: 20px 0; font-size: 14px; color: #0f172a; line-height: 1.6;">
+      🎁 <strong>Bonus Pendaftaran:</strong> Anda mendapatkan <strong>1 Slot Kuota Pasang Iklan Gratis</strong> untuk mulai memasang iklan barang butuh uang hari ini!
+    </p>
 
     <div style="text-align: center; margin: 24px 0 12px;">
       <a href="https://jualrugi.my.id/#pasangiklan" class="button" style="display: inline-block; background: #0284c7; color: #ffffff !important; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(2, 132, 199, 0.3);" data-track="false" data-msys-linktracking="0" sh-no-track="true">
         🚀 Pasang Iklan Sekarang (Gunakan Kuota Gratis)
       </a>
     </div>
-    <p style="text-align: center; font-size: 12px; color: #64748b; margin: 6px 0 20px;">
+    <p style="text-align: center; font-size: 12px; color: #64748b; margin: 6px 0 24px;">
       Direct Link Pasang Iklan: <a href="https://jualrugi.my.id/#pasangiklan" style="color: #0284c7; font-weight: 600;" data-track="false" data-msys-linktracking="0">https://jualrugi.my.id/#pasangiklan</a>
     </p>
 
@@ -192,7 +196,7 @@ export function getWelcomeEmailHtml(name: string, email: string): string {
       <p style="font-size: 13px; line-height: 1.5; color: #14532d; margin: 0 0 16px;">
         Dapatkan info kilat barang BU diskon sadis, tips aman COD tatap muka, dan promosi langsung dengan sesama anggota.
       </p>
-      <a href="https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2" style="display: inline-block; background: #25D366; color: #ffffff !important; font-weight: bold; font-size: 14px; padding: 12px 24px; border-radius: 10px; text-decoration: none; box-shadow: 0 3px 10px rgba(37, 211, 102, 0.35);" target="_blank" rel="noopener noreferrer" data-track="false" data-msys-linktracking="0" sh-no-track="true">
+      <a href="https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2" style="display: inline-block; background: #22c55e; color: #ffffff !important; font-weight: bold; font-size: 14px; padding: 12px 24px; border-radius: 10px; text-decoration: none; box-shadow: 0 3px 10px rgba(34, 197, 94, 0.35);" target="_blank" rel="noopener noreferrer" data-track="false" data-msys-linktracking="0" sh-no-track="true">
         🟢 Gabung Grup WhatsApp Sekarang
       </a>
       <div style="margin-top: 10px; font-size: 11px; color: #15803d; word-break: break-all;">
@@ -201,7 +205,7 @@ export function getWelcomeEmailHtml(name: string, email: string): string {
     </div>
 
     <p style="text-align: center; font-size: 14px; font-weight: 700; color: #0284c7; margin: 24px 0 12px;">
-      Selamat berbelanja & happy shopping! 🥳
+      Selamat berbelanja & happy shopping! 🎉
     </p>
 
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 20px;" />
@@ -242,12 +246,18 @@ export async function sendRegistrationToMakeWebhook(
   }
   const nomor_wa = cleanPhone || rawPhone;
 
-  // Exact JSON payload yang dipersyaratkan oleh Make.com
+  // Exact JSON payload yang dipersyaratkan oleh Make.com & Brevo Module
   const payload = {
     nama,
     email,
     password,
     nomor_wa,
+    name: nama,
+    phone: nomor_wa,
+    sender_name: 'jualrugi.my.id',
+    sender_email: 'admin@jualrugi.my.id',
+    subject: `Selamat Datang di JualRugi.my.id! 👋 - Panduan Transaksi COD Aman`,
+    htmlContent: getWelcomeEmailHtml(nama, email),
   };
 
   console.log('[Make.com Webhook] Menyiapkan payload pendaftaran:', {
@@ -471,8 +481,8 @@ export async function sendWelcomeEmailAutomation(
         },
         body: JSON.stringify({
           sender: {
-            name: 'JualRugi.my.id',
-            email: 'info@jualrugi.my.id',
+            name: 'jualrugi.my.id',
+            email: 'admin@jualrugi.my.id',
           },
           to: [{ email: recipientEmail, name: recipientName }],
           subject: `Selamat Datang di JualRugi.my.id! 👋 - Panduan Transaksi COD Aman`,
