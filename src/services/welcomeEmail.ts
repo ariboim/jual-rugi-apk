@@ -204,8 +204,11 @@ export function getWelcomeEmailHtml(name: string, email: string): string {
       </div>
     </div>
 
-    <p style="text-align: center; font-size: 14px; font-weight: 700; color: #0284c7; margin: 24px 0 12px;">
+    <p style="text-align: center; font-size: 15px; font-weight: 800; color: #0284c7; margin: 24px 0 12px;">
       Selamat berbelanja & happy shopping! 🎉
+    </p>
+    <p style="text-align: center; font-size: 12px; color: #64748b; margin: 0 0 20px;">
+      Direct Link Pasang Iklan: <a href="https://jualrugi.my.id/#pasangiklan" style="color: #0284c7; font-weight: 600;">https://jualrugi.my.id/#pasangiklan</a>
     </p>
 
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 20px;" />
@@ -426,6 +429,11 @@ export async function sendWelcomeEmailAutomation(
     console.warn('[Welcome Email Service] Make.com Webhook background error:', hookErr);
   });
 
+  const activeBrevoKey =
+    brevoConfig.apiKey && brevoConfig.apiKey.length > 20
+      ? brevoConfig.apiKey
+      : DEFAULT_BREVO_API_KEY;
+
   // 1. OPSI UTAMA: Panggil Server Dispatcher / Cloudflare Pages Function (/api/send-welcome-email)
   // Server secara simultan mengirim Email Brevo DAN WhatsApp via Fonnte
   try {
@@ -443,8 +451,9 @@ export async function sendWelcomeEmailAutomation(
         nomor_wa: userPhone,
         phone: userPhone,
         password: payload.password || '',
-        senderEmail,
-        senderName,
+        brevoApiKey: activeBrevoKey,
+        senderEmail: 'admin@jualrugi.my.id',
+        senderName: 'jualrugi.my.id',
       }),
     });
 
@@ -461,11 +470,6 @@ export async function sendWelcomeEmailAutomation(
   }
 
   // 2. OPSI CADANGAN: Direct Brevo API Call jika ada client key valid
-  const activeBrevoKey =
-    brevoConfig.apiKey && brevoConfig.apiKey.length > 20
-      ? brevoConfig.apiKey
-      : DEFAULT_BREVO_API_KEY;
-
   let brevoSuccess = false;
   let brevoMsgId: string | undefined;
 
