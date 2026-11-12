@@ -20,9 +20,10 @@ export const APK_REDIRECT_URL =
   'https://drive.google.com/file/d/19bjppKlFRS3IHtodooc0kshSfyb38hIW/view?usp=drivesdk';
 
 export const PWAInstallButton: React.FC = () => {
-  const { isInstalled, isIOS } = usePWAInstall();
+  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [showModal, setShowModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
 
   // If already running inside standalone app / installed APK
   if (isInstalled) {
@@ -34,6 +35,24 @@ export const PWAInstallButton: React.FC = () => {
     );
   }
 
+  const handleInstallClick = async () => {
+    if (isInstallable) {
+      setIsInstalling(true);
+      try {
+        const accepted = await install();
+        if (accepted) {
+          return;
+        }
+      } catch (err) {
+        console.warn('Native PWA install error:', err);
+      } finally {
+        setIsInstalling(false);
+      }
+    }
+    // Jika browser belum mendukung prompt otomatis atau pengguna ingin APK langsung, buka modal
+    setShowModal(true);
+  };
+
   const handleDownloadClick = () => {
     setShowToast(true);
     setTimeout(() => setShowToast(false), 8000);
@@ -42,19 +61,19 @@ export const PWAInstallButton: React.FC = () => {
   return (
     <>
       <div className="flex items-center gap-1.5">
-        {/* Tombol Utama: Download & Pasang File APK Real Android (Tanpa Logo Browser) */}
-        <a
-          href={APK_DOWNLOAD_URL}
-          onClick={handleDownloadClick}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Download & Install File APK Real JualRugi"
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white shadow-xs shadow-sky-500/25 transition-all active:scale-95 cursor-pointer"
+        {/* Tombol Utama: 1-Klik Install Native WebAPK Android (Tanpa Logo Browser di Ikon) */}
+        <button
+          onClick={handleInstallClick}
+          disabled={isInstalling}
+          aria-label="Install Aplikasi JualRugi (Tanpa Logo Browser)"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white shadow-xs shadow-sky-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-75"
         >
           <Smartphone className="w-3.5 h-3.5 text-white" />
-          <span className="font-extrabold tracking-wide">Install APK Real</span>
+          <span className="font-extrabold tracking-wide">
+            {isInstalling ? 'Memasang...' : 'Install Aplikasi'}
+          </span>
           <Download className="w-3 h-3 text-sky-200 animate-bounce" />
-        </a>
+        </button>
 
         {/* Tombol Bantuan / Panduan */}
         <button
@@ -147,7 +166,7 @@ export const PWAInstallButton: React.FC = () => {
               <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-start gap-2.5">
                 <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <div className="text-[11.5px] text-emerald-950 leading-relaxed">
-                  <strong>Kenapa menggunakan File APK?</strong> Menginstall file APK asli menghasilkan aplikasi mandiri sejati di HP Anda. Ikon launcher dijamin <strong>bersih 100% tanpa watermark/logo kecil Chrome</strong> di sudutnya!
+                  <strong>Aplikasi Mandiri Bersih (WebAPK/APK):</strong> Saat dipasang, ikon aplikasi JualRugi dijamin <strong>bersih 100% tanpa watermark/logo kecil Chrome</strong> di sudutnya, dengan akses cepat &amp; hemat kuota!
                 </div>
               </div>
 
@@ -203,7 +222,20 @@ export const PWAInstallButton: React.FC = () => {
             </div>
 
             {/* Action Buttons */}
-            <div className="mt-5 pt-3 border-t border-sky-100 flex items-center gap-2">
+            <div className="mt-5 pt-3 border-t border-sky-100 flex flex-col sm:flex-row items-center gap-2">
+              {isInstallable && (
+                <button
+                  onClick={async () => {
+                    setShowModal(false);
+                    await install();
+                  }}
+                  className="w-full sm:flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-extrabold text-xs shadow-xs transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Pasang Langsung (1-Klik WebAPK)</span>
+                </button>
+              )}
+
               <a
                 href={APK_DOWNLOAD_URL}
                 target="_blank"
@@ -212,15 +244,19 @@ export const PWAInstallButton: React.FC = () => {
                   setShowModal(false);
                   setShowToast(true);
                 }}
-                className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-extrabold text-xs shadow-xs transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                className={`w-full sm:flex-1 py-2.5 px-3 rounded-xl ${
+                  isInstallable
+                    ? 'bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200'
+                    : 'bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white shadow-xs'
+                } font-extrabold text-xs transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer`}
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Download File APK Sekarang</span>
+                <span>Unduh File APK Langsung</span>
               </a>
 
               <button
                 onClick={() => setShowModal(false)}
-                className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer active:scale-95"
+                className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer active:scale-95"
               >
                 Tutup
               </button>

@@ -527,19 +527,52 @@ export default {
     // =========================================================================
     // STATIC ASSETS & SPA ROUTING (Fallback to /index.html for client-side routing)
     // =========================================================================
+    // A. Service Worker wajib tidak pernah di-cache oleh HTTP agar pembaruan instan
+    if (url.pathname === '/sw.js') {
+      const swRequest = new Request(new URL('/sw.js', request.url).toString());
+      const swResponse = await env.ASSETS.fetch(swRequest);
+      const headers = new Headers(swResponse.headers);
+      headers.set('Content-Type', 'application/javascript; charset=utf-8');
+      headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return new Response(swResponse.body, { status: swResponse.status, headers });
+    }
+
+    // B. Web App Manifest resmi
+    if (url.pathname === '/manifest.json') {
+      const mRequest = new Request(new URL('/manifest.json', request.url).toString());
+      const mResponse = await env.ASSETS.fetch(mRequest);
+      const headers = new Headers(mResponse.headers);
+      headers.set('Content-Type', 'application/manifest+json; charset=utf-8');
+      return new Response(mResponse.body, { status: mResponse.status, headers });
+    }
+
+    // C. Root SPA Navigation (termasuk /?source=pwa, /?id=..., /index.html)
+    if (url.pathname === '/' || url.pathname === '/index.html') {
+      const indexRequest = new Request(new URL('/index.html', request.url).toString());
+      const indexResponse = await env.ASSETS.fetch(indexRequest);
+      if (indexResponse.status === 200) {
+        const headers = new Headers(indexResponse.headers);
+        headers.set('Content-Type', 'text/html; charset=utf-8');
+        headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return new Response(indexResponse.body, {
+          status: 200,
+          headers,
+        });
+      }
+    }
+
+    // D. Fetch Asset Reguler
     const response = await env.ASSETS.fetch(request);
 
-    // If resource is not found (404) and this is a GET navigation request (no static file extension),
-    // fallback gracefully to /index.html for Single Page Application client-side routing.
+    // Fallback 404 untuk client-side routing SPA
     if (response.status === 404 && request.method === 'GET') {
-      const pathname = url.pathname;
-      const isStaticFile = pathname.match(/\.[a-zA-Z0-9]+$/);
-
+      const isStaticFile = url.pathname.match(/\.[a-zA-Z0-9]+$/);
       if (!isStaticFile) {
-        const indexRequest = new Request(new URL('/index.html', request.url), request);
+        const indexRequest = new Request(new URL('/index.html', request.url).toString());
         const indexResponse = await env.ASSETS.fetch(indexRequest);
         if (indexResponse.status === 200) {
           const headers = new Headers(indexResponse.headers);
+          headers.set('Content-Type', 'text/html; charset=utf-8');
           headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
           return new Response(indexResponse.body, {
             status: 200,
@@ -547,16 +580,6 @@ export default {
           });
         }
       }
-    }
-
-    // Never cache index.html or root to ensure fresh deployments are immediately seen
-    if (url.pathname === '/' || url.pathname === '/index.html') {
-      const headers = new Headers(response.headers);
-      headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-      return new Response(response.body, {
-        status: response.status,
-        headers,
-      });
     }
 
     return response;

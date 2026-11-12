@@ -35,15 +35,15 @@ export default defineConfig(() => {
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         },
         manifest: {
-          id: '/?source=pwa',
-          name: 'JualRugi.my.id - Pasar Butuh Uang (BU) COD',
+          id: '/',
+          name: 'JualRugi.my.id - Pasar Butuh Uang (BU)',
           short_name: 'JualRugi',
-          description: 'Pasar Jual Cepat & Butuh Uang (BU) Diskon Ekstrim - Transaksi Aman COD Tatap Muka dengan Verifikasi Terverifikasi',
+          description: 'Pasar Jual Cepat & Butuh Uang (BU) Diskon Ekstrim - Transaksi Aman COD Tatap Muka Terpercaya',
           theme_color: '#ffffff',
           background_color: '#ffffff',
           display: 'standalone',
           orientation: 'portrait-primary',
-          start_url: '/?source=pwa',
+          start_url: '/',
           scope: '/',
           icons: [
             {

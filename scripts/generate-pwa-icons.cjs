@@ -124,9 +124,9 @@ fs.writeFileSync(path.join(publicDir, 'icon.svg'), svgContent, 'utf8');
 console.log('Generating manifest.json...');
 const manifestJson = {
   id: '/',
-  name: 'JualRugi.my.id - Pasar Butuh Uang (BU) COD',
-  short_name: 'JualRugi.my.id',
-  description: 'Pasar Jual Cepat & Butuh Uang (BU) Diskon Ekstrim - Transaksi Aman COD Tatap Muka dengan Verifikasi Multimodal',
+  name: 'JualRugi.my.id - Pasar Butuh Uang (BU)',
+  short_name: 'JualRugi',
+  description: 'Pasar Jual Cepat & Butuh Uang (BU) Diskon Ekstrim - Transaksi Aman COD Tatap Muka Terpercaya',
   theme_color: '#ffffff',
   background_color: '#ffffff',
   display: 'standalone',

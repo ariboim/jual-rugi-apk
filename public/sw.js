@@ -1,20 +1,22 @@
-// Service Worker JualRugi.my.id (Network-First Cache Buster v8)
-const CACHE_NAME = 'jualrugi-v8-pwa-ogfix';
+// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v9)
+const CACHE_NAME = 'jualrugi-v9-pwa-final';
 
 const PRECACHE_ASSETS = [
+  '/',
+  '/index.html',
   '/manifest.json',
-  '/og-image.png',
-  '/logo_icon.png',
-  '/logo_transparent.png',
+  '/favicon.ico',
+  '/favicon.png',
+  '/apple-touch-icon.png',
+  '/icon.svg',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/pwa-maskable-512x512.png',
-  '/apple-touch-icon.png',
-  '/favicon.png',
-  '/favicon.ico',
-  '/icon.svg',
-  '/image_3.png',
-  '/banner-hp-jualrugi.png'
+  '/logo_icon.png',
+  '/logo_transparent.png',
+  '/og-image.png',
+  '/banner-hp-jualrugi.png',
+  '/image_3.png'
 ];
 
 self.addEventListener('message', (event) => {
@@ -23,7 +25,7 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// 1. Install Event: Skip waiting segera agar update langsung aktif
+// 1. Install Event: Pre-cache app shell & skip waiting
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
@@ -35,7 +37,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 2. Activate Event: Hapus SEMUA cache versi lama dari memori HP pengguna
+// 2. Activate Event: Bersihkan cache versi lama & claim clients
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -51,17 +53,80 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch Event: Strict Network-First untuk Dokumen HTML (Menjamin kode web selalu mutakhir setelah git push)
+// 3. Fetch Event: Network-First yang tangguh untuk navigasi (Mencegah ERR_FAILED di Android Webview/APK)
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
   if (!url.protocol.startsWith('http')) return;
 
-  // Jika permintaan navigasi halaman (HTML/index), selalu ambil versi TERBARU dari server
-  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+  // Jangan tangani API internal (/api/*) atau backend proxy
+  if (url.pathname.startsWith('/api/')) return;
+
+  // A. Navigasi Halaman Utama, PWA start_url (?source=pwa), dan dokumen HTML
+  const isNavigation =
+    event.request.mode === 'navigate' ||
+    url.pathname === '/' ||
+    url.pathname === '/index.html' ||
+    url.pathname.endsWith('.html') ||
+    url.search.includes('source=');
+
+  if (isNavigation) {
     event.respondWith(
-      fetch(event.request, { cache: 'no-cache' })
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, clone);
+              cache.put('/', networkResponse.clone());
+              cache.put('/index.html', networkResponse.clone());
+            });
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          // Fallback saat offline atau cold-start WebView Android
+          const cache = await caches.open(CACHE_NAME);
+          const cached =
+            (await cache.match(event.request, { ignoreSearch: true })) ||
+            (await cache.match('/')) ||
+            (await cache.match('/index.html'));
+
+          if (cached) {
+            return cached;
+          }
+
+          // Emergency response agar TIDAK PERNAH terjadi ERR_FAILED di Chromium/Android
+          return new Response(
+            `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>JualRugi.my.id</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:32px 16px;text-align:center;background:#f0f9ff;color:#0f172a;}button{background:#0284c7;color:#fff;border:none;padding:12px 28px;border-radius:12px;font-weight:bold;cursor:pointer;margin-top:20px;font-size:14px;}</style></head><body><h2 style="color:#0369a1;">Memuat JualRugi.my.id...</h2><p style="color:#64748b;font-size:14px;">Menghubungkan ke server. Harap pastikan koneksi internet Anda aktif.</p><button onclick="window.location.reload()">Coba Muat Ulang</button><script>setTimeout(function(){window.location.reload();},1500);</script></body></html>`,
+            {
+              status: 200,
+              headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            }
+          );
+        })
+    );
+    return;
+  }
+
+  // B. Aset Statis (CSS, JS, Gambar, Font)
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        // Return cache seketika, fetch background untuk update (Stale-While-Revalidate)
+        fetch(event.request)
+          .then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              const clone = networkResponse.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            }
+          })
+          .catch(() => {});
+        return cachedResponse;
+      }
+
+      return fetch(event.request)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const clone = networkResponse.clone();
@@ -70,24 +135,11 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          // Hanya jika benar-benar offline tanpa sinyal internet, gunakan cache
-          return caches.match(event.request).then((cached) => cached || caches.match('/'));
-        })
-    );
-    return;
-  }
-
-  // Untuk asset statis lainnya: Network-First dengan Cache Fallback
-  event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const clone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return networkResponse;
-      })
-      .catch(() => caches.match(event.request))
+          if (event.request.destination === 'image') {
+            return caches.match('/pwa-192x192.png');
+          }
+        });
+    })
   );
 });
 

@@ -38,19 +38,9 @@
     <link rel="manifest" href="/manifest.json" />
     <script>
       (function() {
-        var APP_BUILD_ID = 'jualrugi-app-20261112-og-v8';
+        var APP_BUILD_ID = 'jualrugi-app-20261112-pwa-v9';
         try {
-          var lastBuild = localStorage.getItem('jr_build_id');
-          if (lastBuild && lastBuild !== APP_BUILD_ID) {
-            localStorage.setItem('jr_build_id', APP_BUILD_ID);
-            if ('caches' in window) {
-              caches.keys().then(function(keys) {
-                keys.forEach(function(k) { caches.delete(k); });
-              });
-            }
-          } else {
-            localStorage.setItem('jr_build_id', APP_BUILD_ID);
-          }
+          localStorage.setItem('jr_build_id', APP_BUILD_ID);
         } catch(e) {}
 
         if ('serviceWorker' in navigator) {
