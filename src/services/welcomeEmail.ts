@@ -387,18 +387,15 @@ export async function sendRegistrationToMakeWebhook(
  */
 export function getWelcomeMessageText(name: string, email: string): string {
   return (
-    `Halo *${name}*, terima kasih sudah mendaftar di *jualrugi.my.id*! 🎉\n\n` +
-    `Akun Anda dengan email *${email}* sudah aktif dan siap digunakan.\n\n` +
-    `🎁 *Bonus Pendaftaran:* Anda mendapatkan *1 Slot Kuota Pasang Iklan Gratis*!\n\n` +
-    `Yuk, langsung pasang iklan pertamamu atau cari barang incaranmu di sini:\n` +
-    `https://jualrugi.my.id/?action=post\n\n` +
-    `🛡️ *Tips Aman Transaksi COD JualRugi:*\n` +
-    `1. Selalu bertransaksi dengan COD tatap muka di tempat ramai.\n` +
-    `2. Jangan pernah transfer DP / uang muka sebelum cek fisik barang.\n` +
-    `3. Cek kondisi fisik & fungsi barang sebelum pembayaran.\n\n` +
-    `💬 Gabung Grup WhatsApp Resmi JualRugi:\n` +
-    `https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi\n\n` +
-    `Happy Shopping!\n- Tim JualRugi.my.id`
+    `Halo *${name}*! 👋\n\n` +
+    `Selamat datang di *jualrugi.my.id* — Platform Jual Beli Barang Bekas & Preloved Paling Praktis!\n\n` +
+    `Akun Anda dengan email *${email}* telah berhasil dibuat dan aktif sepenuhnya. Sekarang Anda sudah bisa mulai pasang iklan gratis atau mencari barang impian dengan penawaran terbaik.\n\n` +
+    `🔗 *Silakan masuk ke akun Anda di sini:*\n` +
+    `https://jualrugi.my.id/login\n\n` +
+    `Jika butuh bantuan, tim kami siap membantu kapan, saja. \n` +
+    `Silakan simpan nomor wa ini sebagai admin Selamat bertransaksi, bro/sis! 🚀\n\n` +
+    `---\n` +
+    `*jualrugi.my.id*`
   );
 }
 

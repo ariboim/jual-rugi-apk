@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   X,
-  Sparkles,
   AlertOctagon,
   Flame,
   CheckCircle2,
@@ -13,8 +12,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Category, CATEGORIES, Listing, UserProfile, ProductPhoto, MonetizationPackage } from '../types';
-import { DEMO_PRESET_IMAGES } from '../data/initialData';
-import { ADMIN_TEST_PRESETS, AdminTestPreset } from '../data/adminTestPresets';
+import type { AdminTestPreset } from '../data/adminTestPresets';
 import { PhotoUploadManager } from './gallery/PhotoUploadManager';
 import { QuotaExceededModal } from './QuotaExceededModal';
 import { CameraGalleryPermissionModal } from './CameraGalleryPermissionModal';
@@ -88,32 +86,6 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
       ? Math.round(((numNormal - numSelling) / numNormal) * 100)
       : 0;
 
-  const loadPreset = (preset: (typeof DEMO_PRESET_IMAGES)[0]) => {
-    setTitle(preset.sampleTitle);
-    setCategory(preset.category);
-    setNormalPrice(preset.normal);
-    setSellingPrice(preset.selling);
-    setCondition(preset.condition);
-    setUrgentReason(preset.urgentReason);
-
-    // Memuat contoh foto multi-sudut dengan caption yang relevan
-    const presetPhotos: ProductPhoto[] = [
-      {
-        id: `preset-${Date.now()}-1`,
-        url: preset.url,
-        caption: `Tampak depan: ${preset.sampleTitle}`,
-      },
-      {
-        id: `preset-${Date.now()}-2`,
-        url: preset.url,
-        caption: 'Tampak sudut samping dan kondisi kelengkapan',
-      },
-    ];
-
-    setPhotos(presetPhotos);
-    setRejectionNotice(null);
-    setValidationError(null);
-  };
 
   const handleConfirmModerationAndFinish = () => {
     setIsModerationModalOpen(false);
@@ -368,36 +340,6 @@ export const PostListingModal: React.FC<PostListingModalProps> = ({
               </div>
             </div>
           )}
-
-          {/* Quick Demo Preset Selector */}
-          <div className="bg-white p-3.5 rounded-2xl border border-sky-100 shadow-xs space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-sky-950 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                Coba Contoh Cepat (Preset Demo):
-              </span>
-              <span className="text-[10px] text-slate-400">1-Klik isi otomatis</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {DEMO_PRESET_IMAGES.map((preset, idx) => (
-                <button
-                  type="button"
-                  key={idx}
-                  onClick={() => loadPreset(preset)}
-                  className={`p-2.5 rounded-xl text-left border transition text-[11px] font-semibold cursor-pointer active:scale-95 ${
-                    preset.type === 'flyer'
-                      ? 'bg-red-50/60 hover:bg-red-100/70 border-red-200 text-red-900'
-                      : 'bg-sky-50/70 hover:bg-sky-100 border-sky-200 text-sky-950'
-                  }`}
-                >
-                  <span className="block truncate">{preset.label}</span>
-                  <span className="block text-[9px] text-slate-500 mt-0.5">
-                    {preset.type === 'flyer' ? '⚠️ Uji Penolakan Flyer' : '✅ Uji Lolos Fisik Asli'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* 1. Sistem Upload & Manajemen Foto (Maksimal 6 foto, validasi JPG/PNG/WebP, caption, tombol hapus) */}
           <div className="bg-white p-4 rounded-2xl border border-sky-100 shadow-xs">
