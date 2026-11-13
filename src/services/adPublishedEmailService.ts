@@ -1276,7 +1276,7 @@ Team Admin jualrugi.my.id`;
 // status BU Prioritas (PALING BU) pada sebuah iklan.
 // =============================================================================
 export const DEFAULT_PRIORITY_MAKE_WEBHOOK_URL =
-  'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
+  'https://hook.eu1.make.com/atk7199ky3v9eh37xox6zeqxk2g9pcd8';
 
 const STORAGE_KEY_PRIORITY_MAKE_WEBHOOK = 'jualrugi_priority_make_webhook_url';
 
@@ -1318,13 +1318,17 @@ export interface PriorityMakeWebhookResponse {
 export function getPriorityMakeWebhookUrl(): string {
   try {
     const saved = localStorage.getItem(STORAGE_KEY_PRIORITY_MAKE_WEBHOOK);
-    if (saved && saved.trim().startsWith('http')) {
+    if (
+      saved &&
+      saved.trim().startsWith('http') &&
+      !saved.includes('1i6d9bq5i57dnksxju764f8uno3bdsam') &&
+      !saved.includes('1i6d9bq5157dnksxju764f8uno3bdsam')
+    ) {
       return saved.trim();
     }
   } catch {}
   return (
     (import.meta.env.VITE_MAKE_PRIORITY_AD_WEBHOOK_URL as string) ||
-    (import.meta.env.VITE_FREE_WELCOME_WEBHOOK as string) ||
     DEFAULT_PRIORITY_MAKE_WEBHOOK_URL
   );
 }

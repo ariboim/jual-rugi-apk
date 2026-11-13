@@ -674,8 +674,7 @@ export default {
             ? body.webhookUrl.trim()
             : null) ||
           env.MAKE_PRIORITY_AD_WEBHOOK_URL ||
-          env.MAKE_WELCOME_EMAIL_WEBHOOK_URL ||
-          'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
+          'https://hook.eu1.make.com/atk7199ky3v9eh37xox6zeqxk2g9pcd8';
 
         const normalPrice = Number(body.normal_price ?? body.normalPrice ?? 0) || 0;
         const buPrice = Number(body.bu_price ?? body.sellingPrice ?? body.buPrice ?? 0) || 0;

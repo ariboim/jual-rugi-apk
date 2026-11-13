@@ -1,10 +1,9 @@
 interface Env {
   MAKE_PRIORITY_AD_WEBHOOK_URL?: string;
-  MAKE_WELCOME_EMAIL_WEBHOOK_URL?: string;
 }
 
 const DEFAULT_PRIORITY_MAKE_WEBHOOK_URL =
-  'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
+  'https://hook.eu1.make.com/atk7199ky3v9eh37xox6zeqxk2g9pcd8';
 
 export async function onRequestPost(context: { request: Request; env: Env }) {
   const { request, env } = context;
@@ -17,7 +16,6 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         ? body.webhookUrl.trim()
         : null) ||
       env.MAKE_PRIORITY_AD_WEBHOOK_URL ||
-      env.MAKE_WELCOME_EMAIL_WEBHOOK_URL ||
       DEFAULT_PRIORITY_MAKE_WEBHOOK_URL;
 
     const normalPrice = Number(body.normal_price ?? body.normalPrice ?? 0) || 0;

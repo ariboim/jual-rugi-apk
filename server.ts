@@ -802,8 +802,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
   // Konfigurasi & Endpoint Webhook Make.com Khusus Approve "BU Prioritas (PALING BU)"
   const DEFAULT_PRIORITY_MAKE_WEBHOOK =
     process.env.MAKE_PRIORITY_AD_WEBHOOK_URL ||
-    process.env.MAKE_WELCOME_EMAIL_WEBHOOK_URL ||
-    'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
+    'https://hook.eu1.make.com/atk7199ky3v9eh37xox6zeqxk2g9pcd8';
   let globalPriorityMakeWebhookUrl = DEFAULT_PRIORITY_MAKE_WEBHOOK;
 
   app.get('/api/priority-make-webhook', (_req, res) => {
