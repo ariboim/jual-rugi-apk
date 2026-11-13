@@ -47,7 +47,15 @@ const STORAGE_KEY_FONNTE_LOGS = 'jualrugi_fonnte_logs';
  */
 export function normalizeWhatsAppNumber(rawPhone?: string | null): string {
   if (!rawPhone) return '';
-  let clean = String(rawPhone).replace(/\D/g, '');
+  const trimmed = String(rawPhone).trim();
+  if (!trimmed) return '';
+
+  // Pertahankan format JID grup WhatsApp (@g.us) atau personal JID (@s.whatsapp.net)
+  if (trimmed.includes('@g.us') || trimmed.includes('@s.whatsapp.net')) {
+    return trimmed;
+  }
+
+  let clean = trimmed.replace(/\D/g, '');
   if (!clean) return '';
 
   if (clean.startsWith('0')) {
@@ -105,7 +113,7 @@ export function getFonnteLogs(): FonnteLogEntry[] {
 }
 
 /**
- * Kirim Notifikasi WhatsApp Otomatis Menggunakan Fonnte API
+ * Kirim Notifikasi WhatsApp Otomatis Menggunakan Fonnte API (Mendukung Personal & Group @g.us)
  * Urutan Eksekusi:
  * 1. Panggil server proxy /api/send-fonnte-wa (Bebas kendala CORS)
  * 2. Fallback direct call ke https://api.fonnte.com/send
@@ -116,22 +124,23 @@ export async function sendFonnteWhatsApp(
 ): Promise<FonnteSendResponse> {
   const { targetPhone, message, title = 'Notifikasi JualRugi' } = params;
   const cleanPhone = normalizeWhatsAppNumber(targetPhone);
+  const isGroupTarget = cleanPhone.includes('@g.us');
 
-  if (!cleanPhone || cleanPhone.length < 8) {
-    console.warn('[FonnteService] Nomor WhatsApp tidak valid:', targetPhone);
+  if (!cleanPhone || (!isGroupTarget && cleanPhone.length < 8)) {
+    console.warn('[FonnteService] Nomor/Target WhatsApp tidak valid:', targetPhone);
     return {
       success: false,
-      message: `Nomor WhatsApp tidak valid (${targetPhone || 'kosong'})`,
+      message: `Target WhatsApp tidak valid (${targetPhone || 'kosong'})`,
       provider: 'simulation',
     };
   }
 
-  console.log(`[FonnteService] Mengirim pesan WA ke ${cleanPhone} | Judul: ${title}`);
+  console.log(`[FonnteService] Mengirim pesan WA ke ${cleanPhone} (${isGroupTarget ? 'GROUP' : 'PERSONAL'}) | Judul: ${title}`);
 
   // METODE 1: Server-side proxy (/api/send-fonnte-wa)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     const serverRes = await fetch('/api/send-fonnte-wa', {
       method: 'POST',
@@ -149,17 +158,20 @@ export async function sendFonnteWhatsApp(
 
     if (serverRes.ok) {
       const serverData = await serverRes.json().catch(() => ({}));
+      const isApiSuccess = serverData?.detail?.status !== false && serverData?.success !== false;
       console.log('✅ [FonnteService] WA berhasil dikirim via server proxy:', serverData);
       saveFonnteLog({
         targetPhone: cleanPhone,
         title,
         message,
-        status: 'sent',
+        status: isApiSuccess ? 'sent' : 'failed',
         provider: 'fonnte_server',
       });
       return {
-        success: true,
-        message: `Pesan WhatsApp berhasil dikirim ke ${cleanPhone}`,
+        success: isApiSuccess,
+        message: isApiSuccess
+          ? `Pesan WhatsApp berhasil dikirim ke ${cleanPhone}`
+          : `Fonnte merespons: ${serverData?.detail?.reason || 'Gagal kirim'}`,
         target: cleanPhone,
         provider: 'fonnte_server',
         detail: serverData,
@@ -175,10 +187,12 @@ export async function sendFonnteWhatsApp(
     const formData = new FormData();
     formData.append('target', cleanPhone);
     formData.append('message', message);
-    formData.append('countryCode', '62');
+    if (!isGroupTarget) {
+      formData.append('countryCode', '62');
+    }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     const directRes = await fetch('https://api.fonnte.com/send', {
       method: 'POST',

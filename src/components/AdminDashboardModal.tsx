@@ -75,6 +75,13 @@ import {
   triggerQuotaActivatedEmail,
   triggerAdTakenDownEmailAndWa,
   getDynamicAdLink,
+  PRIORITY_WA_GROUP_INVITE_URL,
+  PRIORITY_WA_GROUP_JID,
+  PRIORITY_WA_GROUP_NAME,
+  getPriorityGroupConfig,
+  savePriorityGroupConfig,
+  triggerPriorityAdGroupWhatsApp,
+  PriorityGroupWaConfig,
 } from '../services/adPublishedEmailService';
 import {
   getBrevoConfig,
@@ -175,6 +182,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   // Email Audit Logs from localStorage
   const [emailLogs, setEmailLogs] = useState<any[]>([]);
+
+  // Priority Group WhatsApp Notification State
+  const [priorityGroupConfig, setPriorityGroupConfig] = useState<PriorityGroupWaConfig>(() =>
+    getPriorityGroupConfig()
+  );
+  const [isTestingGroupWa, setIsTestingGroupWa] = useState(false);
+  const [isSyncingGroups, setIsSyncingGroups] = useState(false);
+  const [broadcastingListingId, setBroadcastingListingId] = useState<string | null>(null);
 
   // Brevo API Key Configuration State
   const [brevoKeyInput, setBrevoKeyInput] = useState('');
@@ -858,7 +873,109 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
-  // Action: Toggle BU Prioritas with Automatic Email Notification
+  // Toggle aktif/nonaktif auto-broadcast Iklan Prioritas ke Grup WA
+  const handleTogglePriorityGroupEnabled = () => {
+    const next = savePriorityGroupConfig({ enabled: !priorityGroupConfig.enabled });
+    setPriorityGroupConfig(next);
+    showNotification(
+      next.enabled
+        ? `✅ Notifikasi Grup WA Iklan Prioritas (${next.groupName}) DIAKTIFKAN!`
+        : `⏸️ Notifikasi Grup WA Iklan Prioritas dinonaktifkan sementara.`
+    );
+  };
+
+  // Sinkronisasi daftar grup WhatsApp dari server Fonnte
+  const handleSyncFonnteGroups = async () => {
+    setIsSyncingGroups(true);
+    try {
+      const res = await fetch('/api/fonnte/groups');
+      const data = await res.json().catch(() => ({}));
+      const groups: Array<{ id?: string; name?: string }> = Array.isArray(data?.groups) ? data.groups : [];
+      const matched =
+        groups.find((g) => g.id === priorityGroupConfig.groupJid) ||
+        groups.find((g) => (g.name || '').toLowerCase().includes('jualrugi')) ||
+        groups[0];
+
+      if (matched && matched.id) {
+        const next = savePriorityGroupConfig({
+          groupJid: matched.id,
+          groupName: matched.name || PRIORITY_WA_GROUP_NAME,
+        });
+        setPriorityGroupConfig(next);
+        showNotification(`✅ Grup WA tersinkron: ${next.groupName} (${next.groupJid})`);
+      } else {
+        showNotification(`ℹ️ Menggunakan Grup WA resmi: ${PRIORITY_WA_GROUP_NAME} (${PRIORITY_WA_GROUP_JID})`);
+      }
+    } catch {
+      showNotification(`ℹ️ Menggunakan Grup WA resmi: ${PRIORITY_WA_GROUP_NAME} (${PRIORITY_WA_GROUP_JID})`);
+    } finally {
+      setIsSyncingGroups(false);
+    }
+  };
+
+  // Tes kirim notifikasi Iklan Prioritas ke Grup WA
+  const handleTestPriorityGroupBroadcast = async () => {
+    const sample = listings.find((l) => !!l.isSuperBU) || listings[0];
+    setIsTestingGroupWa(true);
+    try {
+      const res = await triggerPriorityAdGroupWhatsApp(
+        {
+          listingId: sample?.id || 'bu-prioritas-test',
+          listingTitle: sample?.title || 'Contoh Iklan Prioritas JualRugi.my.id',
+          sellingPrice: sample?.sellingPrice || 4500000,
+          normalPrice: sample?.normalPrice || 7500000,
+          discountPercentage: sample?.discountPercentage || 40,
+          location: sample?.location || 'Jakarta Selatan (COD Aman)',
+          category: sample?.category || 'HP & Gadget',
+          urgentReason: sample?.urgentReason || 'Butuh dana cepat hari ini, siap COD tatap muka',
+          sellerName: sample?.seller?.name || 'Member Terverifikasi',
+          isTest: true,
+        },
+        { forceSend: true }
+      );
+      loadEmailLogs();
+      showNotification(
+        res.success
+          ? `✅ Tes kirim Grup WA "${res.groupName}" berhasil!`
+          : `⚠️ ${res.message}`
+      );
+    } catch {
+      showNotification('⚠️ Gagal menjalankan tes kirim ke Grup WA.');
+    } finally {
+      setIsTestingGroupWa(false);
+    }
+  };
+
+  // Kirim manual iklan prioritas terpilih ke Grup WA
+  const handleManualBroadcastPriorityGroup = async (listing: Listing) => {
+    setBroadcastingListingId(listing.id);
+    try {
+      const res = await triggerPriorityAdGroupWhatsApp(
+        {
+          listingId: listing.id,
+          listingTitle: listing.title,
+          sellingPrice: listing.sellingPrice,
+          normalPrice: listing.normalPrice,
+          discountPercentage: listing.discountPercentage,
+          location: listing.location,
+          category: listing.category,
+          urgentReason: listing.urgentReason,
+          sellerName: listing.seller?.name,
+        },
+        { forceSend: true }
+      );
+      loadEmailLogs();
+      showNotification(
+        res.success
+          ? `📢 Iklan "${listing.title}" berhasil diteruskan ke Grup WA ${res.groupName}!`
+          : `⚠️ ${res.message}`
+      );
+    } finally {
+      setBroadcastingListingId(null);
+    }
+  };
+
+  // Action: Toggle BU Prioritas with Automatic Seller Notification + Priority WA Group Broadcast
   const handleToggleSuperBUWithEmail = async (listing: Listing) => {
     const currentStatus = !!listing.isSuperBU;
     const willActivate = !currentStatus;
@@ -866,25 +983,65 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     onToggleSuperBU(listing.id, currentStatus);
 
     if (willActivate) {
+      const storedUsers = getStoredUsers();
+      const matchedUser = storedUsers.find(
+        (u) =>
+          u.id === listing.user_id ||
+          (listing.seller?.id && u.id === listing.seller.id) ||
+          (listing.seller?.name && u.name.toLowerCase() === listing.seller.name.toLowerCase())
+      );
+
       const sellerEmail =
-        listing.user_id === 'seller-agus'
+        matchedUser?.email ||
+        (listing as any).seller_email ||
+        (listing.user_id === 'seller-agus'
           ? 'agus.setiawan@gmail.com'
-          : `${listing.id.toLowerCase()}@jualrugi.my.id`;
+          : `${listing.id.toLowerCase()}@jualrugi.my.id`);
+
+      const sellerPhone =
+        matchedUser?.whatsapp ||
+        matchedUser?.phone ||
+        (listing.seller as any)?.whatsapp ||
+        (listing.seller as any)?.phone ||
+        '';
 
       try {
+        // 1. Notifikasi Email & WA ke Penjual
         await triggerMonetizationActivatedEmail({
           listingId: listing.id,
           listingTitle: listing.title,
           recipientEmail: sellerEmail,
-          recipientName: listing.seller?.name || 'Pengiklan',
+          recipientPhone: sellerPhone,
+          whatsapp: sellerPhone,
+          recipientName: listing.seller?.name || matchedUser?.name || 'Pengiklan',
           packageType: 'prioritas',
         });
+
+        // 2. Forward otomatis Iklan Prioritas ke Grup WA Resmi (Jualrugi.my.id)
+        const groupRes = await triggerPriorityAdGroupWhatsApp({
+          listingId: listing.id,
+          listingTitle: listing.title,
+          sellingPrice: listing.sellingPrice,
+          normalPrice: listing.normalPrice,
+          discountPercentage: listing.discountPercentage,
+          location: listing.location,
+          category: listing.category,
+          urgentReason: listing.urgentReason,
+          sellerName: listing.seller?.name || matchedUser?.name || 'Pengiklan JualRugi',
+        });
+
+        const groupNote = groupRes.success
+          ? ` & diteruskan ke Grup WA ${groupRes.groupName}`
+          : groupRes.skipped
+          ? ' (Forward Grup WA nonaktif)'
+          : '';
+
         showNotification(
-          `BU Prioritas aktif! Email notifikasi otomatis dikirim ke ${sellerEmail}`
+          `🔥 BU Prioritas di-approve! Notifikasi dikirim ke seller${groupNote}.`
         );
         loadEmailLogs();
       } catch (e) {
-        showNotification('BU Prioritas aktif! (Log email tersimpan)');
+        showNotification('BU Prioritas aktif! (Log notifikasi tersimpan)');
       }
     } else {
       showNotification(`Status BU Prioritas untuk ${listing.id} telah dinonaktifkan.`);
@@ -1467,7 +1624,88 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
             {/* TAB CONTENT 1: TABEL MANAJEMEN IKLAN */}
             {activeTab === 'listings' && (
-              <div className="flex-1 overflow-auto p-4 min-h-0">
+              <div className="flex-1 overflow-auto p-4 min-h-0 space-y-3">
+                {/* Banner Kontrol Broadcast Otomatis Grup WhatsApp Iklan Prioritas */}
+                <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-sky-50 p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <MessageCircle className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-black text-emerald-950">
+                          Notifikasi Grup WA Iklan Prioritas
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            priorityGroupConfig.enabled
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-slate-300 text-slate-700'
+                          }`}
+                        >
+                          {priorityGroupConfig.enabled ? 'AKTIF OTOMATIS' : 'NONAKTIF'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        Setiap iklan <strong>BU Prioritas</strong> yang di-approve Admin otomatis diteruskan ke Grup{' '}
+                        <strong className="text-emerald-800">{priorityGroupConfig.groupName}</strong>{' '}
+                        <span className="font-mono text-[10px] bg-white/80 px-1.5 py-0.5 rounded border border-emerald-200 text-emerald-900">
+                          {priorityGroupConfig.groupJid}
+                        </span>
+                      </p>
+                      <a
+                        href={priorityGroupConfig.groupInviteUrl || PRIORITY_WA_GROUP_INVITE_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline break-all"
+                      >
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                        <span>{priorityGroupConfig.groupInviteUrl || PRIORITY_WA_GROUP_INVITE_URL}</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleTogglePriorityGroupEnabled}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer border ${
+                        priorityGroupConfig.enabled
+                          ? 'bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                          : 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
+                      }`}
+                    >
+                      {priorityGroupConfig.enabled ? 'Matikan Auto-WA' : 'Aktifkan Auto-WA'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSyncFonnteGroups}
+                      disabled={isSyncingGroups}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition active:scale-95 cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
+                      title="Sinkronisasi ID grup dari akun Fonnte"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGroups ? 'animate-spin' : ''}`} />
+                      <span>Sync Grup</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTestPriorityGroupBroadcast}
+                      disabled={isTestingGroupWa}
+                      className="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
+                      title="Uji kirim pesan Iklan Prioritas ke Grup WhatsApp sekarang"
+                    >
+                      {isTestingGroupWa ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isTestingGroupWa ? 'Mengirim...' : 'Tes Kirim Grup WA'}</span>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs">
                   <table className="w-full text-left text-xs text-slate-700 divide-y divide-slate-200">
                     <thead className="bg-slate-50 text-[11px] font-black uppercase text-slate-500 tracking-wider">
@@ -1601,6 +1839,22 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               {/* Kolom Aksi */}
                               <td className="px-3.5 py-3 text-right whitespace-nowrap">
                                 <div className="flex items-center justify-end gap-1.5">
+                                  {isSuperBUActive && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleManualBroadcastPriorityGroup(listing)}
+                                      disabled={broadcastingListingId === listing.id}
+                                      className="px-2 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer flex items-center gap-1 text-[10px] font-black disabled:opacity-60"
+                                      title="Teruskan iklan prioritas ini ke Grup WhatsApp JualRugi"
+                                    >
+                                      {broadcastingListingId === listing.id ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Send className="w-3 h-3" />
+                                      )}
+                                      <span>Grup WA</span>
+                                    </button>
+                                  )}
                                   {onViewListingDetail && (
                                     <button
                                       onClick={() => onViewListingDetail(listing)}

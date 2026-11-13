@@ -377,12 +377,246 @@ export interface MonetizationEmailPayload {
   listingId: string;
   listingTitle: string;
   recipientEmail: string;
+  recipientPhone?: string;
+  whatsapp?: string;
   recipientName?: string;
   packageType: 'sundul' | 'prioritas';
 }
 
+// =============================================================================
+// [3. KONFIGURASI GRUP WHATSAPP RESMI UNTUK BROADCAST IKLAN PRIORITAS]
+// Link Group : https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2
+// JID Fonnte : 120363413910178396@g.us (Jualrugi.my.id)
+// =============================================================================
+export const PRIORITY_WA_GROUP_INVITE_URL =
+  'https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2';
+export const PRIORITY_WA_GROUP_JID = '120363413910178396@g.us';
+export const PRIORITY_WA_GROUP_NAME = 'Jualrugi.my.id';
+
+const STORAGE_KEY_PRIORITY_GROUP_CFG = 'jualrugi_priority_wa_group_config';
+
+export interface PriorityGroupWaConfig {
+  enabled: boolean;
+  groupJid: string;
+  groupInviteUrl: string;
+  groupName: string;
+}
+
+export function getPriorityGroupConfig(): PriorityGroupWaConfig {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PRIORITY_GROUP_CFG);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        enabled: parsed.enabled !== false, // Aktif default
+        groupJid: (parsed.groupJid || PRIORITY_WA_GROUP_JID).trim(),
+        groupInviteUrl: (parsed.groupInviteUrl || PRIORITY_WA_GROUP_INVITE_URL).trim(),
+        groupName: (parsed.groupName || PRIORITY_WA_GROUP_NAME).trim(),
+      };
+    }
+  } catch {}
+  return {
+    enabled: true,
+    groupJid: PRIORITY_WA_GROUP_JID,
+    groupInviteUrl: PRIORITY_WA_GROUP_INVITE_URL,
+    groupName: PRIORITY_WA_GROUP_NAME,
+  };
+}
+
+export function savePriorityGroupConfig(
+  cfg: Partial<PriorityGroupWaConfig>
+): PriorityGroupWaConfig {
+  const current = getPriorityGroupConfig();
+  const next: PriorityGroupWaConfig = {
+    enabled: cfg.enabled !== undefined ? cfg.enabled : current.enabled,
+    groupJid: (cfg.groupJid ?? current.groupJid).trim() || PRIORITY_WA_GROUP_JID,
+    groupInviteUrl: (cfg.groupInviteUrl ?? current.groupInviteUrl).trim() || PRIORITY_WA_GROUP_INVITE_URL,
+    groupName: (cfg.groupName ?? current.groupName).trim() || PRIORITY_WA_GROUP_NAME,
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY_PRIORITY_GROUP_CFG, JSON.stringify(next));
+  } catch {}
+  return next;
+}
+
+export interface PriorityGroupBroadcastPayload {
+  listingId: string;
+  listingTitle: string;
+  sellingPrice?: number;
+  normalPrice?: number;
+  discountPercentage?: number;
+  location?: string;
+  category?: string;
+  urgentReason?: string;
+  sellerName?: string;
+  adLink?: string;
+  isTest?: boolean;
+}
+
+export function getPriorityGroupBroadcastMessage(
+  params: PriorityGroupBroadcastPayload
+): string {
+  const cleanId = (params.listingId || 'bu-prioritas').trim();
+  const title = (params.listingTitle || 'Produk BU Prioritas').trim();
+  const adLink = params.adLink || getDynamicAdLink(cleanId);
+  const priceStr =
+    typeof params.sellingPrice === 'number' && params.sellingPrice > 0
+      ? `Rp ${params.sellingPrice.toLocaleString('id-ID')}`
+      : 'Harga Butuh Uang (Cek Link)';
+  const normalStr =
+    typeof params.normalPrice === 'number' && params.normalPrice > 0
+      ? `Rp ${params.normalPrice.toLocaleString('id-ID')}`
+      : '';
+  const discStr =
+    typeof params.discountPercentage === 'number' && params.discountPercentage > 0
+      ? `Hemat ${params.discountPercentage}%`
+      : '';
+  const location = (params.location || 'Indonesia (COD Aman)').trim();
+  const category = (params.category || 'Barang BU Prioritas').trim();
+  const sellerName = (params.sellerName || 'Member JualRugi').trim();
+  const urgentReason = (params.urgentReason || 'Butuh dana cepat, siap COD hari ini').trim();
+
+  const priceLine = normalStr
+    ? `💸 *Harga BU:* *${priceStr}* _(Normal ~${normalStr}~${discStr ? ` • ${discStr}` : ''})_`
+    : `💸 *Harga BU:* *${priceStr}*`;
+
+  return (
+    `🔥 *IKLAN PRIORITAS BARU DI-APPROVED ADMIN!* 🔥\n\n` +
+    `🏷️ *${title}*\n` +
+    `🆔 ID Iklan: *${cleanId}*\n` +
+    `📂 Kategori: ${category}\n` +
+    `${priceLine}\n` +
+    `📍 Lokasi COD: *${location}*\n` +
+    `👤 Penjual: ${sellerName}\n` +
+    `⚡ Keterangan: _"${urgentReason}"_\n\n` +
+    `🔗 *Lihat Detail & Chat Penjual Langsung:*\n` +
+    `${adLink}\n\n` +
+    `⚠️ _Selalu utamakan COD tatap muka di tempat ramai & JANGAN transfer DP sebelum cek fisik barang._\n\n` +
+    `---\n` +
+    `*Admin jualrugi.my.id*`
+  );
+}
+
+export interface PriorityGroupWaResponse {
+  success: boolean;
+  skipped?: boolean;
+  message: string;
+  groupJid: string;
+  groupName: string;
+  groupInviteUrl: string;
+  adLink: string;
+  provider: 'fonnte_server' | 'fonnte_direct' | 'simulation' | 'disabled';
+  detail?: any;
+}
+
 /**
- * Mengirimkan Email Notifikasi saat Admin Mengaktifkan Paket Sundul / BU Prioritas
+ * Mengirimkan Notifikasi WhatsApp Otomatis ke Grup WA Resmi JualRugi.my.id
+ * setiap kali Iklan Prioritas (BU Prioritas) di-approve oleh Admin.
+ */
+export async function triggerPriorityAdGroupWhatsApp(
+  payload: PriorityGroupBroadcastPayload,
+  options?: { forceSend?: boolean }
+): Promise<PriorityGroupWaResponse> {
+  const cfg = getPriorityGroupConfig();
+  const adLink = payload.adLink || getDynamicAdLink(payload.listingId);
+
+  if (!cfg.enabled && !options?.forceSend) {
+    return {
+      success: false,
+      skipped: true,
+      message: 'Notifikasi Grup WA Iklan Prioritas sedang dinonaktifkan di pengaturan Admin.',
+      groupJid: cfg.groupJid,
+      groupName: cfg.groupName,
+      groupInviteUrl: cfg.groupInviteUrl,
+      adLink,
+      provider: 'disabled',
+    };
+  }
+
+  const message = getPriorityGroupBroadcastMessage({ ...payload, adLink });
+
+  // Simpan log audit lokal
+  const logEntry = {
+    id: `wa-group-priority-${Date.now()}`,
+    listingId: payload.listingId,
+    listingTitle: `[GRUP WA PRIORITAS] ${payload.listingTitle}`,
+    recipientEmail: `${cfg.groupName} (${cfg.groupJid})`,
+    recipientPhone: cfg.groupJid,
+    packageType: 'prioritas_group_wa',
+    sentAt: new Date().toISOString(),
+    adLink,
+  };
+
+  try {
+    const existingLogs = JSON.parse(
+      localStorage.getItem('jualrugi_ad_published_emails') || '[]'
+    );
+    localStorage.setItem(
+      'jualrugi_ad_published_emails',
+      JSON.stringify([logEntry, ...existingLogs].slice(0, 50))
+    );
+  } catch {}
+
+  // 1. Prioritas Utama: Kirim lewat backend proxy /api/send-priority-group-wa (Bebas CORS)
+  try {
+    const serverRes = await fetch('/api/send-priority-group-wa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        adLink,
+        groupJid: cfg.groupJid,
+        groupInviteUrl: cfg.groupInviteUrl,
+        groupName: cfg.groupName,
+        customMessage: message,
+      }),
+    });
+
+    if (serverRes.ok) {
+      const serverData = await serverRes.json().catch(() => ({}));
+      const isOk = serverData?.success !== false && serverData?.detail?.status !== false;
+      console.log('✅ [Priority Group WA] Terkirim via server proxy:', serverData);
+      return {
+        success: isOk,
+        message:
+          serverData.message ||
+          `Iklan prioritas "${payload.listingTitle}" berhasil diteruskan ke Grup WA ${cfg.groupName}!`,
+        groupJid: serverData.targetGroupJid || cfg.groupJid,
+        groupName: serverData.groupName || cfg.groupName,
+        groupInviteUrl: cfg.groupInviteUrl,
+        adLink,
+        provider: 'fonnte_server',
+        detail: serverData,
+      };
+    }
+  } catch (proxyErr) {
+    console.warn('[Priority Group WA] Server proxy unreachable, mencoba fallback Fonnte direct:', proxyErr);
+  }
+
+  // 2. Fallback direct via sendFonnteWhatsApp ke Group JID
+  const waRes = await sendFonnteWhatsApp({
+    targetPhone: cfg.groupJid,
+    message,
+    title: `Iklan Prioritas -> Grup ${cfg.groupName}`,
+    recipientName: cfg.groupName,
+  });
+
+  return {
+    success: waRes.success,
+    message: waRes.success
+      ? `Iklan prioritas berhasil diteruskan ke Grup WA ${cfg.groupName} (${cfg.groupJid})`
+      : waRes.message,
+    groupJid: cfg.groupJid,
+    groupName: cfg.groupName,
+    groupInviteUrl: cfg.groupInviteUrl,
+    adLink,
+    provider: waRes.provider === 'fonnte_server' ? 'fonnte_server' : waRes.provider === 'fonnte_direct' ? 'fonnte_direct' : 'simulation',
+    detail: waRes.detail,
+  };
+}
+
+/**
+ * Mengirimkan Email & WhatsApp Notifikasi saat Admin Mengaktifkan Paket Sundul / BU Prioritas
  * Sesuai format wajib:
  * "Selamat, iklan [sundul/prioritas] Anda sudah aktif! Silakan cek iklan Anda melalui: https://jualrugi.my.id/?id={id_iklan}"
  */
@@ -395,6 +629,22 @@ export async function triggerMonetizationActivatedEmail(
   const packageName = packageType === 'sundul' ? 'Sundul Iklan (#1 Feed)' : 'BU Prioritas (Highlight Emas)';
 
   const textContent = `Selamat, iklan ${packageLabel} Anda sudah aktif!\n\nProduk: "${listingTitle}"\nSilakan cek iklan Anda melalui: ${adLink}`;
+
+  // Cari nomor WhatsApp penjual dari payload atau database lokal
+  let targetPhone = payload.recipientPhone || payload.whatsapp || '';
+  if (!targetPhone) {
+    try {
+      const users = getStoredUsers();
+      const found = users.find(
+        (u) =>
+          (recipientEmail && u.email.toLowerCase() === recipientEmail.toLowerCase()) ||
+          (recipientName && u.name.toLowerCase() === recipientName.toLowerCase())
+      );
+      if (found) {
+        targetPhone = found.whatsapp || found.phone || '';
+      }
+    } catch {}
+  }
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -442,6 +692,7 @@ export async function triggerMonetizationActivatedEmail(
     listingId,
     listingTitle,
     recipientEmail,
+    recipientPhone: targetPhone,
     packageType,
     sentAt: new Date().toISOString(),
     adLink,
@@ -457,6 +708,18 @@ export async function triggerMonetizationActivatedEmail(
     );
   } catch (e) {
     console.warn('Gagal menyimpan log email aktivasi ke localStorage:', e);
+  }
+
+  // Kirim notifikasi WA ke penjual jika nomor valid
+  if (targetPhone && targetPhone.replace(/\D/g, '').length >= 8) {
+    sendFonnteWhatsApp({
+      targetPhone,
+      message: textContent,
+      title: `Aktivasi Paket ${packageLabel}`,
+      recipientName,
+    }).catch((waErr) => {
+      console.warn('[Fonnte WA Monetisasi Seller Error]:', waErr);
+    });
   }
 
   if (apiKey && apiKey.startsWith('xkeysib-') && recipientEmail && recipientEmail.includes('@')) {
@@ -483,9 +746,10 @@ export async function triggerMonetizationActivatedEmail(
           success: true,
           message: `Email aktivasi ${packageLabel} berhasil dikirim ke ${recipientEmail}`,
           sentTo: recipientEmail,
+          whatsappSentTo: targetPhone || undefined,
           listingId,
           adLink,
-          provider: 'brevo',
+          provider: 'brevo_and_fonnte',
           messageId: data.messageId,
         };
       }
@@ -498,6 +762,7 @@ export async function triggerMonetizationActivatedEmail(
     success: true,
     message: `Notifikasi aktivasi ${packageLabel} tercatat untuk ${recipientEmail}`,
     sentTo: recipientEmail,
+    whatsappSentTo: targetPhone || undefined,
     listingId,
     adLink,
     provider: 'simulation_fallback',

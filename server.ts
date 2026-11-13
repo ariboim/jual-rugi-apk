@@ -617,16 +617,24 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       }
 
       const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
-      let cleanPhone = String(targetPhone).replace(/\D/g, '');
-      if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
-      else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+      const rawTarget = String(targetPhone).trim();
+      const isGroupJid = rawTarget.endsWith('@g.us') || rawTarget.endsWith('@s.whatsapp.net');
+
+      let cleanPhone = rawTarget;
+      if (!isGroupJid) {
+        cleanPhone = rawTarget.replace(/\D/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+        else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+      }
 
       const formData = new FormData();
       formData.append('target', cleanPhone);
       formData.append('message', message);
-      formData.append('countryCode', '62');
+      if (!isGroupJid) {
+        formData.append('countryCode', '62');
+      }
 
-      console.log(`[Server - Fonnte API] Mengirim WhatsApp ke ${cleanPhone}...`);
+      console.log(`[Server - Fonnte API] Mengirim WhatsApp ke ${cleanPhone} (Group: ${isGroupJid})...`);
       const fonnteRes = await fetch('https://api.fonnte.com/send', {
         method: 'POST',
         headers: {
@@ -639,9 +647,10 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       console.log(`[Server - Fonnte API Response]: ${fonnteRes.status}`, fonnteData);
 
       return res.status(200).json({
-        success: fonnteRes.ok,
+        success: fonnteRes.ok && fonnteData?.status !== false,
         status: fonnteRes.status,
         target: cleanPhone,
+        isGroup: isGroupJid,
         detail: fonnteData,
       });
     } catch (err: any) {
@@ -649,6 +658,143 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       return res.status(500).json({
         success: false,
         error: err.message || 'Gagal mengirim pesan WhatsApp via Fonnte.',
+      });
+    }
+  });
+
+  // Endpoint Daftar Grup WhatsApp dari Device Fonnte (Sinkronisasi & Verifikasi JID Grup)
+  app.get('/api/fonnte/groups', async (_req, res) => {
+    try {
+      const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+
+      // Panggil fetch-group terlebih dahulu agar list grup terbaru tersinkron di Fonnte
+      await fetch('https://api.fonnte.com/fetch-group', {
+        method: 'POST',
+        headers: { Authorization: FONNTE_TOKEN },
+      }).catch(() => {});
+
+      const listRes = await fetch('https://api.fonnte.com/get-whatsapp-group', {
+        method: 'POST',
+        headers: { Authorization: FONNTE_TOKEN },
+      });
+      const listData = await listRes.json().catch(() => ({}));
+
+      return res.status(200).json({
+        success: listRes.ok && listData?.status !== false,
+        groups: Array.isArray(listData?.data) ? listData.data : [],
+        detail: listData,
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal mengambil daftar grup WhatsApp dari Fonnte.',
+      });
+    }
+  });
+
+  // Endpoint Khusus Forward Notifikasi Iklan Prioritas ke Grup WA Resmi (Jualrugi.my.id)
+  app.post('/api/send-priority-group-wa', async (req, res) => {
+    try {
+      const DEFAULT_GROUP_JID = '120363413910178396@g.us';
+      const DEFAULT_GROUP_INVITE_URL =
+        'https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi?s=cl&p=a&mlu=4&ilr=4&iam=2';
+      const DEFAULT_GROUP_NAME = 'Jualrugi.my.id';
+
+      const {
+        listingId,
+        listingTitle,
+        sellingPrice,
+        normalPrice,
+        discountPercentage,
+        location,
+        category,
+        urgentReason,
+        sellerName,
+        adLink,
+        groupJid,
+        groupInviteUrl,
+        groupName,
+        customMessage,
+      } = req.body || {};
+
+      const targetGroupJid = String(groupJid || process.env.PRIORITY_WA_GROUP_JID || DEFAULT_GROUP_JID).trim();
+      const resolvedGroupName = String(groupName || DEFAULT_GROUP_NAME).trim();
+      const resolvedInviteUrl = String(groupInviteUrl || DEFAULT_GROUP_INVITE_URL).trim();
+
+      const cleanId = String(listingId || 'bu-prioritas').trim();
+      const directAdLink = adLink || `https://jualrugi.my.id/?id=${encodeURIComponent(cleanId)}`;
+      const title = String(listingTitle || 'Produk BU Prioritas').trim();
+
+      let message = typeof customMessage === 'string' && customMessage.trim() ? customMessage.trim() : '';
+      if (!message) {
+        const priceStr =
+          typeof sellingPrice === 'number' && sellingPrice > 0
+            ? `Rp ${sellingPrice.toLocaleString('id-ID')}`
+            : 'Harga Butuh Uang (Cek Link)';
+        const normalStr =
+          typeof normalPrice === 'number' && normalPrice > 0
+            ? `Rp ${normalPrice.toLocaleString('id-ID')}`
+            : '';
+        const discStr =
+          typeof discountPercentage === 'number' && discountPercentage > 0
+            ? `Hemat ${discountPercentage}%`
+            : '';
+        const priceLine = normalStr
+          ? `💸 *Harga BU:* *${priceStr}* _(Normal ~${normalStr}~${discStr ? ` • ${discStr}` : ''})_`
+          : `💸 *Harga BU:* *${priceStr}*`;
+
+        message =
+          `🔥 *IKLAN PRIORITAS BARU DI-APPROVED ADMIN!* 🔥\n\n` +
+          `🏷️ *${title}*\n` +
+          `🆔 ID Iklan: *${cleanId}*\n` +
+          `📂 Kategori: ${String(category || 'Barang BU Prioritas').trim()}\n` +
+          `${priceLine}\n` +
+          `📍 Lokasi COD: *${String(location || 'Indonesia (COD Aman)').trim()}*\n` +
+          `👤 Penjual: ${String(sellerName || 'Member JualRugi').trim()}\n` +
+          `⚡ Keterangan: _"${String(urgentReason || 'Butuh dana cepat, siap COD hari ini').trim()}"_\n\n` +
+          `🔗 *Lihat Detail & Chat Penjual Langsung:*\n` +
+          `${directAdLink}\n\n` +
+          `⚠️ _Selalu utamakan COD tatap muka di tempat ramai & JANGAN transfer DP sebelum cek fisik barang._\n\n` +
+          `---\n` +
+          `*Admin jualrugi.my.id*`;
+      }
+
+      const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+      const formData = new FormData();
+      formData.append('target', targetGroupJid);
+      formData.append('message', message);
+
+      console.log(
+        `[Server - Priority Group WA] Meneruskan iklan prioritas "${title}" (${cleanId}) ke Grup ${resolvedGroupName} (${targetGroupJid})...`
+      );
+      const fonnteRes = await fetch('https://api.fonnte.com/send', {
+        method: 'POST',
+        headers: {
+          Authorization: FONNTE_TOKEN,
+        },
+        body: formData,
+      });
+
+      const fonnteData = await fonnteRes.json().catch(() => ({}));
+      const isOk = fonnteRes.ok && fonnteData?.status !== false;
+      console.log(`[Server - Priority Group WA Response]: ${fonnteRes.status}`, fonnteData);
+
+      return res.status(isOk ? 200 : 502).json({
+        success: isOk,
+        message: isOk
+          ? `Iklan prioritas "${title}" berhasil diteruskan ke Grup WA ${resolvedGroupName}!`
+          : fonnteData?.reason || 'Fonnte gagal mengirim pesan ke grup WhatsApp.',
+        targetGroupJid,
+        groupName: resolvedGroupName,
+        groupInviteUrl: resolvedInviteUrl,
+        adLink: directAdLink,
+        detail: fonnteData,
+      });
+    } catch (err: any) {
+      console.error('[Server - Priority Group WA Exception]:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal meneruskan notifikasi iklan prioritas ke Grup WA.',
       });
     }
   });

@@ -36,6 +36,7 @@ import {
 import {
   triggerAdPublishedEmail,
   triggerQuotaActivatedEmail,
+  triggerPriorityAdGroupWhatsApp,
   getDynamicAdLink,
 } from './services/adPublishedEmailService';
 import { INITIAL_LISTINGS } from './data/initialData';
@@ -821,6 +822,21 @@ export default function App() {
           });
         }
 
+        // Jika termasuk iklan prioritas (BU Prioritas), teruskan otomatis ke Grup WA Resmi
+        if (newListing.isSuperBU) {
+          triggerPriorityAdGroupWhatsApp({
+            listingId: newListing.id,
+            listingTitle: newListing.title,
+            sellingPrice: newListing.sellingPrice,
+            normalPrice: newListing.normalPrice,
+            discountPercentage: newListing.discountPercentage,
+            location: newListing.location,
+            category: newListing.category,
+            urgentReason: newListing.urgentReason,
+            sellerName: currentUser.name || newListing.seller?.name || 'Member JualRugi',
+          }).catch(() => {});
+        }
+
         // 2. Set banner notifikasi lengkap dengan link dinamis
         setAdApprovedNotification({
           title: 'Selamat, iklan Anda telah tayang!',
@@ -891,6 +907,21 @@ export default function App() {
     }
 
     // Kembalikan status listing ke 'active' (resmi tayang)
+    const approvedItem = listings.find((item) => item.id === pendingModeration.id);
+    if (approvedItem?.isSuperBU) {
+      triggerPriorityAdGroupWhatsApp({
+        listingId: approvedItem.id,
+        listingTitle: approvedItem.title,
+        sellingPrice: approvedItem.sellingPrice,
+        normalPrice: approvedItem.normalPrice,
+        discountPercentage: approvedItem.discountPercentage,
+        location: approvedItem.location,
+        category: approvedItem.category,
+        urgentReason: approvedItem.urgentReason,
+        sellerName: currentUser.name || approvedItem.seller?.name || 'Member JualRugi',
+      }).catch(() => {});
+    }
+
     setListings((prev) =>
       prev.map((item) => (item.id === pendingModeration.id ? { ...item, status: 'active' } : item))
     );
@@ -1011,6 +1042,21 @@ export default function App() {
           subject: 'Pembaruan Iklan Tayang',
           isEdit: true,
         });
+
+        // Jika termasuk iklan prioritas (BU Prioritas), teruskan otomatis ke Grup WA Resmi
+        if (target.isSuperBU) {
+          triggerPriorityAdGroupWhatsApp({
+            listingId: target.id,
+            listingTitle: target.title,
+            sellingPrice: target.sellingPrice,
+            normalPrice: target.normalPrice,
+            discountPercentage: target.discountPercentage,
+            location: target.location,
+            category: target.category,
+            urgentReason: target.urgentReason,
+            sellerName: currentUser.name || target.seller?.name || 'Member JualRugi',
+          }).catch(() => {});
+        }
 
         // Tampilkan push / in-app notification banner
         setAdApprovedNotification({
