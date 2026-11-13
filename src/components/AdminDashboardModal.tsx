@@ -1055,42 +1055,54 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         '';
 
       try {
-        // 1. Notifikasi Email & WA ke Penjual
-        await triggerMonetizationActivatedEmail({
-          listingId: listing.id,
-          listingTitle: listing.title,
-          recipientEmail: sellerEmail,
-          recipientPhone: sellerPhone,
-          whatsapp: sellerPhone,
-          recipientName: listing.seller?.name || matchedUser?.name || 'Pengiklan',
-          packageType: 'prioritas',
-        });
+        // Jalankan ketiga aksi secara paralel agar POST ke Make.com langsung dieksekusi tanpa menunggu email/WA
+        const [emailResult, groupResult, makeResult] = await Promise.allSettled([
+          // 1. Notifikasi Email & WA ke Penjual
+          triggerMonetizationActivatedEmail({
+            listingId: listing.id,
+            listingTitle: listing.title,
+            recipientEmail: sellerEmail,
+            recipientPhone: sellerPhone,
+            whatsapp: sellerPhone,
+            recipientName: listing.seller?.name || matchedUser?.name || 'Pengiklan',
+            packageType: 'prioritas',
+          }),
+          // 2. Forward otomatis Iklan Prioritas ke Grup WA Resmi (Jualrugi.my.id)
+          triggerPriorityAdGroupWhatsApp({
+            listingId: listing.id,
+            listingTitle: listing.title,
+            sellingPrice: listing.sellingPrice,
+            normalPrice: listing.normalPrice,
+            discountPercentage: listing.discountPercentage,
+            location: listing.location,
+            category: listing.category,
+            urgentReason: listing.urgentReason,
+            sellerName: listing.seller?.name || matchedUser?.name || 'Pengiklan JualRugi',
+          }),
+          // 3. POST Payload JSON Iklan BU Prioritas ke Webhook Make.com
+          triggerPriorityMakeWebhook(listing, {
+            sellerName: listing.seller?.name || matchedUser?.name || 'Member JualRugi',
+            webhookUrl: priorityMakeWebhookInput.trim() || undefined,
+          }),
+        ]);
 
-        // 2. Forward otomatis Iklan Prioritas ke Grup WA Resmi (Jualrugi.my.id)
-        const groupRes = await triggerPriorityAdGroupWhatsApp({
-          listingId: listing.id,
-          listingTitle: listing.title,
-          sellingPrice: listing.sellingPrice,
-          normalPrice: listing.normalPrice,
-          discountPercentage: listing.discountPercentage,
-          location: listing.location,
-          category: listing.category,
-          urgentReason: listing.urgentReason,
-          sellerName: listing.seller?.name || matchedUser?.name || 'Pengiklan JualRugi',
-        });
+        const groupRes = groupResult.status === 'fulfilled' ? groupResult.value : null;
+        const makeRes = makeResult.status === 'fulfilled' ? makeResult.value : null;
 
-        // 3. POST Payload JSON Iklan BU Prioritas ke Webhook Make.com
-        const makeRes = await triggerPriorityMakeWebhook(listing, {
-          sellerName: listing.seller?.name || matchedUser?.name || 'Member JualRugi',
-          webhookUrl: priorityMakeWebhookInput.trim() || undefined,
-        });
-
-        const groupNote = groupRes.success
+        const groupNote = groupRes?.success
           ? ` & Grup WA ${groupRes.groupName}`
-          : groupRes.skipped
+          : groupRes?.skipped
           ? ' (Grup WA nonaktif)'
           : '';
-        const makeNote = makeRes.success ? ' & Webhook Make.com terkirim!' : '';
+        const makeNote = makeRes?.success
+          ? ' & Webhook Make.com terkirim!'
+          : makeRes?.message
+          ? ` (Make.com: ${makeRes.message})`
+          : '';
+
+        if (emailResult.status === 'rejected') {
+          console.warn('Email aktivasi prioritas gagal:', emailResult.reason);
+        }
 
         showNotification(
           `🔥 BU Prioritas di-approve! Notifikasi ke seller${groupNote}${makeNote}`

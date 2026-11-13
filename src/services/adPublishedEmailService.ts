@@ -1467,13 +1467,30 @@ export async function triggerPriorityMakeWebhook(
       responseText,
     };
   } catch (err: any) {
-    return {
-      success: false,
-      message: err?.message || 'Gagal menghubungi URL Webhook Make.com.',
-      webhookUrl: targetWebhookUrl,
-      payload,
-      provider: 'error',
-    };
+    // 3. Fallback Terakhir jika Direct CORS diblokir browser tanpa backend proxy
+    try {
+      await fetch(targetWebhookUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify(payload),
+      });
+      return {
+        success: true,
+        message: `Data iklan "${payload.title}" dikirim ke Make.com (mode no-cors fallback).`,
+        webhookUrl: targetWebhookUrl,
+        payload,
+        provider: 'make_direct_post',
+      };
+    } catch {
+      return {
+        success: false,
+        message: err?.message || 'Gagal menghubungi URL Webhook Make.com.',
+        webhookUrl: targetWebhookUrl,
+        payload,
+        provider: 'error',
+      };
+    }
   }
 }
 
