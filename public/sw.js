@@ -1,5 +1,5 @@
-// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v9)
-const CACHE_NAME = 'jualrugi-v9-pwa-final';
+// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v10)
+const CACHE_NAME = 'jualrugi-v10-pwa-final';
 
 const PRECACHE_ASSETS = [
   '/',

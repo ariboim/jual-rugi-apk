@@ -1947,9 +1947,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                     <span>{isSuperBUActive ? 'PALING BU' : 'Nonaktif'}</span>
                                   </button>
                                   {isSuperBUActive && (
-                                    <span className="text-[9px] text-amber-700 font-bold">
-                                      24 Jam Aktif
-                                    </span>
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="text-[9px] text-amber-700 font-bold">
+                                        24 Jam Aktif
+                                      </span>
+                                      <a
+                                        href={getPriorityShareWhatsAppUrl(listing)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={() =>
+                                          showNotification(
+                                            `📲 Membuka WhatsApp untuk Share iklan prioritas "${listing.title}"`
+                                          )
+                                        }
+                                        className="px-2.5 py-0.5 rounded-full bg-[#25D366] hover:bg-[#1ebe5d] text-white shadow-2xs transition active:scale-95 cursor-pointer inline-flex items-center gap-1 text-[10px] font-black"
+                                        title="Bagikan iklan BU Prioritas ini via WhatsApp"
+                                      >
+                                        <span>Share WA</span>
+                                      </a>
+                                    </div>
                                   )}
                                 </div>
                               </td>
