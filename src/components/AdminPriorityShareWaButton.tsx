@@ -17,6 +17,8 @@ export interface PriorityShareListingInput {
   urgentReason?: string | null;
   urgent_reason?: string | null;
   description?: string | null;
+  imageUrl?: string | null;
+  image_url?: string | null;
   isSuperBU?: boolean | null;
   is_priority?: boolean | null;
   is_super_bu?: boolean | null;
@@ -36,6 +38,7 @@ export interface NormalizedPriorityShareItem {
   seller_name: string;
   description: string;
   category: string;
+  image_url: string;
   ad_url: string;
 }
 
@@ -125,6 +128,8 @@ export function normalizePriorityListingForShare(
     }
   }
 
+  const rawImageUrl = toSafeString(listing?.imageUrl ?? listing?.image_url, '');
+
   return {
     id: safeId,
     title: safeTitle,
@@ -135,6 +140,7 @@ export function normalizePriorityListingForShare(
     seller_name: sellerName,
     description,
     category,
+    image_url: rawImageUrl,
     ad_url: `${PRODUCTION_BASE_URL}/product/${encodeURIComponent(safeId)}`,
   };
 }
@@ -294,6 +300,7 @@ export const AdminPriorityShareWaButton: React.FC<AdminPriorityShareWaButtonProp
           urgentReason: normalizedItem.description,
           sellerName: normalizedItem.seller_name,
           adLink: normalizedItem.ad_url,
+          imageUrl: normalizedItem.image_url,
           customMessage: shareText,
         }),
       });

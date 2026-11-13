@@ -450,6 +450,7 @@ export interface PriorityGroupBroadcastPayload {
   urgentReason?: string;
   sellerName?: string;
   adLink?: string;
+  imageUrl?: string;
   isTest?: boolean;
 }
 
@@ -565,6 +566,7 @@ export async function triggerPriorityAdGroupWhatsApp(
       body: JSON.stringify({
         ...payload,
         adLink,
+        imageUrl: payload.imageUrl,
         groupJid: cfg.groupJid,
         groupInviteUrl: cfg.groupInviteUrl,
         groupName: cfg.groupName,

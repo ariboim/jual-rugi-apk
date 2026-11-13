@@ -713,6 +713,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         urgentReason,
         sellerName,
         adLink,
+        imageUrl,
+        image_url,
         groupJid,
         groupInviteUrl,
         groupName,
@@ -726,6 +728,25 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       const cleanId = String(listingId || 'bu-prioritas').trim();
       const directAdLink = adLink || `https://jualrugi.my.id/?id=${encodeURIComponent(cleanId)}`;
       const title = String(listingTitle || 'Produk BU Prioritas').trim();
+
+      const DEFAULT_OG_LOGO_URL = 'https://jualrugi.my.id/og-image.jpg?v=3';
+      const resolvePublicMediaUrl = (rawUrl: unknown): string => {
+        const val = String(rawUrl || '').trim();
+        if (!val || val.startsWith('data:') || val.startsWith('blob:')) {
+          return DEFAULT_OG_LOGO_URL;
+        }
+        if (/^https?:\/\//i.test(val)) {
+          if (val.includes('images.unsplash.com') && !val.includes('fm=')) {
+            return `${val}${val.includes('?') ? '&' : '?'}fm=jpg`;
+          }
+          return val;
+        }
+        if (val.startsWith('/')) {
+          return `https://jualrugi.my.id${val}`;
+        }
+        return DEFAULT_OG_LOGO_URL;
+      };
+      const resolvedMediaUrl = resolvePublicMediaUrl(imageUrl || image_url);
 
       let message = typeof customMessage === 'string' && customMessage.trim() ? customMessage.trim() : '';
       if (!message) {
@@ -762,24 +783,42 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       }
 
       const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
-      const formData = new FormData();
-      formData.append('target', targetGroupJid);
-      formData.append('message', message);
+      const sendViaFonnte = async (attachMediaUrl?: string) => {
+        const formData = new FormData();
+        formData.append('target', targetGroupJid);
+        formData.append('message', message);
+        if (attachMediaUrl) {
+          formData.append('url', attachMediaUrl);
+        }
+        const resp = await fetch('https://api.fonnte.com/send', {
+          method: 'POST',
+          headers: {
+            Authorization: FONNTE_TOKEN,
+          },
+          body: formData,
+        });
+        const data = await resp.json().catch(() => ({}));
+        return { ok: resp.ok && data?.status !== false, status: resp.status, data };
+      };
 
       console.log(
-        `[Server - Priority Group WA] Meneruskan iklan prioritas "${title}" (${cleanId}) ke Grup ${resolvedGroupName} (${targetGroupJid})...`
+        `[Server - Priority Group WA] Meneruskan iklan prioritas "${title}" (${cleanId}) ke Grup ${resolvedGroupName} (${targetGroupJid}) dengan media: ${resolvedMediaUrl}`
       );
-      const fonnteRes = await fetch('https://api.fonnte.com/send', {
-        method: 'POST',
-        headers: {
-          Authorization: FONNTE_TOKEN,
-        },
-        body: formData,
-      });
+      let result = await sendViaFonnte(resolvedMediaUrl);
+      let mediaFallbackUsed = false;
 
-      const fonnteData = await fonnteRes.json().catch(() => ({}));
-      const isOk = fonnteRes.ok && fonnteData?.status !== false;
-      console.log(`[Server - Priority Group WA Response]: ${fonnteRes.status}`, fonnteData);
+      if (!result.ok) {
+        console.warn(
+          '[Server - Priority Group WA] Pengiriman dengan gambar gagal, mencoba ulang mode teks:',
+          result.data
+        );
+        result = await sendViaFonnte();
+        mediaFallbackUsed = result.ok;
+      }
+
+      const isOk = result.ok;
+      const fonnteData = result.data;
+      console.log(`[Server - Priority Group WA Response]: ${result.status}`, fonnteData);
 
       return res.status(isOk ? 200 : 502).json({
         success: isOk,
@@ -790,6 +829,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         groupName: resolvedGroupName,
         groupInviteUrl: resolvedInviteUrl,
         adLink: directAdLink,
+        imageUrl: mediaFallbackUsed ? null : resolvedMediaUrl,
+        mediaFallbackUsed,
         detail: fonnteData,
       });
     } catch (err: any) {

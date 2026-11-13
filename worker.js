@@ -579,6 +579,8 @@ export default {
           urgentReason,
           sellerName,
           adLink,
+          imageUrl,
+          image_url,
           groupJid,
           groupInviteUrl,
           groupName,
@@ -592,6 +594,25 @@ export default {
         const cleanId = String(listingId || 'bu-prioritas').trim();
         const directAdLink = adLink || `https://jualrugi.my.id/?id=${encodeURIComponent(cleanId)}`;
         const title = String(listingTitle || 'Produk BU Prioritas').trim();
+
+        const DEFAULT_OG_LOGO_URL = 'https://jualrugi.my.id/og-image.jpg?v=3';
+        const resolvePublicMediaUrl = (rawUrl) => {
+          const val = String(rawUrl || '').trim();
+          if (!val || val.startsWith('data:') || val.startsWith('blob:')) {
+            return DEFAULT_OG_LOGO_URL;
+          }
+          if (/^https?:\/\//i.test(val)) {
+            if (val.includes('images.unsplash.com') && !val.includes('fm=')) {
+              return `${val}${val.includes('?') ? '&' : '?'}fm=jpg`;
+            }
+            return val;
+          }
+          if (val.startsWith('/')) {
+            return `https://jualrugi.my.id${val}`;
+          }
+          return DEFAULT_OG_LOGO_URL;
+        };
+        const resolvedMediaUrl = resolvePublicMediaUrl(imageUrl || image_url);
 
         let message = typeof customMessage === 'string' && customMessage.trim() ? customMessage.trim() : '';
         if (!message) {
@@ -628,18 +649,32 @@ export default {
         }
 
         const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
-        const formData = new FormData();
-        formData.append('target', targetGroupJid);
-        formData.append('message', message);
+        const sendViaFonnte = async (attachMediaUrl) => {
+          const formData = new FormData();
+          formData.append('target', targetGroupJid);
+          formData.append('message', message);
+          if (attachMediaUrl) {
+            formData.append('url', attachMediaUrl);
+          }
+          const resp = await fetch('https://api.fonnte.com/send', {
+            method: 'POST',
+            headers: { Authorization: FONNTE_TOKEN },
+            body: formData,
+          });
+          const data = await resp.json().catch(() => ({}));
+          return { ok: resp.ok && data?.status !== false, data };
+        };
 
-        const fonnteRes = await fetch('https://api.fonnte.com/send', {
-          method: 'POST',
-          headers: { Authorization: FONNTE_TOKEN },
-          body: formData,
-        });
+        let result = await sendViaFonnte(resolvedMediaUrl);
+        let mediaFallbackUsed = false;
 
-        const fonnteData = await fonnteRes.json().catch(() => ({}));
-        const isOk = fonnteRes.ok && fonnteData?.status !== false;
+        if (!result.ok) {
+          result = await sendViaFonnte();
+          mediaFallbackUsed = result.ok;
+        }
+
+        const isOk = result.ok;
+        const fonnteData = result.data;
 
         return new Response(
           JSON.stringify({
@@ -651,6 +686,8 @@ export default {
             groupName: resolvedGroupName,
             groupInviteUrl: resolvedInviteUrl,
             adLink: directAdLink,
+            imageUrl: mediaFallbackUsed ? null : resolvedMediaUrl,
+            mediaFallbackUsed,
             detail: fonnteData,
           }),
           { status: isOk ? 200 : 502, headers: { 'Content-Type': 'application/json' } }
@@ -871,38 +908,262 @@ export default {
       return new Response(mResponse.body, { status: mResponse.status, headers });
     }
 
+    // Helper Injeksi OpenGraph Produk Dinamis untuk WhatsApp / Social Media Crawler
+    const serveHtmlWithDynamicOg = async (indexResponse) => {
+      const headers = new Headers(indexResponse.headers);
+      headers.set('Content-Type', 'text/html; charset=utf-8');
+      headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+      const pathMatch = url.pathname.match(/^\/(?:product|iklan)\/([^/?#]+)/i);
+      const requestedId = String(
+        url.searchParams.get('id') ||
+          url.searchParams.get('deal') ||
+          (pathMatch ? decodeURIComponent(pathMatch[1]) : '')
+      ).trim();
+
+      if (!requestedId || typeof HTMLRewriter === 'undefined') {
+        return new Response(indexResponse.body, { status: 200, headers });
+      }
+
+      const CURATED_OG_CATALOG = {
+        'bu-001': {
+          title: 'iPhone 14 Pro 128GB Deep Purple - BU Beli Susu Anak',
+          selling_price: 8900000,
+          discount_percentage: 39,
+          location: 'Jakarta Selatan',
+          urgent_reason: 'Butuh uang tunai hari ini buat nebus obat & susu anak. Siap COD Blok M / Gandaria City.',
+          image_url: 'https://images.unsplash.com/photo-1678685888221-cda773a3dcdb?auto=format&fit=crop&w=1000&q=80&fm=jpg',
+        },
+        'bu-002': {
+          title: 'Honda Beat Deluxe CBS ISS 2023 Surat Lengkap Pajak Hidup',
+          selling_price: 11500000,
+          discount_percentage: 37,
+          location: 'Bekasi Barat',
+          urgent_reason: 'BU mendesak bayar kontrakan tahunan. COD & cek unit di Bekasi Barat.',
+          image_url: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1000&q=80&fm=jpg',
+        },
+        'bu-003': {
+          title: 'MacBook Pro M1 2020 16GB 512GB Space Gray - BU Skripsi',
+          selling_price: 10200000,
+          discount_percentage: 38,
+          location: 'Bandung',
+          urgent_reason: 'Butuh dana segera bayar biaya ujian sidang skripsi. COD Dago / ITB / Unpad.',
+          image_url: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1000&q=80&fm=jpg',
+        },
+        'bu-004': {
+          title: 'Smart TV LG 55 Inch 4K UHD ThinQ Model 2023 Lengkap Remote Magic',
+          selling_price: 4200000,
+          discount_percentage: 46,
+          location: 'Tangerang Selatan',
+          urgent_reason: 'Pindahan mendadak ke luar kota. Ambil langsung di Bintaro Sektor 7.',
+          image_url: 'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=1000&q=80&fm=jpg',
+        },
+        'bu-005': {
+          title: 'Asus ROG Zephyrus G14 Ryzen 7 RTX 3060 16GB 512GB Gaming Laptop',
+          selling_price: 10800000,
+          discount_percentage: 38,
+          location: 'Surabaya',
+          urgent_reason: 'BU modal usaha konveksi terdesak. COD Tunjungan Plaza atau Marvel City.',
+          image_url: 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=1000&q=80&fm=jpg',
+        },
+        'bu-006': {
+          title: 'Kulkas 2 Pintu Inverter Sharp No Frost Masih Dingin Salju',
+          selling_price: 1950000,
+          discount_percentage: 49,
+          location: 'Depok',
+          urgent_reason: 'Rumah mau direnovasi total, kulkas cadangan tidak terpakai. COD Margonda.',
+          image_url: 'https://jualrugi.my.id/assets/images/sharp_kulkas_2pintu.jpg',
+        },
+        'bu-007': {
+          title: 'Yamaha NMAX 155 Connected ABS 2022 Plat B Pajak Panjang',
+          selling_price: 19800000,
+          discount_percentage: 33,
+          location: 'Jakarta Timur',
+          urgent_reason: 'Butuh dana cepat hari ini. Wajib COD di SPBU Raden Inten Duren Sawit.',
+          image_url: 'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?auto=format&fit=crop&w=1000&q=80&fm=jpg',
+        },
+        'bu-008': {
+          title: 'Samsung Galaxy S23 Ultra 512GB Phantom Black Snapdragon 8 Gen 2',
+          selling_price: 10500000,
+          discount_percentage: 39,
+          location: 'Semarang',
+          urgent_reason: 'Perlu dana darurat berobat orang tua. COD Mall Ciputra Semarang.',
+          image_url: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?auto=format&fit=crop&w=1000&q=80&fm=jpg',
+        },
+      };
+
+      let listing = null;
+      const sbUrl = String(env.SUPABASE_URL || env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
+      const sbKey = String(
+        env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || ''
+      ).trim();
+
+      if (sbUrl && sbUrl.startsWith('http') && !sbUrl.includes('your-project-id') && sbKey.length > 20) {
+        try {
+          const sbRes = await fetch(
+            `${sbUrl}/rest/v1/listings?select=id,title,selling_price,normal_price,discount_percentage,location,urgent_reason,condition,image_url&id=eq.${encodeURIComponent(requestedId)}&limit=1`,
+            {
+              headers: {
+                apikey: sbKey,
+                Authorization: `Bearer ${sbKey}`,
+                Accept: 'application/json',
+              },
+            }
+          );
+          if (sbRes.ok) {
+            const rows = await sbRes.json().catch(() => []);
+            if (Array.isArray(rows) && rows[0]) {
+              listing = rows[0];
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!listing) {
+        listing = CURATED_OG_CATALOG[requestedId] || CURATED_OG_CATALOG[requestedId.toLowerCase()] || null;
+      }
+
+      if (!listing) {
+        return new Response(indexResponse.body, { status: 200, headers });
+      }
+
+      const siteOrigin = (env.SITE_URL || env.APP_URL || 'https://jualrugi.my.id').replace(/\/+$/, '');
+      const rawImg = String(listing.image_url || '').trim();
+      let ogImage = `${siteOrigin}/og-image.jpg?v=3`;
+      let isCustomProductImage = false;
+      if (rawImg && !rawImg.startsWith('data:') && !rawImg.startsWith('blob:')) {
+        if (/^https?:\/\//i.test(rawImg)) {
+          ogImage =
+            rawImg.includes('images.unsplash.com') && !rawImg.includes('fm=')
+              ? `${rawImg}${rawImg.includes('?') ? '&' : '?'}fm=jpg`
+              : rawImg;
+          isCustomProductImage = true;
+        } else if (rawImg.startsWith('/')) {
+          ogImage = `${siteOrigin}${rawImg}`;
+          isCustomProductImage = true;
+        }
+      }
+
+      const priceNum = Number(listing.selling_price || 0);
+      const discNum = Number(listing.discount_percentage || 0);
+      const priceText = priceNum > 0 ? `Rp ${priceNum.toLocaleString('id-ID')}` : 'Harga BU';
+      const discText = discNum > 0 ? ` (Hemat ${discNum}%)` : '';
+      const ogTitle = `${String(listing.title || 'Barang BU').trim()} - ${priceText}${discText} | JualRugi.my.id`;
+      const locText = listing.location ? `COD ${listing.location}. ` : '';
+      const rawReason = String(listing.urgent_reason || listing.condition || '').trim();
+      const ogDescription = `${locText}${rawReason || 'Barang Butuh Uang (BU) siap COD aman di JualRugi.my.id.'}`.slice(0, 200);
+      const ogUrl = `${siteOrigin}/?id=${encodeURIComponent(requestedId)}`;
+
+      let rewriter = new HTMLRewriter()
+        .on('title', {
+          element(el) {
+            el.setInnerContent(ogTitle);
+          },
+        })
+        .on('meta[name="description"]', {
+          element(el) {
+            el.setAttribute('content', ogDescription);
+          },
+        })
+        .on('link[rel="canonical"]', {
+          element(el) {
+            el.setAttribute('href', ogUrl);
+          },
+        })
+        .on('meta[property="og:title"]', {
+          element(el) {
+            el.setAttribute('content', ogTitle);
+          },
+        })
+        .on('meta[property="og:description"]', {
+          element(el) {
+            el.setAttribute('content', ogDescription);
+          },
+        })
+        .on('meta[property="og:url"]', {
+          element(el) {
+            el.setAttribute('content', ogUrl);
+          },
+        })
+        .on('meta[property="og:image"]', {
+          element(el) {
+            el.setAttribute('content', ogImage);
+          },
+        })
+        .on('meta[property="og:image:secure_url"]', {
+          element(el) {
+            el.setAttribute('content', ogImage);
+          },
+        })
+        .on('meta[property="og:image:alt"]', {
+          element(el) {
+            el.setAttribute('content', String(listing.title || 'JualRugi.my.id'));
+          },
+        })
+        .on('meta[name="twitter:title"]', {
+          element(el) {
+            el.setAttribute('content', ogTitle);
+          },
+        })
+        .on('meta[name="twitter:description"]', {
+          element(el) {
+            el.setAttribute('content', ogDescription);
+          },
+        })
+        .on('meta[name="twitter:image"]', {
+          element(el) {
+            el.setAttribute('content', ogImage);
+          },
+        })
+        .on('link[rel="image_src"]', {
+          element(el) {
+            el.setAttribute('href', ogImage);
+          },
+        });
+
+      if (isCustomProductImage) {
+        rewriter = rewriter
+          .on('meta[property="og:image:type"]', {
+            element(el) {
+              el.remove();
+            },
+          })
+          .on('meta[property="og:image:width"]', {
+            element(el) {
+              el.remove();
+            },
+          })
+          .on('meta[property="og:image:height"]', {
+            element(el) {
+              el.remove();
+            },
+          });
+      }
+
+      const rawResponse = new Response(indexResponse.body, { status: 200, headers });
+      return rewriter.transform(rawResponse);
+    };
+
     // C. Root SPA Navigation (termasuk /?source=pwa, /?id=..., /index.html)
     if (url.pathname === '/' || url.pathname === '/index.html') {
       const indexRequest = new Request(new URL('/index.html', request.url).toString());
       const indexResponse = await env.ASSETS.fetch(indexRequest);
       if (indexResponse.status === 200) {
-        const headers = new Headers(indexResponse.headers);
-        headers.set('Content-Type', 'text/html; charset=utf-8');
-        headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-        return new Response(indexResponse.body, {
-          status: 200,
-          headers,
-        });
+        return serveHtmlWithDynamicOg(indexResponse);
       }
     }
 
     // D. Fetch Asset Reguler
     const response = await env.ASSETS.fetch(request);
 
-    // Fallback 404 untuk client-side routing SPA
+    // Fallback 404 untuk client-side routing SPA (termasuk /product/:id dan /iklan/:id)
     if (response.status === 404 && request.method === 'GET') {
       const isStaticFile = url.pathname.match(/\.[a-zA-Z0-9]+$/);
       if (!isStaticFile) {
         const indexRequest = new Request(new URL('/index.html', request.url).toString());
         const indexResponse = await env.ASSETS.fetch(indexRequest);
         if (indexResponse.status === 200) {
-          const headers = new Headers(indexResponse.headers);
-          headers.set('Content-Type', 'text/html; charset=utf-8');
-          headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-          return new Response(indexResponse.body, {
-            status: 200,
-            headers,
-          });
+          return serveHtmlWithDynamicOg(indexResponse);
         }
       }
     }

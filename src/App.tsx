@@ -834,6 +834,7 @@ export default function App() {
             category: newListing.category,
             urgentReason: newListing.urgentReason,
             sellerName: currentUser.name || newListing.seller?.name || 'Member JualRugi',
+            imageUrl: newListing.imageUrl || newListing.images?.[0],
           }).catch(() => {});
         }
 
@@ -919,6 +920,7 @@ export default function App() {
         category: approvedItem.category,
         urgentReason: approvedItem.urgentReason,
         sellerName: currentUser.name || approvedItem.seller?.name || 'Member JualRugi',
+        imageUrl: approvedItem.imageUrl || approvedItem.images?.[0],
       }).catch(() => {});
     }
 
@@ -1055,6 +1057,7 @@ export default function App() {
             category: target.category,
             urgentReason: target.urgentReason,
             sellerName: currentUser.name || target.seller?.name || 'Member JualRugi',
+            imageUrl: target.imageUrl || target.images?.[0],
           }).catch(() => {});
         }
 

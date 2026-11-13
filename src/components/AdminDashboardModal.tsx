@@ -945,6 +945,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           category: sample?.category || 'HP & Gadget',
           urgentReason: sample?.urgentReason || 'Butuh dana cepat hari ini, siap COD tatap muka',
           sellerName: sample?.seller?.name || 'Member Terverifikasi',
+          imageUrl: sample?.imageUrl || sample?.images?.[0],
           isTest: true,
         },
         { forceSend: true }
@@ -977,6 +978,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           category: listing.category,
           urgentReason: listing.urgentReason,
           sellerName: listing.seller?.name,
+          imageUrl: listing.imageUrl || listing.images?.[0],
         },
         { forceSend: true }
       );
@@ -1084,6 +1086,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             category: listing.category,
             urgentReason: listing.urgentReason,
             sellerName: listing.seller?.name || matchedUser?.name || 'Pengiklan JualRugi',
+            imageUrl: listing.imageUrl || listing.images?.[0],
           }),
           // 3. POST Payload JSON Iklan BU Prioritas ke Webhook Make.com
           triggerPriorityMakeWebhook(listing, {
