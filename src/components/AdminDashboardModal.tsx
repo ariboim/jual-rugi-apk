@@ -82,6 +82,9 @@ import {
   savePriorityGroupConfig,
   triggerPriorityAdGroupWhatsApp,
   PriorityGroupWaConfig,
+  getPriorityMakeWebhookUrl,
+  savePriorityMakeWebhookUrl,
+  triggerPriorityMakeWebhook,
 } from '../services/adPublishedEmailService';
 import {
   getBrevoConfig,
@@ -190,6 +193,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [isTestingGroupWa, setIsTestingGroupWa] = useState(false);
   const [isSyncingGroups, setIsSyncingGroups] = useState(false);
   const [broadcastingListingId, setBroadcastingListingId] = useState<string | null>(null);
+
+  // Make.com Priority Ad Webhook State
+  const [priorityMakeWebhookInput, setPriorityMakeWebhookInput] = useState<string>(() =>
+    getPriorityMakeWebhookUrl()
+  );
+  const [isSavingPriorityWebhook, setIsSavingPriorityWebhook] = useState(false);
+  const [isTestingMakeWebhook, setIsTestingMakeWebhook] = useState(false);
 
   // Brevo API Key Configuration State
   const [brevoKeyInput, setBrevoKeyInput] = useState('');
@@ -975,7 +985,46 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
-  // Action: Toggle BU Prioritas with Automatic Seller Notification + Priority WA Group Broadcast
+  // Simpan URL Webhook Make.com khusus BU Prioritas
+  const handleSavePriorityMakeWebhook = () => {
+    const trimmed = priorityMakeWebhookInput.trim();
+    if (!trimmed || !trimmed.startsWith('http')) {
+      showNotification('⚠️ URL Webhook Make.com wajib diawali https:// atau http://');
+      return;
+    }
+    setIsSavingPriorityWebhook(true);
+    const saved = savePriorityMakeWebhookUrl(trimmed);
+    setPriorityMakeWebhookInput(saved);
+    setTimeout(() => {
+      setIsSavingPriorityWebhook(false);
+      showNotification('✅ URL Webhook Make.com BU Prioritas berhasil disimpan!');
+    }, 250);
+  };
+
+  // Tes kirim payload BU Prioritas ke Webhook Make.com
+  const handleTestPriorityMakeWebhook = async () => {
+    const sample = listings.find((l) => !!l.isSuperBU) || listings[0];
+    if (!sample) {
+      showNotification('⚠️ Belum ada iklan untuk diuji.');
+      return;
+    }
+    setIsTestingMakeWebhook(true);
+    try {
+      const res = await triggerPriorityMakeWebhook(sample, {
+        webhookUrl: priorityMakeWebhookInput.trim() || undefined,
+      });
+      loadEmailLogs();
+      showNotification(
+        res.success
+          ? `✅ Payload iklan "${sample.title}" terkirim ke Make.com!`
+          : `⚠️ ${res.message}`
+      );
+    } finally {
+      setIsTestingMakeWebhook(false);
+    }
+  };
+
+  // Action: Toggle BU Prioritas with Automatic Seller Notification + Priority WA Group Broadcast + Make.com Webhook POST
   const handleToggleSuperBUWithEmail = async (listing: Listing) => {
     const currentStatus = !!listing.isSuperBU;
     const willActivate = !currentStatus;
@@ -1030,14 +1079,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           sellerName: listing.seller?.name || matchedUser?.name || 'Pengiklan JualRugi',
         });
 
+        // 3. POST Payload JSON Iklan BU Prioritas ke Webhook Make.com
+        const makeRes = await triggerPriorityMakeWebhook(listing, {
+          sellerName: listing.seller?.name || matchedUser?.name || 'Member JualRugi',
+          webhookUrl: priorityMakeWebhookInput.trim() || undefined,
+        });
+
         const groupNote = groupRes.success
-          ? ` & diteruskan ke Grup WA ${groupRes.groupName}`
+          ? ` & Grup WA ${groupRes.groupName}`
           : groupRes.skipped
-          ? ' (Forward Grup WA nonaktif)'
+          ? ' (Grup WA nonaktif)'
           : '';
+        const makeNote = makeRes.success ? ' & Webhook Make.com terkirim!' : '';
 
         showNotification(
-          `🔥 BU Prioritas di-approve! Notifikasi dikirim ke seller${groupNote}.`
+          `🔥 BU Prioritas di-approve! Notifikasi ke seller${groupNote}${makeNote}`
         );
         loadEmailLogs();
       } catch (e) {
@@ -1702,6 +1758,55 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         <Send className="w-3.5 h-3.5" />
                       )}
                       <span>{isTestingGroupWa ? 'Mengirim...' : 'Tes Kirim Grup WA'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Baris Konfigurasi URL Webhook Make.com untuk Approve BU Prioritas */}
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3 flex flex-col md:flex-row md:items-center justify-between gap-2.5 shadow-2xs">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                      <Zap className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="text-[11px] font-black text-amber-950">
+                          Webhook Make.com Approve &ldquo;BU Prioritas (PALING BU)&rdquo;
+                        </span>
+                        <span className="text-[10px] text-amber-800 font-medium">
+                          (POST JSON: id, title, normal_price, bu_price, discount_percentage, cod_location, seller_name, description)
+                        </span>
+                      </div>
+                      <input
+                        type="url"
+                        value={priorityMakeWebhookInput}
+                        onChange={(e) => setPriorityMakeWebhookInput(e.target.value)}
+                        placeholder="https://hook.eu1.make.com/..."
+                        className="w-full px-3 py-1.5 text-xs font-mono rounded-xl border border-amber-300 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleSavePriorityMakeWebhook}
+                      disabled={isSavingPriorityWebhook}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-amber-900 border border-amber-300 hover:bg-amber-100 transition active:scale-95 cursor-pointer disabled:opacity-60"
+                    >
+                      {isSavingPriorityWebhook ? 'Menyimpan...' : 'Simpan URL'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleTestPriorityMakeWebhook}
+                      disabled={isTestingMakeWebhook}
+                      className="px-3 py-1.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-amber-950 shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
+                    >
+                      {isTestingMakeWebhook ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isTestingMakeWebhook ? 'Mengirim...' : 'Tes Make.com'}</span>
                     </button>
                   </div>
                 </div>

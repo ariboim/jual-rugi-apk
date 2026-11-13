@@ -799,6 +799,125 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     }
   });
 
+  // Konfigurasi & Endpoint Webhook Make.com Khusus Approve "BU Prioritas (PALING BU)"
+  const DEFAULT_PRIORITY_MAKE_WEBHOOK =
+    process.env.MAKE_PRIORITY_AD_WEBHOOK_URL ||
+    process.env.MAKE_WELCOME_EMAIL_WEBHOOK_URL ||
+    'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
+  let globalPriorityMakeWebhookUrl = DEFAULT_PRIORITY_MAKE_WEBHOOK;
+
+  app.get('/api/priority-make-webhook', (_req, res) => {
+    res.json({
+      success: true,
+      webhookUrl: globalPriorityMakeWebhookUrl,
+      provider: 'make.com',
+    });
+  });
+
+  app.post('/api/save-priority-webhook', (req, res) => {
+    const { webhookUrl } = req.body || {};
+    if (webhookUrl && typeof webhookUrl === 'string' && webhookUrl.trim().startsWith('http')) {
+      globalPriorityMakeWebhookUrl = webhookUrl.trim();
+      return res.json({
+        success: true,
+        webhookUrl: globalPriorityMakeWebhookUrl,
+        message: 'URL Webhook Make.com BU Prioritas berhasil disimpan.',
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      error: 'URL Webhook tidak valid (harus diawali http/https).',
+    });
+  });
+
+  // Endpoint Backend POST Payload Iklan BU Prioritas ke Make.com saat Admin Klik Approve
+  app.post('/api/approve-priority-make-webhook', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const targetWebhookUrl =
+        (typeof body.webhookUrl === 'string' && body.webhookUrl.trim().startsWith('http')
+          ? body.webhookUrl.trim()
+          : null) || globalPriorityMakeWebhookUrl;
+
+      const normalPrice = Number(body.normal_price ?? body.normalPrice ?? 0) || 0;
+      const buPrice = Number(body.bu_price ?? body.sellingPrice ?? body.buPrice ?? 0) || 0;
+      const rawDiscount = body.discount_percentage ?? body.discountPercentage;
+      const discountPercentage =
+        typeof rawDiscount === 'number' && !isNaN(rawDiscount)
+          ? Math.round(rawDiscount)
+          : normalPrice > buPrice && normalPrice > 0
+          ? Math.round(((normalPrice - buPrice) / normalPrice) * 100)
+          : 0;
+
+      const conditionText = String(body.condition || '').trim();
+      const urgentText = String(body.urgentReason || body.urgent_reason || '').trim();
+      const fallbackDesc =
+        conditionText && urgentText && conditionText !== urgentText
+          ? `${conditionText} | Alasan BU: ${urgentText}`
+          : urgentText || conditionText || 'Barang BU Prioritas siap COD.';
+
+      // Payload JSON bersih sesuai daftar variabel Make.com
+      const makePayload = {
+        id: String(body.id || body.listingId || '').trim(),
+        title: String(body.title || body.listingTitle || '').trim(),
+        normal_price: normalPrice,
+        bu_price: buPrice,
+        discount_percentage: discountPercentage,
+        cod_location: String(body.cod_location ?? body.location ?? '').trim(),
+        seller_name: String(
+          body.seller_name ?? body.sellerName ?? body.seller?.name ?? 'Member JualRugi'
+        ).trim(),
+        description: String(body.description || fallbackDesc).trim(),
+      };
+
+      if (!makePayload.id || !makePayload.title) {
+        return res.status(400).json({
+          success: false,
+          error: 'Parameter id dan title iklan wajib diisi.',
+        });
+      }
+
+      console.log(
+        `[Server - Make.com BU Prioritas] POST payload iklan "${makePayload.title}" (${makePayload.id}) ke ${targetWebhookUrl}`
+      );
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      const makeRes = await fetch(targetWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(makePayload),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const responseText = await makeRes.text().catch(() => '');
+      console.log(
+        `[Server - Make.com BU Prioritas Response]: HTTP ${makeRes.status} | Body: ${responseText}`
+      );
+
+      return res.status(makeRes.ok ? 200 : 502).json({
+        success: makeRes.ok,
+        status: makeRes.status,
+        webhookUrl: targetWebhookUrl,
+        payload: makePayload,
+        responseText,
+        message: makeRes.ok
+          ? `Payload BU Prioritas "${makePayload.title}" berhasil dikirim ke Make.com!`
+          : `Make.com merespons HTTP ${makeRes.status}: ${responseText || 'Webhook error'}`,
+      });
+    } catch (err: any) {
+      console.error('[Server - Make.com BU Prioritas Exception]:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal mengirim payload BU Prioritas ke Webhook Make.com.',
+      });
+    }
+  });
+
   // Endpoint Khusus Double Notifikasi Penambahan Kuota Manual (Email Brevo + WA Fonnte)
   app.post('/api/send-quota-notification', async (req, res) => {
     try {

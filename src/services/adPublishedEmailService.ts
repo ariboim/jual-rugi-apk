@@ -1270,3 +1270,206 @@ Team Admin jualrugi.my.id`;
   };
 }
 
+// =============================================================================
+// [4. WEBHOOK MAKE.COM UNTUK APPROVE "BU PRIORITAS (PALING BU)"]
+// Mengirimkan payload JSON bersih via HTTP POST setiap kali admin mengaktifkan
+// status BU Prioritas (PALING BU) pada sebuah iklan.
+// =============================================================================
+export const DEFAULT_PRIORITY_MAKE_WEBHOOK_URL =
+  'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
+
+const STORAGE_KEY_PRIORITY_MAKE_WEBHOOK = 'jualrugi_priority_make_webhook_url';
+
+export interface PriorityMakeWebhookPayload {
+  id: string;
+  title: string;
+  normal_price: number;
+  bu_price: number;
+  discount_percentage: number;
+  cod_location: string;
+  seller_name: string;
+  description: string;
+}
+
+export interface PriorityMakeWebhookListingInput {
+  id: string;
+  title: string;
+  normalPrice?: number;
+  sellingPrice?: number;
+  discountPercentage?: number;
+  location?: string;
+  condition?: string;
+  urgentReason?: string;
+  seller?: {
+    name?: string;
+  };
+}
+
+export interface PriorityMakeWebhookResponse {
+  success: boolean;
+  message: string;
+  webhookUrl: string;
+  payload: PriorityMakeWebhookPayload;
+  provider: 'make_server_proxy' | 'make_direct_post' | 'error';
+  status?: number;
+  responseText?: string;
+}
+
+export function getPriorityMakeWebhookUrl(): string {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_PRIORITY_MAKE_WEBHOOK);
+    if (saved && saved.trim().startsWith('http')) {
+      return saved.trim();
+    }
+  } catch {}
+  return (
+    (import.meta.env.VITE_MAKE_PRIORITY_AD_WEBHOOK_URL as string) ||
+    (import.meta.env.VITE_FREE_WELCOME_WEBHOOK as string) ||
+    DEFAULT_PRIORITY_MAKE_WEBHOOK_URL
+  );
+}
+
+export function savePriorityMakeWebhookUrl(url: string): string {
+  const cleanUrl = (url || '').trim() || DEFAULT_PRIORITY_MAKE_WEBHOOK_URL;
+  try {
+    localStorage.setItem(STORAGE_KEY_PRIORITY_MAKE_WEBHOOK, cleanUrl);
+    fetch('/api/save-priority-webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhookUrl: cleanUrl }),
+    }).catch(() => {});
+  } catch {}
+  return cleanUrl;
+}
+
+/**
+ * Menyusun payload JSON bersih sesuai skema Make.com:
+ * id, title, normal_price, bu_price, discount_percentage, cod_location, seller_name, description
+ */
+export function buildPriorityMakeWebhookPayload(
+  listing: PriorityMakeWebhookListingInput,
+  sellerNameOverride?: string
+): PriorityMakeWebhookPayload {
+  const normalPrice = Number(listing.normalPrice) || 0;
+  const buPrice = Number(listing.sellingPrice) || 0;
+  const calculatedDiscount =
+    typeof listing.discountPercentage === 'number' && !isNaN(listing.discountPercentage)
+      ? Math.round(listing.discountPercentage)
+      : normalPrice > buPrice && normalPrice > 0
+      ? Math.round(((normalPrice - buPrice) / normalPrice) * 100)
+      : 0;
+
+  const conditionText = (listing.condition || '').trim();
+  const urgentText = (listing.urgentReason || '').trim();
+  let description = '';
+  if (conditionText && urgentText && conditionText !== urgentText) {
+    description = `${conditionText} | Alasan BU: ${urgentText}`;
+  } else {
+    description = urgentText || conditionText || 'Barang BU Prioritas siap COD.';
+  }
+
+  return {
+    id: String(listing.id || '').trim(),
+    title: String(listing.title || '').trim(),
+    normal_price: normalPrice,
+    bu_price: buPrice,
+    discount_percentage: calculatedDiscount,
+    cod_location: String(listing.location || '').trim(),
+    seller_name: String(sellerNameOverride || listing.seller?.name || 'Member JualRugi').trim(),
+    description,
+  };
+}
+
+/**
+ * Mengirimkan payload iklan BU Prioritas ke Webhook Make.com via metode POST
+ */
+export async function triggerPriorityMakeWebhook(
+  listing: PriorityMakeWebhookListingInput,
+  options?: { sellerName?: string; webhookUrl?: string }
+): Promise<PriorityMakeWebhookResponse> {
+  const targetWebhookUrl = (options?.webhookUrl || getPriorityMakeWebhookUrl()).trim();
+  const payload = buildPriorityMakeWebhookPayload(listing, options?.sellerName);
+
+  // Catat log pengiriman di localStorage untuk audit Admin
+  const logEntry = {
+    id: `make-priority-${Date.now()}`,
+    listingId: payload.id,
+    listingTitle: `[MAKE.COM BU PRIORITAS] ${payload.title}`,
+    recipientEmail: targetWebhookUrl,
+    recipientPhone: payload.seller_name,
+    packageType: 'prioritas_make_webhook',
+    sentAt: new Date().toISOString(),
+    adLink: getDynamicAdLink(payload.id),
+  };
+
+  try {
+    const existingLogs = JSON.parse(
+      localStorage.getItem('jualrugi_ad_published_emails') || '[]'
+    );
+    localStorage.setItem(
+      'jualrugi_ad_published_emails',
+      JSON.stringify([logEntry, ...existingLogs].slice(0, 50))
+    );
+  } catch {}
+
+  // 1. Prioritas Utama: POST melalui server proxy (/api/approve-priority-make-webhook) agar bebas CORS
+  try {
+    const proxyRes = await fetch('/api/approve-priority-make-webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        webhookUrl: targetWebhookUrl,
+        ...payload,
+      }),
+    });
+
+    const proxyData = await proxyRes.json().catch(() => ({}));
+    if (proxyRes.ok && proxyData?.success) {
+      console.log('✅ [Make.com BU Prioritas] Berhasil dikirim via server proxy:', proxyData);
+      return {
+        success: true,
+        message: proxyData.message || `Data iklan "${payload.title}" berhasil dikirim ke Make.com!`,
+        webhookUrl: proxyData.webhookUrl || targetWebhookUrl,
+        payload: proxyData.payload || payload,
+        provider: 'make_server_proxy',
+        status: proxyData.status || proxyRes.status,
+        responseText: proxyData.responseText,
+      };
+    }
+
+    console.warn('⚠️ [Make.com BU Prioritas] Server proxy merespons non-OK, mencoba direct POST:', proxyData);
+  } catch (proxyErr) {
+    console.warn('⚠️ [Make.com BU Prioritas] Server proxy tidak terjangkau, mencoba direct POST:', proxyErr);
+  }
+
+  // 2. Fallback: Direct POST JSON ke URL Webhook Make.com
+  try {
+    const directRes = await fetch(targetWebhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const responseText = await directRes.text().catch(() => '');
+
+    return {
+      success: directRes.ok,
+      message: directRes.ok
+        ? `Data iklan "${payload.title}" berhasil dikirim langsung ke Make.com!`
+        : `Make.com merespons HTTP ${directRes.status}: ${responseText || 'Webhook error'}`,
+      webhookUrl: targetWebhookUrl,
+      payload,
+      provider: 'make_direct_post',
+      status: directRes.status,
+      responseText,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Gagal menghubungi URL Webhook Make.com.',
+      webhookUrl: targetWebhookUrl,
+      payload,
+      provider: 'error',
+    };
+  }
+}
+
