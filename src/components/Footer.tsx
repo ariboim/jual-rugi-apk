@@ -3,20 +3,12 @@ import { Mail, MapPin, ShieldCheck, Copy, Check, ExternalLink, Users } from 'luc
 import { BrandLogo } from './BrandLogo';
 
 export const Footer: React.FC = () => {
-  const [copiedAddress, setCopiedAddress] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
 
   const companyAddress = 'Jl. Pangkalan 6 Raya No. 16, RT 003/RW 004, Ciketing, Bekasi 17153';
   const whatsappNumber = '089673686625';
   const whatsappUrl = 'https://wa.me/6289673686625?text=Halo%20Admin%20JualRugi.my.id%2C%20saya%20butuh%20bantuan%20terkait%20platform.';
   const contactEmail = 'admin@jualrugi.my.id';
-
-  const handleCopyAddress = (e: React.MouseEvent) => {
-    e.preventDefault();
-    navigator.clipboard.writeText(companyAddress);
-    setCopiedAddress(true);
-    setTimeout(() => setCopiedAddress(false), 2500);
-  };
 
   const handleCopyPhone = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -143,41 +135,12 @@ export const Footer: React.FC = () => {
               Alamat Operasional
             </h4>
 
-            <div className="p-3.5 rounded-2xl bg-slate-800/50 border border-slate-700/60 space-y-2">
+            <div className="p-3.5 rounded-2xl bg-slate-800/50 border border-slate-700/60">
               <div className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                 <address className="not-italic text-xs text-slate-300 leading-relaxed font-normal">
                   {companyAddress}
                 </address>
-              </div>
-
-              <div className="pt-1 flex items-center gap-2">
-                <button
-                  onClick={handleCopyAddress}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-700/80 hover:bg-slate-700 text-slate-200 transition cursor-pointer"
-                >
-                  {copiedAddress ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-400" />
-                      <span className="text-emerald-400">Tersalin!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span>Salin Alamat</span>
-                    </>
-                  )}
-                </button>
-
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(companyAddress)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg text-sky-400 hover:text-sky-300 hover:bg-sky-950/40 transition"
-                >
-                  <span>Google Maps</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
               </div>
             </div>
           </div>
