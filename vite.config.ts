@@ -29,6 +29,7 @@ export default defineConfig(() => {
         ],
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+          navigateFallbackDenylist: [/^\/api\//, /^\/sitemap\.xml$/, /^\/robots\.txt$/],
           skipWaiting: true,
           clientsClaim: true,
           cleanupOutdatedCaches: true,

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://jualrugi.my.id/sitemap.xml

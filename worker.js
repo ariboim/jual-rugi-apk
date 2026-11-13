@@ -742,6 +742,114 @@ export default {
     }
 
     // =========================================================================
+    // SEO SITEMAP XML (/sitemap.xml) - Daftar dinamis seluruh iklan aktif & tayang
+    // =========================================================================
+    if (url.pathname === '/sitemap.xml' && (request.method === 'GET' || request.method === 'HEAD')) {
+      const escapeXml = (str) =>
+        String(str || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&apos;');
+
+      const siteOrigin = (env.SITE_URL || env.APP_URL || 'https://jualrugi.my.id').replace(/\/+$/, '');
+      const inactiveStatuses = new Set(['sold', 'expired', 'deleted', 'in_moderation', 'rejected', 'draft', 'archived']);
+      const fallbackItems = [
+        { id: 'bu-001', title: 'iPhone 14 Pro 128GB Deep Purple - BU Beli Susu Anak', is_priority: true, image_url: 'https://images.unsplash.com/photo-1678685888221-cda773a3dcdb?auto=format&fit=crop&w=1000&q=80' },
+        { id: 'bu-002', title: 'Honda Beat Deluxe CBS ISS 2023 Surat Lengkap Pajak Hidup', is_priority: true, image_url: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1000&q=80' },
+        { id: 'bu-003', title: 'MacBook Pro M1 2020 16GB 512GB Space Gray - BU Skripsi', is_priority: false, image_url: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1000&q=80' },
+        { id: 'bu-004', title: 'Smart TV LG 55 Inch 4K UHD ThinQ Model 2023 Lengkap Remote Magic', is_priority: true, image_url: 'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=1000&q=80' },
+        { id: 'bu-005', title: 'Asus ROG Zephyrus G14 Ryzen 7 RTX 3060 16GB 512GB Gaming Laptop', is_priority: false, image_url: 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=1000&q=80' },
+        { id: 'bu-006', title: 'Kulkas 2 Pintu Inverter Sharp No Frost Masih Dingin Salju', is_priority: false, image_url: 'https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?auto=format&fit=crop&w=1000&q=80' },
+        { id: 'bu-007', title: 'Yamaha NMAX 155 Connected ABS 2022 Plat B Pajak Panjang', is_priority: true, image_url: 'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?auto=format&fit=crop&w=1000&q=80' },
+        { id: 'bu-008', title: 'Samsung Galaxy S23 Ultra 512GB Phantom Black Snapdragon 8 Gen 2', is_priority: false, image_url: 'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?auto=format&fit=crop&w=1000&q=80' },
+      ];
+
+      let activeItems = [];
+      const sbUrl = String(env.SUPABASE_URL || env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
+      const sbKey = String(env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || '').trim();
+
+      if (sbUrl && sbUrl.startsWith('http') && !sbUrl.includes('your-project-id') && sbKey.length > 20) {
+        try {
+          const sbRes = await fetch(
+            `${sbUrl}/rest/v1/listings?select=id,title,status,is_priority,is_super_bu,image_url,created_at,expires_at&or=(status.is.null,status.eq.active,status.eq.published)&order=created_at.desc&limit=5000`,
+            {
+              headers: {
+                apikey: sbKey,
+                Authorization: `Bearer ${sbKey}`,
+                Accept: 'application/json',
+              },
+            }
+          );
+          if (sbRes.ok) {
+            const rows = await sbRes.json().catch(() => []);
+            if (Array.isArray(rows)) {
+              const nowMs = Date.now();
+              activeItems = rows.filter((r) => {
+                if (!r || !r.id) return false;
+                const st = String(r.status || 'active').trim().toLowerCase();
+                if (inactiveStatuses.has(st)) return false;
+                if (r.expires_at) {
+                  const exp = Date.parse(r.expires_at);
+                  if (!Number.isNaN(exp) && exp <= nowMs) return false;
+                }
+                return true;
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[Worker Sitemap] Supabase fetch error:', err);
+        }
+      }
+
+      if (activeItems.length === 0) {
+        activeItems = fallbackItems;
+      }
+
+      const nowIso = new Date().toISOString();
+      const seen = new Set();
+      const urlBlocks = [
+        `  <url>\n    <loc>${escapeXml(siteOrigin + '/')}</loc>\n    <lastmod>${escapeXml(nowIso)}</lastmod>\n    <changefreq>hourly</changefreq>\n    <priority>1.0</priority>\n  </url>`,
+      ];
+
+      for (const item of activeItems) {
+        const id = String(item.id || '').trim();
+        if (!id || seen.has(id.toLowerCase())) continue;
+        seen.add(id.toLowerCase());
+        const loc = `${siteOrigin}/product/${encodeURIComponent(id)}`;
+        const rawDate = item.created_at || item.createdAt;
+        const parsedDate = rawDate ? Date.parse(rawDate) : NaN;
+        const lastmod = !Number.isNaN(parsedDate) ? new Date(parsedDate).toISOString() : nowIso;
+        const priority = item.is_priority || item.is_super_bu || item.isSuperBU ? '0.9' : '0.8';
+        const img = String(item.image_url || item.imageUrl || '').trim();
+        const imageXml =
+          img.startsWith('http://') || img.startsWith('https://')
+            ? `\n    <image:image>\n      <image:loc>${escapeXml(img)}</image:loc>${item.title ? `\n      <image:title>${escapeXml(String(item.title).trim())}</image:title>` : ''}\n    </image:image>`
+            : '';
+
+        urlBlocks.push(
+          `  <url>\n    <loc>${escapeXml(loc)}</loc>\n    <lastmod>${escapeXml(lastmod)}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>${priority}</priority>${imageXml}\n  </url>`
+        );
+      }
+
+      const xml =
+        `<?xml version="1.0" encoding="UTF-8"?>\n` +
+        `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n` +
+        `${urlBlocks.join('\n')}\n` +
+        `</urlset>\n`;
+
+      return new Response(request.method === 'HEAD' ? null : xml, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=300, stale-while-revalidate=600',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
+    }
+
+    // =========================================================================
     // STATIC ASSETS & SPA ROUTING (Fallback to /index.html for client-side routing)
     // =========================================================================
     // A. Service Worker wajib tidak pernah di-cache oleh HTTP agar pembaruan instan

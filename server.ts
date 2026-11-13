@@ -6,6 +6,8 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import { generateDynamicSitemap } from './src/services/sitemapService';
+import { INITIAL_LISTINGS } from './src/data/initialData';
 
 dotenv.config();
 dotenv.config({ path: '.env.local' });
@@ -2068,6 +2070,42 @@ Team Admin jualrugi.my.id`;
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Dynamic SEO Sitemap endpoint (lists all active, published product listings)
+  app.get('/sitemap.xml', async (req, res) => {
+    try {
+      const requestOrigin = `${req.protocol}://${req.get('host') || 'jualrugi.my.id'}`;
+      const { xml } = await generateDynamicSitemap({
+        env: {
+          APP_URL: process.env.APP_URL,
+          SITE_URL: process.env.SITE_URL,
+          SUPABASE_URL: process.env.SUPABASE_URL,
+          VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
+          SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+          SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+          VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY,
+        },
+        requestUrl: requestOrigin,
+        extraListings: INITIAL_LISTINGS.map((item) => ({
+          id: item.id,
+          title: item.title,
+          category: item.category,
+          status: item.status || 'active',
+          isSuperBU: item.isSuperBU,
+          imageUrl: item.imageUrl,
+          createdAt: item.createdAt,
+          expiresAt: item.expiresAt,
+        })),
+      });
+
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+      res.status(200).send(xml);
+    } catch (err) {
+      console.error('[Server Sitemap Error]:', err);
+      res.status(500).type('text/plain').send('Failed to generate sitemap.xml');
     }
   });
 
