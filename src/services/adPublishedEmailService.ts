@@ -1494,3 +1494,50 @@ export async function triggerPriorityMakeWebhook(
   }
 }
 
+/**
+ * Menyusun template pesan Share WA untuk iklan BU Prioritas (PALING BU)
+ * dengan variabel otomatis dari payload iklan.
+ */
+export function buildPriorityShareWhatsAppMessage(
+  listing: PriorityMakeWebhookListingInput,
+  sellerNameOverride?: string
+): string {
+  const item = buildPriorityMakeWebhookPayload(listing, sellerNameOverride);
+  const normalPriceFormatted = item.normal_price.toLocaleString('id-ID');
+  const buPriceFormatted = item.bu_price.toLocaleString('id-ID');
+
+  return [
+    `🔥 *BU PRIORITAS - JUAL RUGI* 🔥`,
+    ``,
+    `Halo rekan-rekan grup! Ada barang hot deal nih yang baru saja di-approve admin dan langsung diobral rugi cepat! 🚀`,
+    ``,
+    `📌 *Judul:* ${item.title}`,
+    `💰 *Harga Normal:* Rp ${normalPriceFormatted}`,
+    `⚡ *Harga BU:* *Rp ${buPriceFormatted}*`,
+    `📉 *Diskon:* *${item.discount_percentage}%*`,
+    `📍 *Lokasi COD:* ${item.cod_location}`,
+    `👤 *Seller:* ${item.seller_name}`,
+    ``,
+    `📝 *Keterangan:*`,
+    `${item.description}`,
+    ``,
+    `🔗 *Link Iklan:* https://jualrugi.my.id/product/${encodeURIComponent(item.id)}`,
+    ``,
+    `---`,
+    `Langsung cek iklannya untuk amankan barangnya sekarang! Siapa cepat dia dapat! 🏃💨`,
+  ].join('\n');
+}
+
+/**
+ * Menghasilkan URL WhatsApp share (https://api.whatsapp.com/send?text=...)
+ * dengan teks ter-encode rapi via encodeURIComponent.
+ */
+export function getPriorityShareWhatsAppUrl(
+  listing: PriorityMakeWebhookListingInput,
+  sellerNameOverride?: string
+): string {
+  const text = buildPriorityShareWhatsAppMessage(listing, sellerNameOverride);
+  return `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+}
+
+

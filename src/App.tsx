@@ -349,7 +349,7 @@ export default function App() {
           }
         }
         if (!dealId) {
-          const matchPath = window.location.pathname.match(/\/iklan\/([^\/\?#]+)/i);
+          const matchPath = window.location.pathname.match(/\/(?:iklan|product)\/([^\/\?#]+)/i);
           if (matchPath && matchPath[1]) {
             dealId = decodeURIComponent(matchPath[1]);
           }
