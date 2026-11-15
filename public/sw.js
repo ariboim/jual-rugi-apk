@@ -1,5 +1,5 @@
-// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v10)
-const CACHE_NAME = 'jualrugi-v10-pwa-final';
+// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v12)
+const CACHE_NAME = 'jualrugi-v12-pwa-noads';
 
 const PRECACHE_ASSETS = [
   '/',
@@ -14,6 +14,7 @@ const PRECACHE_ASSETS = [
   '/pwa-maskable-512x512.png',
   '/logo_icon.png',
   '/logo_transparent.png',
+  '/og-image.jpg',
   '/og-image.png',
   '/banner-hp-jualrugi.png',
   '/image_3.png'
