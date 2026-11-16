@@ -8,7 +8,7 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 const MONETAG_SW_HEADER = `self.options = {
     "domain": "3nbf4.com",
-    "zoneId": 12274190
+    "zoneId": 12274867
 }
 self.lary = ""
 try {
@@ -32,7 +32,7 @@ function monetagServiceWorkerPlugin(): Plugin {
         const swPath = path.resolve(outDir, 'sw.js');
         if (fs.existsSync(swPath)) {
           const current = fs.readFileSync(swPath, 'utf8');
-          if (!current.includes('12274190')) {
+          if (!current.includes('12274867')) {
             fs.writeFileSync(swPath, `${MONETAG_SW_HEADER}\n${current}`, 'utf8');
           }
         } else {

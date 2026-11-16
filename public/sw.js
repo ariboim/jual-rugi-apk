@@ -1,14 +1,14 @@
 self.options = {
     "domain": "3nbf4.com",
-    "zoneId": 12274190
+    "zoneId": 12274867
 }
 self.lary = ""
 try {
     importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
 } catch (e) {}
 
-// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v14)
-const CACHE_NAME = 'jualrugi-v14-pwa';
+// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v15)
+const CACHE_NAME = 'jualrugi-v15-pwa';
 
 const PRECACHE_ASSETS = [
   '/',
