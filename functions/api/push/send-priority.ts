@@ -9,7 +9,9 @@ export async function onRequestPost(context: { request: Request; env: Record<str
         ...body,
         siteOrigin: body.siteOrigin || url.origin,
       },
-      context.env || {}
+      context.env || {},
+      null,
+      body?.supabaseConfig || null
     );
 
     return new Response(JSON.stringify({ success: true, ...summary }), {

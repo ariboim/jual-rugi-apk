@@ -4,12 +4,22 @@ import {
   listPushSubscriptions,
 } from '../../../shared/webPushCore.js';
 
-export async function onRequestGet(context: { env: Record<string, any> }) {
+async function handleStatusRequest(request: Request, env: Record<string, any>) {
   try {
-    const env = context.env || {};
+    const body: any =
+      request.method === 'POST' ? await request.json().catch(() => ({})) : {};
+    const clientConfig =
+      body?.supabaseConfig ||
+      (request.headers.get('x-supabase-url') && request.headers.get('x-supabase-key')
+        ? {
+            url: request.headers.get('x-supabase-url'),
+            anonKey: request.headers.get('x-supabase-key'),
+          }
+        : null);
+
     const vapid = getVapidConfig(env);
     const { subscriptions, supabaseConfigured, supabaseTableReady } =
-      await listPushSubscriptions(env);
+      await listPushSubscriptions(env, null, clientConfig);
 
     return new Response(
       JSON.stringify({
@@ -42,4 +52,23 @@ export async function onRequestGet(context: { env: Record<string, any> }) {
       }
     );
   }
+}
+
+export async function onRequestGet(context: { request: Request; env: Record<string, any> }) {
+  return handleStatusRequest(context.request, context.env || {});
+}
+
+export async function onRequestPost(context: { request: Request; env: Record<string, any> }) {
+  return handleStatusRequest(context.request, context.env || {});
+}
+
+export async function onRequestOptions() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, x-supabase-url, x-supabase-key',
+    },
+  });
 }

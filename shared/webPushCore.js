@@ -23,7 +23,9 @@ export const PUSH_SUBSCRIPTIONS_SQL = `CREATE TABLE IF NOT EXISTS public.push_su
   updated_at timestamptz DEFAULT now()
 );
 ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Allow public insert/update push_subscriptions" ON public.push_subscriptions FOR ALL USING (true) WITH CHECK (true);`;
+DROP POLICY IF EXISTS "Allow public insert/update push_subscriptions" ON public.push_subscriptions;
+CREATE POLICY "Allow public insert/update push_subscriptions"
+  ON public.push_subscriptions FOR ALL USING (true) WITH CHECK (true);`;
 
 function getMemoryStore() {
   if (!globalThis.__JUALRUGI_PUSH_SUBS__) {
@@ -37,6 +39,24 @@ function getRecentPushMap() {
     globalThis.__JUALRUGI_RECENT_PUSH__ = new Map();
   }
   return globalThis.__JUALRUGI_RECENT_PUSH__;
+}
+
+export function getLatestPriorityAlert() {
+  const latest = globalThis.__JUALRUGI_LATEST_PRIORITY_ALERT__;
+  if (!latest) return null;
+  // Berlaku 15 menit untuk sinkronisasi tab web aktif
+  if (Date.now() - (latest.timestamp || 0) > 15 * 60 * 1000) {
+    return null;
+  }
+  return latest;
+}
+
+function recordLatestPriorityAlert(payload) {
+  globalThis.__JUALRUGI_LATEST_PRIORITY_ALERT__ = {
+    eventId: `${payload.listingId || 'bu'}-${payload.timestamp || Date.now()}`,
+    ...payload,
+  };
+  return globalThis.__JUALRUGI_LATEST_PRIORITY_ALERT__;
 }
 
 export function uint8ArrayToBase64Url(bytes) {
@@ -295,20 +315,33 @@ export async function sendSingleWebPush(subscription, payload, env = {}) {
   };
 }
 
-export function resolveSupabasePushCredentials(env = {}) {
-  const url = String(env.SUPABASE_URL || env.VITE_SUPABASE_URL || '')
+export function resolveSupabasePushCredentials(env = {}, clientConfig = null) {
+  const envUrl = String(env.SUPABASE_URL || env.VITE_SUPABASE_URL || '')
     .trim()
     .replace(/\/+$/, '');
-  const key = String(
+  const envKey = String(
     env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || ''
   ).trim();
-  const valid =
-    Boolean(url) &&
-    url.startsWith('http') &&
-    !url.includes('your-project-id') &&
-    key.length > 20 &&
-    !key.includes('...');
-  return { url: valid ? url : '', key: valid ? key : '', valid };
+
+  const clientUrl = String(clientConfig?.url || '')
+    .trim()
+    .replace(/\/+$/, '');
+  const clientKey = String(clientConfig?.anonKey || clientConfig?.key || '').trim();
+
+  const isValidPair = (u, k) =>
+    Boolean(u) &&
+    u.startsWith('http') &&
+    !u.includes('your-project-id') &&
+    k.length > 20 &&
+    !k.includes('...');
+
+  if (isValidPair(envUrl, envKey)) {
+    return { url: envUrl, key: envKey, valid: true };
+  }
+  if (isValidPair(clientUrl, clientKey)) {
+    return { url: clientUrl, key: clientKey, valid: true };
+  }
+  return { url: '', key: '', valid: false };
 }
 
 function normalizeRecord(raw) {
@@ -329,7 +362,7 @@ function normalizeRecord(raw) {
   };
 }
 
-export async function upsertPushSubscription(rawSub, env = {}, localStore = null) {
+export async function upsertPushSubscription(rawSub, env = {}, localStore = null, clientConfig = null) {
   const normalized = normalizeRecord(rawSub);
   if (!normalized) {
     return { success: false, error: 'Payload subscription tidak lengkap.' };
@@ -360,7 +393,7 @@ export async function upsertPushSubscription(rawSub, env = {}, localStore = null
   // 3. Supabase persistence (agar sinkron di Cloudflare Workers multi-edge)
   let persistedInSupabase = false;
   let supabaseError = null;
-  const sb = resolveSupabasePushCredentials(env);
+  const sb = resolveSupabasePushCredentials(env, clientConfig);
   if (sb.valid) {
     try {
       const res = await fetch(`${sb.url}/rest/v1/push_subscriptions?on_conflict=endpoint`, {
@@ -391,7 +424,7 @@ export async function upsertPushSubscription(rawSub, env = {}, localStore = null
     }
   }
 
-  const all = await listPushSubscriptions(env, localStore);
+  const all = await listPushSubscriptions(env, localStore, clientConfig);
   return {
     success: true,
     persistedInSupabase,
@@ -401,7 +434,7 @@ export async function upsertPushSubscription(rawSub, env = {}, localStore = null
   };
 }
 
-export async function deletePushSubscription(endpoint, env = {}, localStore = null) {
+export async function deletePushSubscription(endpoint, env = {}, localStore = null, clientConfig = null) {
   const cleanEndpoint = String(endpoint || '').trim();
   if (!cleanEndpoint) return { success: false };
 
@@ -417,7 +450,7 @@ export async function deletePushSubscription(endpoint, env = {}, localStore = nu
     } catch (_) {}
   }
 
-  const sb = resolveSupabasePushCredentials(env);
+  const sb = resolveSupabasePushCredentials(env, clientConfig);
   if (sb.valid) {
     try {
       await fetch(
@@ -436,7 +469,7 @@ export async function deletePushSubscription(endpoint, env = {}, localStore = nu
   return { success: true };
 }
 
-export async function listPushSubscriptions(env = {}, localStore = null) {
+export async function listPushSubscriptions(env = {}, localStore = null, clientConfig = null) {
   const combined = new Map();
   const mem = getMemoryStore();
 
@@ -460,7 +493,7 @@ export async function listPushSubscriptions(env = {}, localStore = null) {
     } catch (_) {}
   }
 
-  const sb = resolveSupabasePushCredentials(env);
+  const sb = resolveSupabasePushCredentials(env, clientConfig);
   let supabaseTableReady = false;
   if (sb.valid) {
     try {
@@ -531,6 +564,10 @@ export function buildPriorityPushPayload(input = {}) {
     source: 'jualrugi-webpush',
     type: 'priority_bu',
     listingId: cleanId,
+    listingTitle: titleText,
+    sellingPrice,
+    discountPercentage,
+    location,
     title: `🔥 BU PRIORITAS: ${titleText}`,
     body: `${priceLabel}${discLabel} • COD ${location}. Klik untuk cek & tawar sebelum terjual!`,
     icon: '/pwa-192x192.png',
@@ -545,11 +582,14 @@ export function buildPriorityPushPayload(input = {}) {
 }
 
 /**
- * Mengirim Push Notifikasi ke seluruh perangkat subscriber secara bersamaan (tanpa pihak ketiga).
+ * Mengirim Push Notifikasi ke seluruh perangkat subscriber secara bersamaan (tanpa pihak ketiga),
+ * sekaligus mencatat alert terbaru untuk pengunjung web yang sedang aktif membuka aplikasi.
  */
-export async function broadcastPriorityWebPush(input = {}, env = {}, localStore = null) {
+export async function broadcastPriorityWebPush(input = {}, env = {}, localStore = null, clientConfig = null) {
   const cleanId = String(input.listingId || 'bu-prioritas').trim();
   const isTest = Boolean(input.isTest);
+  const payload = buildPriorityPushPayload(input);
+  const latestAlert = recordLatestPriorityAlert(payload);
 
   // Deduplikasi singkat 6 detik agar tidak double-push jika dipanggil dari 2 jalur serentak
   if (!isTest) {
@@ -563,14 +603,17 @@ export async function broadcastPriorityWebPush(input = {}, env = {}, localStore 
         failed: 0,
         removedExpired: 0,
         totalSubscribers: getMemoryStore().size,
+        latestAlert,
       };
     }
     recent.set(cleanId, Date.now());
   }
 
+  const resolvedClientConfig = clientConfig || input.supabaseConfig || null;
   const { subscriptions, supabaseConfigured, supabaseTableReady } = await listPushSubscriptions(
     env,
-    localStore
+    localStore,
+    resolvedClientConfig
   );
 
   if (subscriptions.length === 0) {
@@ -582,11 +625,11 @@ export async function broadcastPriorityWebPush(input = {}, env = {}, localStore 
       totalSubscribers: 0,
       supabaseConfigured,
       supabaseTableReady,
-      message: 'Belum ada perangkat yang mengaktifkan izin Push Notifikasi.',
+      latestAlert,
+      message: 'Belum ada perangkat yang mengaktifkan izin Push Notifikasi OS.',
     };
   }
 
-  const payload = buildPriorityPushPayload(input);
   const results = await Promise.allSettled(
     subscriptions.map((sub) => sendSingleWebPush(sub, payload, env))
   );
@@ -608,7 +651,7 @@ export async function broadcastPriorityWebPush(input = {}, env = {}, localStore 
       if (errors.length < 3) errors.push(errMsg);
       if (r.status === 'fulfilled' && r.value?.expired) {
         removedExpired++;
-        await deletePushSubscription(sub.endpoint, env, localStore);
+        await deletePushSubscription(sub.endpoint, env, localStore, resolvedClientConfig);
       }
     }
   }
@@ -621,6 +664,7 @@ export async function broadcastPriorityWebPush(input = {}, env = {}, localStore 
     totalSubscribers: Math.max(0, subscriptions.length - removedExpired),
     supabaseConfigured,
     supabaseTableReady,
+    latestAlert,
     errors: errors.length > 0 ? errors : undefined,
     payloadSummary: {
       title: payload.title,

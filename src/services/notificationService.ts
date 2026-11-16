@@ -2,6 +2,93 @@
  * Service untuk Push Notifikasi Browser & Simulasi Moderasi Iklan
  * Mendukung Web Push Notification (Desktop & Android PWA) serta fallback In-App Toast.
  */
+import { getSupabaseCredentials, isSupabaseConfigured } from './supabase';
+
+function getOptionalSupabaseConfig() {
+  try {
+    if (isSupabaseConfigured()) {
+      return getSupabaseCredentials();
+    }
+  } catch {}
+  return undefined;
+}
+
+export interface PriorityWebAlertPayload {
+  listingId: string;
+  listingTitle: string;
+  title: string;
+  body: string;
+  sellingPrice?: number;
+  discountPercentage?: number;
+  location?: string;
+  image?: string;
+  adLink?: string;
+  url?: string;
+  timestamp: number;
+  isTest?: boolean;
+}
+
+export const PRIORITY_ALERT_EVENT = 'jualrugi-priority-alert';
+export const PRIORITY_ALERT_CHANNEL = 'jualrugi-priority-alerts';
+
+export function emitLocalPriorityWebAlert(
+  input: Partial<PriorityWebAlertPayload> & { listingId: string; listingTitle: string }
+): PriorityWebAlertPayload {
+  const cleanId = String(input.listingId || 'bu-prioritas').trim();
+  const cleanTitle = String(input.listingTitle || 'Barang BU Prioritas Baru').trim();
+  const sellingPrice = Number(input.sellingPrice || 0);
+  const discountPercentage = Number(input.discountPercentage || 0);
+  const location = String(input.location || 'Indonesia (COD Aman)').trim();
+  const priceLabel =
+    sellingPrice > 0 ? `Rp ${sellingPrice.toLocaleString('id-ID')}` : 'Harga BU Spesial';
+  const discLabel = discountPercentage > 0 ? ` • Hemat ${discountPercentage}%` : '';
+
+  const alertPayload: PriorityWebAlertPayload = {
+    listingId: cleanId,
+    listingTitle: cleanTitle,
+    title: input.title || `🔥 BU PRIORITAS: ${cleanTitle}`,
+    body:
+      input.body ||
+      `${priceLabel}${discLabel} • COD ${location}. Klik untuk cek & tawar sebelum terjual!`,
+    sellingPrice: sellingPrice || undefined,
+    discountPercentage: discountPercentage || undefined,
+    location,
+    image: input.image,
+    adLink: input.adLink || `https://jualrugi.my.id/?id=${encodeURIComponent(cleanId)}`,
+    url: input.url || `/?id=${encodeURIComponent(cleanId)}`,
+    timestamp: Number(input.timestamp || Date.now()),
+    isTest: Boolean(input.isTest),
+  };
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent(PRIORITY_ALERT_EVENT, { detail: alertPayload }));
+    } catch {}
+    try {
+      if ('BroadcastChannel' in window) {
+        const bc = new BroadcastChannel(PRIORITY_ALERT_CHANNEL);
+        bc.postMessage(alertPayload);
+        bc.close();
+      }
+    } catch {}
+  }
+
+  return alertPayload;
+}
+
+export async function fetchLatestPriorityWebAlert(): Promise<PriorityWebAlertPayload | null> {
+  try {
+    const res = await fetch('/api/push/latest');
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    if (data?.alert?.listingId) {
+      return data.alert as PriorityWebAlertPayload;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export interface PendingModeration {
   id: string;
@@ -245,6 +332,8 @@ async function getActiveServiceWorkerRegistration(): Promise<ServiceWorkerRegist
     let reg = await navigator.serviceWorker.getRegistration();
     if (!reg) {
       reg = await navigator.serviceWorker.register('/sw.js');
+    } else {
+      await reg.update().catch(() => {});
     }
     const readyReg = await navigator.serviceWorker.ready;
     return readyReg || reg;
@@ -320,15 +409,17 @@ export async function subscribeToWebPushNotifications(meta?: {
     };
   }
 
+  const inIframe = typeof window !== 'undefined' && window.self !== window.top;
   const permission = await requestBrowserNotificationPermission();
   if (permission !== 'granted') {
     return {
       success: false,
       subscribed: false,
-      message:
-        permission === 'denied'
-          ? 'Izin notifikasi diblokir di browser. Aktifkan melalui ikon gembok di address bar.'
-          : 'Izin notifikasi belum diberikan.',
+      message: inIframe
+        ? 'Browser memblokir pop-up izin notifikasi di dalam frame Preview. Buka aplikasi di tab browser penuh (klik "Buka di Tab Baru ↗") lalu klik Aktifkan Push lagi.'
+        : permission === 'denied'
+        ? 'Izin notifikasi diblokir di browser. Aktifkan melalui ikon gembok/izin di address bar.'
+        : 'Izin notifikasi belum diberikan.',
     };
   }
 
@@ -390,6 +481,7 @@ export async function subscribeToWebPushNotifications(meta?: {
         userId: meta?.userId || 'guest',
         userRole: meta?.userRole || 'buyer',
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        supabaseConfig: getOptionalSupabaseConfig(),
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -431,7 +523,10 @@ export async function unsubscribeFromWebPushNotifications(): Promise<{
       await fetch('/api/push/unsubscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint }),
+        body: JSON.stringify({
+          endpoint,
+          supabaseConfig: getOptionalSupabaseConfig(),
+        }),
       }).catch(() => {});
     }
     return {
@@ -480,6 +575,7 @@ export async function syncExistingWebPushSubscription(meta?: {
         userId: meta?.userId || 'guest',
         userRole: meta?.userRole || 'buyer',
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        supabaseConfig: getOptionalSupabaseConfig(),
       }),
     });
     return res.ok;
@@ -490,7 +586,14 @@ export async function syncExistingWebPushSubscription(meta?: {
 
 export async function fetchWebPushServerStatus(): Promise<WebPushServerStatus | null> {
   try {
-    const res = await fetch('/api/push/status');
+    const supabaseConfig = getOptionalSupabaseConfig();
+    const res = supabaseConfig
+      ? await fetch('/api/push/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ supabaseConfig }),
+        })
+      : await fetch('/api/push/status');
     if (!res.ok) return null;
     return await res.json().catch(() => null);
   } catch {
@@ -514,13 +617,28 @@ export async function triggerPriorityWebPush(payload: {
   sent: number;
   failed: number;
   totalSubscribers: number;
+  latestAlert?: PriorityWebAlertPayload;
   message?: string;
 }> {
+  const localAlert = emitLocalPriorityWebAlert({
+    listingId: payload.listingId,
+    listingTitle: payload.listingTitle,
+    sellingPrice: payload.sellingPrice,
+    discountPercentage: payload.discountPercentage,
+    location: payload.location,
+    image: payload.imageUrl,
+    adLink: payload.adLink,
+    isTest: payload.isTest,
+  });
+
   try {
     const res = await fetch('/api/push/send-priority', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        supabaseConfig: getOptionalSupabaseConfig(),
+      }),
     });
     const data = await res.json().catch(() => ({}));
     return {
@@ -528,6 +646,7 @@ export async function triggerPriorityWebPush(payload: {
       sent: Number(data?.sent || 0),
       failed: Number(data?.failed || 0),
       totalSubscribers: Number(data?.totalSubscribers || 0),
+      latestAlert: data?.latestAlert || localAlert,
       message: data?.message,
     };
   } catch (err: any) {
@@ -536,6 +655,7 @@ export async function triggerPriorityWebPush(payload: {
       sent: 0,
       failed: 1,
       totalSubscribers: 0,
+      latestAlert: localAlert,
       message: err?.message || 'Gagal menghubungi server push.',
     };
   }

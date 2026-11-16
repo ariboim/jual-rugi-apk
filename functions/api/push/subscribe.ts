@@ -24,7 +24,9 @@ export async function onRequestPost(context: { request: Request; env: Record<str
         userRole: body.userRole,
         userAgent: body.userAgent || context.request.headers.get('user-agent') || '',
       },
-      context.env || {}
+      context.env || {},
+      null,
+      body?.supabaseConfig || null
     );
 
     return new Response(JSON.stringify(result), {

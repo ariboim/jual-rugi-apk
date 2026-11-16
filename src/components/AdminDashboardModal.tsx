@@ -94,8 +94,10 @@ import {
   sendWelcomeEmailAutomation,
 } from '../services/welcomeEmail';
 import {
+  emitLocalPriorityWebAlert,
   fetchWebPushServerStatus,
   getWebPushClientState,
+  sendSystemPushNotification,
   subscribeToWebPushNotifications,
   triggerPriorityWebPush,
   WebPushServerStatus,
@@ -221,6 +223,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [isSubscribingPush, setIsSubscribingPush] = useState(false);
   const [isTestingWebPush, setIsTestingWebPush] = useState(false);
   const [showPushSqlModal, setShowPushSqlModal] = useState(false);
+  const [pushDiagnosticNotice, setPushDiagnosticNotice] = useState<{
+    type: 'success' | 'warning' | 'info';
+    message: string;
+  } | null>(null);
+
+  const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
   const loadWebPushDiagnostics = async () => {
     const [srv, cli] = await Promise.all([
@@ -957,6 +965,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Aktifkan Native Web Push di perangkat Admin saat ini
   const handleSubscribeAdminPush = async () => {
     setIsSubscribingPush(true);
+    setPushDiagnosticNotice(null);
     try {
       const res = await subscribeToWebPushNotifications({
         userId: 'admin',
@@ -964,6 +973,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       });
       await loadWebPushDiagnostics();
       window.dispatchEvent(new Event('jualrugi-push-state-changed'));
+      setPushDiagnosticNotice({
+        type: res.success ? 'success' : 'warning',
+        message: res.message,
+      });
       showNotification(res.message);
     } finally {
       setIsSubscribingPush(false);
@@ -974,8 +987,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const handleTestWebPushBroadcast = async () => {
     const sample = listings.find((l) => !!l.isSuperBU) || listings[0];
     setIsTestingWebPush(true);
+    setPushDiagnosticNotice(null);
     try {
-      const res = await triggerPriorityWebPush({
+      const samplePayload = {
         listingId: sample?.id || 'bu-prioritas-test',
         listingTitle: sample?.title || 'Tes Iklan Prioritas JualRugi.my.id',
         sellingPrice: sample?.sellingPrice || 4500000,
@@ -985,14 +999,37 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         category: sample?.category || 'HP & Gadget',
         imageUrl: sample?.imageUrl || sample?.images?.[0],
         isTest: true,
-      });
+      };
+      const res = await triggerPriorityWebPush(samplePayload);
+
+      let localOsFallbackSent = false;
+      if (res.sent === 0 && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        localOsFallbackSent = await sendSystemPushNotification(
+          `🔥 BU PRIORITAS: ${samplePayload.listingTitle}`,
+          `Rp ${samplePayload.sellingPrice.toLocaleString('id-ID')} • Hemat ${samplePayload.discountPercentage}% • COD ${samplePayload.location}`,
+          { tag: `jualrugi-priority-${samplePayload.listingId}` }
+        );
+      }
+
       await loadWebPushDiagnostics();
       if (res.sent > 0) {
-        showNotification(`🔔 Push Notifikasi berhasil dikirim ke ${res.sent} perangkat!`);
+        const msg = `🔔 Push OS terkirim ke ${res.sent} perangkat & banner notifikasi web langsung muncul!`;
+        setPushDiagnosticNotice({ type: 'success', message: msg });
+        showNotification(msg);
+      } else if (localOsFallbackSent) {
+        const msg = '🔔 Notifikasi OS lokal & banner notifikasi web berhasil dipicu!';
+        setPushDiagnosticNotice({ type: 'success', message: msg });
+        showNotification(msg);
       } else if (res.totalSubscribers === 0) {
-        showNotification('ℹ️ Belum ada perangkat aktif. Klik "Aktifkan Push Perangkat Ini" dahulu.');
+        const msg = isInIframe
+          ? 'Banner web langsung muncul! Untuk notifikasi OS saat web ditutup (0 perangkat aktif), buka aplikasi di Tab Baru lalu klik "Aktifkan Push Perangkat Ini".'
+          : 'Banner web langsung muncul! Untuk notifikasi OS saat web ditutup (0 perangkat aktif), klik "Aktifkan Push Perangkat Ini" & klik Izinkan (Allow).';
+        setPushDiagnosticNotice({ type: 'info', message: msg });
+        showNotification('ℹ️ Banner web muncul. Klik "Aktifkan Push Perangkat Ini" di tab baru untuk OS Push.');
       } else {
-        showNotification(`⚠️ Push diproses (${res.sent} terkirim, ${res.failed} gagal).`);
+        const msg = `⚠️ Push diproses (${res.sent} terkirim, ${res.failed} gagal). Banner web tetap ditampilkan.`;
+        setPushDiagnosticNotice({ type: 'warning', message: msg });
+        showNotification(msg);
       }
     } finally {
       setIsTestingWebPush(false);
@@ -1004,22 +1041,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     const sample = listings.find((l) => !!l.isSuperBU) || listings[0];
     setIsTestingGroupWa(true);
     try {
-      const res = await triggerPriorityAdGroupWhatsApp(
-        {
-          listingId: sample?.id || 'bu-prioritas-test',
-          listingTitle: sample?.title || 'Contoh Iklan Prioritas JualRugi.my.id',
-          sellingPrice: sample?.sellingPrice || 4500000,
-          normalPrice: sample?.normalPrice || 7500000,
-          discountPercentage: sample?.discountPercentage || 40,
-          location: sample?.location || 'Jakarta Selatan (COD Aman)',
-          category: sample?.category || 'HP & Gadget',
-          urgentReason: sample?.urgentReason || 'Butuh dana cepat hari ini, siap COD tatap muka',
-          sellerName: sample?.seller?.name || 'Member Terverifikasi',
-          imageUrl: sample?.imageUrl || sample?.images?.[0],
-          isTest: true,
-        },
-        { forceSend: true }
-      );
+      const payload = {
+        listingId: sample?.id || 'bu-prioritas-test',
+        listingTitle: sample?.title || 'Contoh Iklan Prioritas JualRugi.my.id',
+        sellingPrice: sample?.sellingPrice || 4500000,
+        normalPrice: sample?.normalPrice || 7500000,
+        discountPercentage: sample?.discountPercentage || 40,
+        location: sample?.location || 'Jakarta Selatan (COD Aman)',
+        category: sample?.category || 'HP & Gadget',
+        urgentReason: sample?.urgentReason || 'Butuh dana cepat hari ini, siap COD tatap muka',
+        sellerName: sample?.seller?.name || 'Member Terverifikasi',
+        imageUrl: sample?.imageUrl || sample?.images?.[0],
+        isTest: true,
+      };
+      const res = await triggerPriorityAdGroupWhatsApp(payload, { forceSend: true });
+      emitLocalPriorityWebAlert(res.webPush?.latestAlert || payload);
       loadEmailLogs();
       loadWebPushDiagnostics();
       const pushCount = res.webPush?.sent || 0;
@@ -1055,6 +1091,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       const res = await triggerPriorityAdGroupWhatsApp(payload, { forceSend: true });
       if (!res.webPush?.attempted) {
         await triggerPriorityWebPush(payload).catch(() => {});
+      } else {
+        emitLocalPriorityWebAlert(res.webPush?.latestAlert || payload);
       }
       loadEmailLogs();
       loadWebPushDiagnostics();
@@ -1062,7 +1100,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       showNotification(
         res.success
           ? `📢 Iklan "${listing.title}" diteruskan ke Grup WA ${res.groupName}${
-              pushSent > 0 ? ` + Push (${pushSent} perangkat)` : ''
+              pushSent > 0 ? ` + Push (${pushSent} perangkat)` : ' + Alert Web'
             }!`
           : `⚠️ ${res.message}`
       );
@@ -1189,6 +1227,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             pushSentCount = directPush.sent;
             pushAttempted = true;
           }
+        } else {
+          emitLocalPriorityWebAlert(groupRes?.webPush?.latestAlert || groupPayload);
         }
 
         const groupNote = groupRes?.success
@@ -1200,7 +1240,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           pushAttempted && pushSentCount > 0
             ? ` & Push (${pushSentCount} perangkat)`
             : pushAttempted
-            ? ' & Web Push siap'
+            ? ' & Alert Web Live'
             : '';
         const makeNote = makeRes?.success
           ? ' & Webhook Make.com terkirim!'
@@ -1898,6 +1938,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-600 text-white">
                             {pushServerStatus ? `${pushServerStatus.totalSubscribers} Perangkat Aktif` : 'Siap'}
                           </span>
+                          {pushServerStatus?.supabaseConfigured && pushServerStatus?.supabaseTableReady && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              Supabase push_subscriptions Aktif ✓
+                            </span>
+                          )}
                           {pushServerStatus?.supabaseConfigured && !pushServerStatus?.supabaseTableReady && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
                               Tabel push_subscriptions belum dibuat
@@ -1905,7 +1950,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           )}
                         </div>
                         <p className="text-[11px] text-slate-600 leading-relaxed">
-                          Terkirim otomatis berbarengan dengan Grup WA saat Admin menyetujui iklan <strong>BU Prioritas</strong>. Tetap muncul di HP &amp; Desktop meski aplikasi tertutup.
+                          Terkirim otomatis berbarengan dengan Grup WA saat Admin menyetujui iklan <strong>BU Prioritas</strong>. Tetap muncul di HP &amp; Desktop meski aplikasi tertutup + tampil di banner web.
                         </p>
                       </div>
                     </div>
@@ -1957,6 +2002,45 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       )}
                     </div>
                   </div>
+
+                  {isInIframe && !isBrowserPushSubscribed && (
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-amber-900">
+                      <span>
+                        <strong>Mode Preview Terdeteksi:</strong> Browser memblokir pop-up izin notifikasi OS di dalam iframe Preview. Buka aplikasi di tab baru untuk klik <strong>&ldquo;Aktifkan Push Perangkat Ini&rdquo;</strong> &amp; menguji notifikasi OS!
+                      </span>
+                      <a
+                        href={typeof window !== 'undefined' ? window.location.href : '/'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] inline-flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+                      >
+                        <span>Buka di Tab Baru</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
+
+                  {pushDiagnosticNotice && (
+                    <div
+                      className={`p-2.5 rounded-xl border text-[11px] font-semibold flex items-center justify-between gap-2 ${
+                        pushDiagnosticNotice.type === 'success'
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                          : pushDiagnosticNotice.type === 'warning'
+                          ? 'bg-amber-50 border-amber-200 text-amber-900'
+                          : 'bg-white border-sky-200 text-sky-900'
+                      }`}
+                    >
+                      <span>{pushDiagnosticNotice.message}</span>
+                      <button
+                        type="button"
+                        onClick={() => setPushDiagnosticNotice(null)}
+                        className="text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
+                        aria-label="Tutup informasi push"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
 
                   {showPushSqlModal && pushServerStatus?.sqlSetup && (
                     <div className="p-3 rounded-xl bg-slate-900 text-slate-100 text-[11px] font-mono space-y-2">

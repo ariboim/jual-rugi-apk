@@ -143,6 +143,14 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     };
 
     const skipWebPush = body?.skipWebPush === true;
+    const clientSupabaseCfg =
+      body?.supabaseConfig ||
+      (request.headers.get('x-supabase-url') && request.headers.get('x-supabase-key')
+        ? {
+            url: request.headers.get('x-supabase-url'),
+            anonKey: request.headers.get('x-supabase-key'),
+          }
+        : null);
     const [waSettled, pushSettled] = await Promise.allSettled([
       sendWaTask(),
       skipWebPush
@@ -161,7 +169,9 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
               siteOrigin: reqUrl.origin,
               isTest: Boolean(body?.isTest),
             },
-            env
+            env,
+            null,
+            clientSupabaseCfg
           ),
     ]);
 

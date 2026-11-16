@@ -15,6 +15,7 @@ import {
 } from './welcomeEmail';
 import { sendFonnteWhatsApp, normalizeWhatsAppNumber } from './fonnteService';
 import { getStoredUsers } from './userService';
+import { getSupabaseCredentials, isSupabaseConfigured } from './supabase';
 
 // =============================================================================
 // [1. KONFIGURASI URL IKLAN LANGSUNG]
@@ -513,6 +514,9 @@ export interface PriorityGroupWaResponse {
     sent?: number;
     failed?: number;
     totalSubscribers?: number;
+    supabaseConfigured?: boolean;
+    supabaseTableReady?: boolean;
+    latestAlert?: any;
     message?: string;
   };
   detail?: any;
@@ -581,6 +585,7 @@ export async function triggerPriorityAdGroupWhatsApp(
         groupName: cfg.groupName,
         customMessage: message,
         skipWebPush: options?.skipWebPush === true,
+        supabaseConfig: isSupabaseConfigured() ? getSupabaseCredentials() : undefined,
       }),
     });
 

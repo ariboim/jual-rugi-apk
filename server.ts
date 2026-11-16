@@ -12,6 +12,7 @@ import {
   PUSH_SUBSCRIPTIONS_SQL,
   broadcastPriorityWebPush,
   deletePushSubscription,
+  getLatestPriorityAlert,
   getVapidConfig,
   listPushSubscriptions,
   upsertPushSubscription,
@@ -853,6 +854,11 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       };
 
       const requestOrigin = `${req.protocol}://${req.get('host') || 'jualrugi.my.id'}`;
+      const clientSupabaseCfg =
+        req.body?.supabaseConfig ||
+        (req.get('x-supabase-url') && req.get('x-supabase-key')
+          ? { url: req.get('x-supabase-url'), anonKey: req.get('x-supabase-key') }
+          : null);
       const [waSettled, pushSettled] = await Promise.allSettled([
         sendWaTask(),
         skipWebPush
@@ -872,7 +878,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
                 isTest: Boolean(req.body?.isTest),
               },
               process.env,
-              pushLocalStore
+              pushLocalStore,
+              clientSupabaseCfg
             ),
       ]);
 
@@ -917,6 +924,19 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
   // =========================================================================
   // NATIVE W3C WEB PUSH API (VAPID RFC 8292 + AES128GCM RFC 8291) - ZERO 3RD PARTY
   // =========================================================================
+  const extractPushClientSupabaseConfig = (req: express.Request) => {
+    const fromBody = req.body?.supabaseConfig;
+    if (fromBody && (fromBody.url || fromBody.anonKey || fromBody.key)) {
+      return fromBody;
+    }
+    const headerUrl = req.get('x-supabase-url');
+    const headerKey = req.get('x-supabase-key');
+    if (headerUrl && headerKey) {
+      return { url: headerUrl, anonKey: headerKey };
+    }
+    return null;
+  };
+
   app.get('/api/push/vapid-public-key', (req, res) => {
     const vapid = getVapidConfig(process.env);
     return res.json({
@@ -926,11 +946,19 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     });
   });
 
-  app.get('/api/push/status', async (req, res) => {
+  app.get('/api/push/latest', (_req, res) => {
+    return res.json({
+      success: true,
+      alert: getLatestPriorityAlert(),
+    });
+  });
+
+  const handlePushStatus = async (req: express.Request, res: express.Response) => {
     try {
       const vapid = getVapidConfig(process.env);
+      const clientConfig = extractPushClientSupabaseConfig(req);
       const { subscriptions, supabaseConfigured, supabaseTableReady } =
-        await listPushSubscriptions(process.env, pushLocalStore);
+        await listPushSubscriptions(process.env, pushLocalStore, clientConfig);
       return res.json({
         success: true,
         configured: true,
@@ -947,7 +975,10 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         error: err.message || 'Gagal memeriksa status push notification.',
       });
     }
-  });
+  };
+
+  app.get('/api/push/status', handlePushStatus);
+  app.post('/api/push/status', handlePushStatus);
 
   app.post('/api/push/subscribe', async (req, res) => {
     try {
@@ -960,6 +991,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         });
       }
 
+      const clientConfig = extractPushClientSupabaseConfig(req);
       const result = await upsertPushSubscription(
         {
           endpoint: targetSub.endpoint,
@@ -969,7 +1001,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
           userAgent: userAgent || req.get('user-agent') || '',
         },
         process.env,
-        pushLocalStore
+        pushLocalStore,
+        clientConfig
       );
 
       return res.status(result.success ? 200 : 400).json(result);
@@ -987,7 +1020,8 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       if (!endpoint) {
         return res.status(400).json({ success: false, error: 'Endpoint wajib disertakan.' });
       }
-      await deletePushSubscription(endpoint, process.env, pushLocalStore);
+      const clientConfig = extractPushClientSupabaseConfig(req);
+      await deletePushSubscription(endpoint, process.env, pushLocalStore, clientConfig);
       return res.json({ success: true });
     } catch (err: any) {
       return res.status(500).json({
@@ -1001,13 +1035,15 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     try {
       const body = req.body || {};
       const requestOrigin = `${req.protocol}://${req.get('host') || 'jualrugi.my.id'}`;
+      const clientConfig = extractPushClientSupabaseConfig(req);
       const summary = await broadcastPriorityWebPush(
         {
           ...body,
           siteOrigin: body.siteOrigin || requestOrigin,
         },
         process.env,
-        pushLocalStore
+        pushLocalStore,
+        clientConfig
       );
       return res.json({
         success: true,

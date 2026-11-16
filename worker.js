@@ -2,6 +2,7 @@ import {
   PUSH_SUBSCRIPTIONS_SQL,
   broadcastPriorityWebPush,
   deletePushSubscription,
+  getLatestPriorityAlert,
   getVapidConfig,
   listPushSubscriptions,
   upsertPushSubscription,
@@ -686,6 +687,14 @@ export default {
         };
 
         const skipWebPush = body?.skipWebPush === true;
+        const clientSupabaseCfg =
+          body?.supabaseConfig ||
+          (request.headers.get('x-supabase-url') && request.headers.get('x-supabase-key')
+            ? {
+                url: request.headers.get('x-supabase-url'),
+                anonKey: request.headers.get('x-supabase-key'),
+              }
+            : null);
         const [waSettled, pushSettled] = await Promise.allSettled([
           sendWaTask(),
           skipWebPush
@@ -704,7 +713,9 @@ export default {
                   siteOrigin: url.origin,
                   isTest: Boolean(body?.isTest),
                 },
-                env
+                env,
+                null,
+                clientSupabaseCfg
               ),
         ]);
 
@@ -757,10 +768,30 @@ export default {
       );
     }
 
-    if (url.pathname === '/api/push/status' && request.method === 'GET') {
+    if (url.pathname === '/api/push/latest' && request.method === 'GET') {
+      return new Response(
+        JSON.stringify({ success: true, alert: getLatestPriorityAlert() }),
+        { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    if (url.pathname === '/api/push/status' && (request.method === 'GET' || request.method === 'POST')) {
       try {
+        const body = request.method === 'POST' ? await request.json().catch(() => ({})) : {};
+        const clientConfig =
+          body?.supabaseConfig ||
+          (request.headers.get('x-supabase-url') && request.headers.get('x-supabase-key')
+            ? {
+                url: request.headers.get('x-supabase-url'),
+                anonKey: request.headers.get('x-supabase-key'),
+              }
+            : null);
         const vapid = getVapidConfig(env);
-        const { subscriptions, supabaseConfigured, supabaseTableReady } = await listPushSubscriptions(env);
+        const { subscriptions, supabaseConfigured, supabaseTableReady } = await listPushSubscriptions(
+          env,
+          null,
+          clientConfig
+        );
         return new Response(
           JSON.stringify({
             success: true,
@@ -800,7 +831,9 @@ export default {
             userRole: body.userRole,
             userAgent: body.userAgent || request.headers.get('user-agent') || '',
           },
-          env
+          env,
+          null,
+          body?.supabaseConfig || null
         );
         return new Response(JSON.stringify(result), {
           status: result.success ? 200 : 400,
@@ -824,7 +857,7 @@ export default {
             { status: 400, headers: { 'Content-Type': 'application/json' } }
           );
         }
-        await deletePushSubscription(endpoint, env);
+        await deletePushSubscription(endpoint, env, null, body?.supabaseConfig || null);
         return new Response(JSON.stringify({ success: true }), {
           status: 200,
           headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
@@ -845,7 +878,9 @@ export default {
             ...body,
             siteOrigin: body.siteOrigin || url.origin,
           },
-          env
+          env,
+          null,
+          body?.supabaseConfig || null
         );
         return new Response(JSON.stringify({ success: true, ...summary }), {
           status: 200,

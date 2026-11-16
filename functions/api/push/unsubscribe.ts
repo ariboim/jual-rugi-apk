@@ -10,7 +10,7 @@ export async function onRequestPost(context: { request: Request; env: Record<str
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
-    await deletePushSubscription(endpoint, context.env || {});
+    await deletePushSubscription(endpoint, context.env || {}, null, body?.supabaseConfig || null);
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: {

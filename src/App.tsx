@@ -34,6 +34,11 @@ import {
   getPendingModerations,
   syncExistingWebPushSubscription,
   triggerPriorityWebPush,
+  emitLocalPriorityWebAlert,
+  fetchLatestPriorityWebAlert,
+  PRIORITY_ALERT_CHANNEL,
+  PRIORITY_ALERT_EVENT,
+  PriorityWebAlertPayload,
 } from './services/notificationService';
 import {
   triggerAdPublishedEmail,
@@ -216,6 +221,72 @@ export default function App() {
         window.dispatchEvent(new Event('jualrugi-push-state-changed'));
       }
     });
+  }, []);
+
+  // State & listener live in-web Alert Iklan BU Prioritas (sinkron antar tab + polling /api/push/latest)
+  const [livePriorityAlert, setLivePriorityAlert] = useState<PriorityWebAlertPayload | null>(null);
+  const lastPriorityAlertKeyRef = React.useRef<string>('');
+  const livePriorityTimerRef = React.useRef<number | null>(null);
+
+  useEffect(() => {
+    const presentAlert = (alert: PriorityWebAlertPayload | null | undefined, isFromPoll = false) => {
+      if (!alert || !alert.listingId) return;
+      const alertKey = `${alert.listingId}:${alert.timestamp || 0}`;
+      if (lastPriorityAlertKeyRef.current === alertKey) return;
+
+      if (isFromPoll) {
+        const ageMs = Date.now() - Number(alert.timestamp || 0);
+        if (ageMs > 5 * 60 * 1000) return;
+        try {
+          if (sessionStorage.getItem('jualrugi_last_dismissed_priority_alert') === alertKey) {
+            return;
+          }
+        } catch {}
+      }
+
+      lastPriorityAlertKeyRef.current = alertKey;
+      setLivePriorityAlert(alert);
+
+      if (livePriorityTimerRef.current) {
+        window.clearTimeout(livePriorityTimerRef.current);
+      }
+      livePriorityTimerRef.current = window.setTimeout(() => {
+        setLivePriorityAlert((cur) =>
+          cur && `${cur.listingId}:${cur.timestamp}` === alertKey ? null : cur
+        );
+      }, 18000);
+    };
+
+    const handleCustomEvent = (e: Event) => {
+      presentAlert((e as CustomEvent<PriorityWebAlertPayload>).detail, false);
+    };
+    window.addEventListener(PRIORITY_ALERT_EVENT, handleCustomEvent);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      if ('BroadcastChannel' in window) {
+        bc = new BroadcastChannel(PRIORITY_ALERT_CHANNEL);
+        bc.onmessage = (e) => presentAlert(e.data, false);
+      }
+    } catch {}
+
+    const checkLatestFromServer = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const latest = await fetchLatestPriorityWebAlert();
+      if (latest) presentAlert(latest, true);
+    };
+
+    checkLatestFromServer();
+    const pollInterval = window.setInterval(checkLatestFromServer, 15000);
+
+    return () => {
+      window.removeEventListener(PRIORITY_ALERT_EVENT, handleCustomEvent);
+      if (bc) bc.close();
+      window.clearInterval(pollInterval);
+      if (livePriorityTimerRef.current) {
+        window.clearTimeout(livePriorityTimerRef.current);
+      }
+    };
   }, []);
 
   // Active navigation tab
@@ -851,6 +922,8 @@ export default function App() {
             .then((waRes) => {
               if (waRes?.skipped || !waRes?.webPush?.attempted) {
                 triggerPriorityWebPush(priorityPayload).catch(() => {});
+              } else {
+                emitLocalPriorityWebAlert(waRes?.webPush?.latestAlert || priorityPayload);
               }
             })
             .catch(() => {
@@ -946,6 +1019,8 @@ export default function App() {
         .then((waRes) => {
           if (waRes?.skipped || !waRes?.webPush?.attempted) {
             triggerPriorityWebPush(priorityPayload).catch(() => {});
+          } else {
+            emitLocalPriorityWebAlert(waRes?.webPush?.latestAlert || priorityPayload);
           }
         })
         .catch(() => {
@@ -1092,6 +1167,8 @@ export default function App() {
             .then((waRes) => {
               if (waRes?.skipped || !waRes?.webPush?.attempted) {
                 triggerPriorityWebPush(priorityPayload).catch(() => {});
+              } else {
+                emitLocalPriorityWebAlert(waRes?.webPush?.latestAlert || priorityPayload);
               }
             })
             .catch(() => {
@@ -1653,6 +1730,84 @@ export default function App() {
               >
                 <X className="w-4 h-4" />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live In-Web Alert Notification Iklan BU Prioritas Baru (Tampil berbarengan dengan WA Group & OS Web Push) */}
+      {livePriorityAlert && (
+        <div className="fixed bottom-20 sm:bottom-6 right-4 left-4 sm:left-auto sm:max-w-md z-[60] animate-slide-down">
+          <div className="bg-white border-2 border-amber-400 rounded-2xl shadow-2xl shadow-amber-950/20 p-3.5 flex items-start gap-3">
+            {livePriorityAlert.image ? (
+              <img
+                src={livePriorityAlert.image}
+                alt={livePriorityAlert.listingTitle}
+                className="w-14 h-14 rounded-xl object-cover shrink-0 border border-amber-200 bg-slate-100"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                <Flame className="w-6 h-6" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] font-black uppercase tracking-wide">
+                  <Flame className="w-3 h-3 text-amber-600" />
+                  <span>BU Prioritas Disetujui</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      sessionStorage.setItem(
+                        'jualrugi_last_dismissed_priority_alert',
+                        `${livePriorityAlert.listingId}:${livePriorityAlert.timestamp}`
+                      );
+                    } catch {}
+                    setLivePriorityAlert(null);
+                  }}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  aria-label="Tutup notifikasi prioritas"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <h4 className="text-xs sm:text-sm font-black text-slate-900 line-clamp-1">
+                {livePriorityAlert.listingTitle}
+              </h4>
+              <p className="text-[11px] text-slate-600 line-clamp-2 leading-snug">
+                {livePriorityAlert.body}
+              </p>
+              <div className="pt-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const matched = listings.find((l) => l.id === livePriorityAlert.listingId);
+                    if (matched) {
+                      setSelectedListing(matched);
+                    } else if (livePriorityAlert.listingId) {
+                      fetchListingByIdFromSupabase(livePriorityAlert.listingId).then((found) => {
+                        if (found) setSelectedListing(found);
+                      });
+                    }
+                    setLivePriorityAlert(null);
+                  }}
+                  className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black transition cursor-pointer inline-flex items-center gap-1"
+                >
+                  <span>Lihat Iklan</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+                <a
+                  href={livePriorityAlert.adLink || getDynamicAdLink(livePriorityAlert.listingId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold text-sky-700 hover:underline inline-flex items-center gap-1"
+                >
+                  <span>Buka Link</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
             </div>
           </div>
         </div>
