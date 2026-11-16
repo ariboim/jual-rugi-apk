@@ -7,8 +7,8 @@ try {
     importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
 } catch (e) {}
 
-// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v13)
-const CACHE_NAME = 'jualrugi-v13-pwa';
+// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v14)
+const CACHE_NAME = 'jualrugi-v14-pwa';
 
 const PRECACHE_ASSETS = [
   '/',
