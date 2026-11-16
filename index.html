@@ -42,15 +42,16 @@
     <link rel="manifest" href="/manifest.json" />
     <script>
       (function() {
-        var APP_BUILD_ID = 'jualrugi-app-20261115-monetag-v15';
+        var APP_BUILD_ID = 'jualrugi-app-20261115-monetag-v16';
         try {
           localStorage.setItem('jr_build_id', APP_BUILD_ID);
         } catch(e) {}
 
         if ('serviceWorker' in navigator) {
+          var hadController = !!navigator.serviceWorker.controller;
           var refreshing = false;
           navigator.serviceWorker.addEventListener('controllerchange', function() {
-            if (!refreshing) {
+            if (hadController && !refreshing) {
               refreshing = true;
               window.location.reload();
             }

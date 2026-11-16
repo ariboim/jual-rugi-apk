@@ -11,9 +11,7 @@ const MONETAG_SW_HEADER = `self.options = {
     "zoneId": 12274867
 }
 self.lary = ""
-try {
-    importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
-} catch (e) {}
+importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
 `;
 
 function monetagServiceWorkerPlugin(): Plugin {
@@ -68,6 +66,7 @@ export default defineConfig(() => {
         ],
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+          globIgnores: ['**/assets/aistudio/**'],
           navigateFallbackDenylist: [/^\/api\//, /^\/sitemap\.xml$/, /^\/robots\.txt$/, /^\/sw\.js$/],
           skipWaiting: true,
           clientsClaim: true,

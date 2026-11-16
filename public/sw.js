@@ -3,12 +3,10 @@ self.options = {
     "zoneId": 12274867
 }
 self.lary = ""
-try {
-    importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
-} catch (e) {}
+importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
 
-// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v15)
-const CACHE_NAME = 'jualrugi-v15-pwa';
+// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v16)
+const CACHE_NAME = 'jualrugi-v16-pwa';
 
 const PRECACHE_ASSETS = [
   '/',
