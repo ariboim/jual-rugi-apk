@@ -876,6 +876,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
                 adLink: directAdLink,
                 siteOrigin: requestOrigin,
                 isTest: Boolean(req.body?.isTest),
+                fallbackSubscription: req.body?.fallbackSubscription || req.body?.currentSubscription,
               },
               process.env,
               pushLocalStore,

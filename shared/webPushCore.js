@@ -610,11 +610,30 @@ export async function broadcastPriorityWebPush(input = {}, env = {}, localStore 
   }
 
   const resolvedClientConfig = clientConfig || input.supabaseConfig || null;
-  const { subscriptions, supabaseConfigured, supabaseTableReady } = await listPushSubscriptions(
+  const fallbackSubRaw = input.fallbackSubscription || input.currentSubscription || null;
+  const normalizedFallback = normalizeRecord(fallbackSubRaw);
+  if (normalizedFallback) {
+    await upsertPushSubscription(
+      normalizedFallback,
+      env,
+      localStore,
+      resolvedClientConfig
+    ).catch(() => {});
+  }
+
+  const { subscriptions: listedSubs, supabaseConfigured, supabaseTableReady } = await listPushSubscriptions(
     env,
     localStore,
     resolvedClientConfig
   );
+
+  const subscriptions = [...listedSubs];
+  if (
+    normalizedFallback &&
+    !subscriptions.some((s) => s.endpoint === normalizedFallback.endpoint)
+  ) {
+    subscriptions.push(normalizedFallback);
+  }
 
   if (subscriptions.length === 0) {
     return {

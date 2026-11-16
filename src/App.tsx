@@ -1737,7 +1737,7 @@ export default function App() {
 
       {/* Live In-Web Alert Notification Iklan BU Prioritas Baru (Tampil berbarengan dengan WA Group & OS Web Push) */}
       {livePriorityAlert && (
-        <div className="fixed bottom-20 sm:bottom-6 right-4 left-4 sm:left-auto sm:max-w-md z-[60] animate-slide-down">
+        <div className="fixed top-3 sm:top-auto sm:bottom-6 right-3 left-3 sm:right-4 sm:left-auto sm:max-w-md z-[60] animate-slide-down">
           <div className="bg-white border-2 border-amber-400 rounded-2xl shadow-2xl shadow-amber-950/20 p-3.5 flex items-start gap-3">
             {livePriorityAlert.image ? (
               <img

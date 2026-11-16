@@ -144,8 +144,9 @@ export async function sendSystemPushNotification(
   const notificationOptions: any = {
     body,
     icon: '/pwa-192x192.png',
-    badge: '/logo_icon.png',
+    badge: '/favicon.png',
     tag: 'jualrugi-ad-moderation',
+    renotify: true,
     data: {
       url: window.location.origin,
       timestamp: Date.now(),
@@ -391,6 +392,22 @@ export async function getWebPushClientState(): Promise<WebPushClientState> {
   }
 }
 
+export async function getCurrentBrowserPushSubscriptionJson(): Promise<PushSubscriptionJSON | null> {
+  if (!isWebPushSupported()) return null;
+  if (Notification.permission !== 'granted') return null;
+  try {
+    if (localStorage.getItem(STORAGE_PUSH_MUTED_KEY) === 'true') return null;
+  } catch {}
+  try {
+    const reg = await getActiveServiceWorkerRegistration();
+    if (!reg || !reg.pushManager) return null;
+    const sub = await reg.pushManager.getSubscription();
+    return sub ? sub.toJSON() : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function subscribeToWebPushNotifications(meta?: {
   userId?: string;
   userRole?: string;
@@ -617,6 +634,9 @@ export async function triggerPriorityWebPush(payload: {
   sent: number;
   failed: number;
   totalSubscribers: number;
+  supabaseConfigured?: boolean;
+  supabaseTableReady?: boolean;
+  errors?: string[];
   latestAlert?: PriorityWebAlertPayload;
   message?: string;
 }> {
@@ -632,12 +652,14 @@ export async function triggerPriorityWebPush(payload: {
   });
 
   try {
+    const fallbackSubscription = await getCurrentBrowserPushSubscriptionJson();
     const res = await fetch('/api/push/send-priority', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...payload,
         supabaseConfig: getOptionalSupabaseConfig(),
+        fallbackSubscription: fallbackSubscription || undefined,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -646,6 +668,9 @@ export async function triggerPriorityWebPush(payload: {
       sent: Number(data?.sent || 0),
       failed: Number(data?.failed || 0),
       totalSubscribers: Number(data?.totalSubscribers || 0),
+      supabaseConfigured: data?.supabaseConfigured,
+      supabaseTableReady: data?.supabaseTableReady,
+      errors: Array.isArray(data?.errors) ? data.errors : undefined,
       latestAlert: data?.latestAlert || localAlert,
       message: data?.message,
     };

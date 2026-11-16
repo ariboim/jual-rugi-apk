@@ -16,6 +16,7 @@ import {
 import { sendFonnteWhatsApp, normalizeWhatsAppNumber } from './fonnteService';
 import { getStoredUsers } from './userService';
 import { getSupabaseCredentials, isSupabaseConfigured } from './supabase';
+import { getCurrentBrowserPushSubscriptionJson } from './notificationService';
 
 // =============================================================================
 // [1. KONFIGURASI URL IKLAN LANGSUNG]
@@ -516,6 +517,7 @@ export interface PriorityGroupWaResponse {
     totalSubscribers?: number;
     supabaseConfigured?: boolean;
     supabaseTableReady?: boolean;
+    errors?: string[];
     latestAlert?: any;
     message?: string;
   };
@@ -573,6 +575,9 @@ export async function triggerPriorityAdGroupWhatsApp(
 
   // 1. Prioritas Utama: Kirim lewat backend proxy /api/send-priority-group-wa (Sekaligus Web Push paralel)
   try {
+    const fallbackSubscription = options?.skipWebPush
+      ? null
+      : await getCurrentBrowserPushSubscriptionJson().catch(() => null);
     const serverRes = await fetch('/api/send-priority-group-wa', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -586,6 +591,7 @@ export async function triggerPriorityAdGroupWhatsApp(
         customMessage: message,
         skipWebPush: options?.skipWebPush === true,
         supabaseConfig: isSupabaseConfigured() ? getSupabaseCredentials() : undefined,
+        fallbackSubscription: fallbackSubscription || undefined,
       }),
     });
 

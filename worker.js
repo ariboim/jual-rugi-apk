@@ -712,6 +712,7 @@ export default {
                   adLink: directAdLink,
                   siteOrigin: url.origin,
                   isTest: Boolean(body?.isTest),
+                  fallbackSubscription: body?.fallbackSubscription || body?.currentSubscription,
                 },
                 env,
                 null,

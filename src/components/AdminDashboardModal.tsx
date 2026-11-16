@@ -99,9 +99,15 @@ import {
   getWebPushClientState,
   sendSystemPushNotification,
   subscribeToWebPushNotifications,
+  syncExistingWebPushSubscription,
   triggerPriorityWebPush,
   WebPushServerStatus,
 } from '../services/notificationService';
+import {
+  getSupabaseCredentials,
+  saveSupabaseCredentials,
+  testSupabaseConnection,
+} from '../services/supabase';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -223,6 +229,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [isSubscribingPush, setIsSubscribingPush] = useState(false);
   const [isTestingWebPush, setIsTestingWebPush] = useState(false);
   const [showPushSqlModal, setShowPushSqlModal] = useState(false);
+  const [quickSbUrl, setQuickSbUrl] = useState(() => getSupabaseCredentials().url || '');
+  const [quickSbKey, setQuickSbKey] = useState(() => getSupabaseCredentials().anonKey || '');
+  const [isConnectingSupabase, setIsConnectingSupabase] = useState(false);
   const [pushDiagnosticNotice, setPushDiagnosticNotice] = useState<{
     type: 'success' | 'warning' | 'info';
     message: string;
@@ -231,12 +240,54 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
   const loadWebPushDiagnostics = async () => {
-    const [srv, cli] = await Promise.all([
+    let [srv, cli] = await Promise.all([
       fetchWebPushServerStatus(),
       getWebPushClientState(),
     ]);
+    if (cli.subscribed && (!srv || srv.totalSubscribers === 0)) {
+      await syncExistingWebPushSubscription({ userId: 'admin', userRole: 'admin' }).catch(() => false);
+      srv = await fetchWebPushServerStatus();
+    }
     if (srv) setPushServerStatus(srv);
     setIsBrowserPushSubscribed(cli.subscribed);
+  };
+
+  const handleQuickConnectSupabasePush = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanUrl = quickSbUrl.trim();
+    const cleanKey = quickSbKey.trim();
+    if (!cleanUrl.startsWith('http') || cleanKey.length < 20) {
+      setPushDiagnosticNotice({
+        type: 'warning',
+        message: 'Masukkan Project URL Supabase (https://...) dan Anon Key yang valid.',
+      });
+      return;
+    }
+    setIsConnectingSupabase(true);
+    try {
+      saveSupabaseCredentials(cleanUrl, cleanKey);
+      await testSupabaseConnection().catch(() => null);
+      await syncExistingWebPushSubscription({ userId: 'admin', userRole: 'admin' }).catch(() => false);
+      await loadWebPushDiagnostics();
+      const latestStatus = await fetchWebPushServerStatus();
+      if (latestStatus?.supabaseConfigured && latestStatus?.supabaseTableReady) {
+        const msg = `✅ Supabase terhubung (${latestStatus.totalSubscribers} subscriber)! Push notifikasi siap masuk ke perangkat.`;
+        setPushDiagnosticNotice({ type: 'success', message: msg });
+        showNotification(msg);
+      } else if (latestStatus?.supabaseConfigured && !latestStatus?.supabaseTableReady) {
+        setPushDiagnosticNotice({
+          type: 'warning',
+          message: '⚠️ Kredensial tersimpan, tetapi tabel push_subscriptions belum terbaca di Supabase.',
+        });
+      } else {
+        setPushDiagnosticNotice({
+          type: 'warning',
+          message: '⚠️ Kredensial Supabase belum terhubung. Periksa URL & Anon Key Anda.',
+        });
+      }
+    } finally {
+      setIsConnectingSupabase(false);
+    }
   };
 
   // Brevo API Key Configuration State
@@ -1012,22 +1063,23 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       }
 
       await loadWebPushDiagnostics();
+      const errDetail = res.errors && res.errors.length > 0 ? ` (${res.errors.join(' | ')})` : '';
       if (res.sent > 0) {
-        const msg = `🔔 Push OS terkirim ke ${res.sent} perangkat & banner notifikasi web langsung muncul!`;
+        const msg = `🔔 Push OS terkirim ke ${res.sent} perangkat via VAPID/FCM & banner web muncul! Jika pop-up tidak bunyi di HP, cek ikon senyap (🔕) / Do Not Disturb.`;
         setPushDiagnosticNotice({ type: 'success', message: msg });
         showNotification(msg);
       } else if (localOsFallbackSent) {
-        const msg = '🔔 Notifikasi OS lokal & banner notifikasi web berhasil dipicu!';
-        setPushDiagnosticNotice({ type: 'success', message: msg });
+        const msg = `🔔 Notifikasi OS lokal & banner web dipicu${errDetail || ' (Server belum terhubung Supabase)'}.`;
+        setPushDiagnosticNotice({ type: 'info', message: msg });
         showNotification(msg);
       } else if (res.totalSubscribers === 0) {
         const msg = isInIframe
           ? 'Banner web langsung muncul! Untuk notifikasi OS saat web ditutup (0 perangkat aktif), buka aplikasi di Tab Baru lalu klik "Aktifkan Push Perangkat Ini".'
           : 'Banner web langsung muncul! Untuk notifikasi OS saat web ditutup (0 perangkat aktif), klik "Aktifkan Push Perangkat Ini" & klik Izinkan (Allow).';
         setPushDiagnosticNotice({ type: 'info', message: msg });
-        showNotification('ℹ️ Banner web muncul. Klik "Aktifkan Push Perangkat Ini" di tab baru untuk OS Push.');
+        showNotification('ℹ️ Banner web muncul. Klik "Aktifkan Push Perangkat Ini" untuk OS Push.');
       } else {
-        const msg = `⚠️ Push diproses (${res.sent} terkirim, ${res.failed} gagal). Banner web tetap ditampilkan.`;
+        const msg = `⚠️ Push diproses (${res.sent} terkirim, ${res.failed} gagal)${errDetail}. Banner web tetap ditampilkan.`;
         setPushDiagnosticNotice({ type: 'warning', message: msg });
         showNotification(msg);
       }
@@ -1229,6 +1281,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           }
         } else {
           emitLocalPriorityWebAlert(groupRes?.webPush?.latestAlert || groupPayload);
+        }
+
+        if (pushSentCount === 0 && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          await sendSystemPushNotification(
+            `🔥 BU PRIORITAS: ${groupPayload.listingTitle}`,
+            `Rp ${(groupPayload.sellingPrice || 0).toLocaleString('id-ID')} • COD ${groupPayload.location || 'Indonesia'}`,
+            {
+              tag: `jualrugi-priority-${groupPayload.listingId}`,
+              data: {
+                url: `/?id=${encodeURIComponent(groupPayload.listingId)}`,
+                listingId: groupPayload.listingId,
+                source: 'jualrugi-webpush',
+              },
+            }
+          ).catch(() => false);
         }
 
         const groupNote = groupRes?.success
@@ -1930,24 +1997,31 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                         <BellRing className="w-5 h-5" />
                       </div>
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2 flex-wrap">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs font-black text-sky-950">
                             Push Notifikasi Aplikasi Native (VAPID — Tanpa OneSignal)
                           </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-600 text-white">
-                            {pushServerStatus ? `${pushServerStatus.totalSubscribers} Perangkat Aktif` : 'Siap'}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            pushServerStatus && pushServerStatus.totalSubscribers > 0
+                              ? 'bg-sky-600 text-white'
+                              : 'bg-amber-500 text-white'
+                          }`}>
+                            Server: {pushServerStatus ? `${pushServerStatus.totalSubscribers} Subscriber` : 'Memuat...'}
                           </span>
-                          {pushServerStatus?.supabaseConfigured && pushServerStatus?.supabaseTableReady && (
+                          {pushServerStatus?.supabaseConfigured && pushServerStatus?.supabaseTableReady ? (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                              Supabase push_subscriptions Aktif ✓
+                              Supabase Push DB: Terhubung ✓
                             </span>
-                          )}
-                          {pushServerStatus?.supabaseConfigured && !pushServerStatus?.supabaseTableReady && (
+                          ) : pushServerStatus?.supabaseConfigured ? (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                              Tabel push_subscriptions belum dibuat
+                              Tabel push_subscriptions belum terbaca
                             </span>
-                          )}
+                          ) : pushServerStatus ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                              Supabase Belum Terhubung di Server!
+                            </span>
+                          ) : null}
                         </div>
                         <p className="text-[11px] text-slate-600 leading-relaxed">
                           Terkirim otomatis berbarengan dengan Grup WA saat Admin menyetujui iklan <strong>BU Prioritas</strong>. Tetap muncul di HP &amp; Desktop meski aplikasi tertutup + tampil di banner web.
@@ -2002,6 +2076,42 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       )}
                     </div>
                   </div>
+
+                  {pushServerStatus && !pushServerStatus.supabaseConfigured && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 space-y-2 text-[11px] text-amber-950">
+                      <div className="font-bold flex items-center gap-1.5 text-amber-900">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Kenapa Server Masih 0 Subscriber? Server Cloudflare belum terhubung ke Supabase Anda!</span>
+                      </div>
+                      <p className="text-[11px] text-amber-900 leading-relaxed">
+                        Tabel SQL di Supabase sudah siap, namun website <strong className="font-bold">jualrugi.my.id</strong> di Cloudflare belum memiliki <code className="bg-amber-100 px-1 rounded">SUPABASE_URL</code> &amp; <code className="bg-amber-100 px-1 rounded">SUPABASE_ANON_KEY</code>. Hubungkan cepat di bawah ini, atau tambahkan di <strong>Cloudflare Dashboard &rarr; Workers &amp; Pages &rarr; Settings &rarr; Variables and Secrets</strong>:
+                      </p>
+                      <form onSubmit={handleQuickConnectSupabasePush} className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+                        <input
+                          type="url"
+                          value={quickSbUrl}
+                          onChange={(e) => setQuickSbUrl(e.target.value)}
+                          placeholder="https://xxxx.supabase.co"
+                          className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white text-[11px] font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        />
+                        <input
+                          type="password"
+                          value={quickSbKey}
+                          onChange={(e) => setQuickSbKey(e.target.value)}
+                          placeholder="Supabase Anon Key (eyJ...)"
+                          className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white text-[11px] font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isConnectingSupabase}
+                          className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] transition cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
+                        >
+                          {isConnectingSupabase ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          <span>{isConnectingSupabase ? 'Menghubungkan...' : 'Simpan & Hubungkan Push'}</span>
+                        </button>
+                      </form>
+                    </div>
+                  )}
 
                   {isInIframe && !isBrowserPushSubscribed && (
                     <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-amber-900">

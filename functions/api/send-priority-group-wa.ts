@@ -168,6 +168,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
               adLink: directAdLink,
               siteOrigin: reqUrl.origin,
               isTest: Boolean(body?.isTest),
+              fallbackSubscription: body?.fallbackSubscription || body?.currentSubscription,
             },
             env,
             null,
