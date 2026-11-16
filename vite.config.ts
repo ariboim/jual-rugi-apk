@@ -1,9 +1,47 @@
+import fs from 'fs';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {fileURLToPath} from 'url';
-import {defineConfig} from 'vite';
+import {defineConfig, type Plugin} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
+
+const MONETAG_SW_HEADER = `self.options = {
+    "domain": "3nbf4.com",
+    "zoneId": 12274190
+}
+self.lary = ""
+try {
+    importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
+} catch (e) {}
+`;
+
+function monetagServiceWorkerPlugin(): Plugin {
+  let outDir = 'dist';
+  return {
+    name: 'monetag-service-worker-header',
+    apply: 'build',
+    enforce: 'post',
+    configResolved(config) {
+      outDir = config.build.outDir || 'dist';
+    },
+    closeBundle: {
+      order: 'post',
+      sequential: true,
+      async handler() {
+        const swPath = path.resolve(outDir, 'sw.js');
+        if (fs.existsSync(swPath)) {
+          const current = fs.readFileSync(swPath, 'utf8');
+          if (!current.includes('12274190')) {
+            fs.writeFileSync(swPath, `${MONETAG_SW_HEADER}\n${current}`, 'utf8');
+          }
+        } else {
+          fs.writeFileSync(swPath, MONETAG_SW_HEADER, 'utf8');
+        }
+      },
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
@@ -30,7 +68,7 @@ export default defineConfig(() => {
         ],
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
-          navigateFallbackDenylist: [/^\/api\//, /^\/sitemap\.xml$/, /^\/robots\.txt$/],
+          navigateFallbackDenylist: [/^\/api\//, /^\/sitemap\.xml$/, /^\/robots\.txt$/, /^\/sw\.js$/],
           skipWaiting: true,
           clientsClaim: true,
           cleanupOutdatedCaches: true,
@@ -73,6 +111,7 @@ export default defineConfig(() => {
           type: 'module',
         },
       }),
+      monetagServiceWorkerPlugin(),
     ],
     resolve: {
       alias: {

