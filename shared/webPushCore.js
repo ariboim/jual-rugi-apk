@@ -41,22 +41,74 @@ function getRecentPushMap() {
   return globalThis.__JUALRUGI_RECENT_PUSH__;
 }
 
-export function getLatestPriorityAlert() {
-  const latest = globalThis.__JUALRUGI_LATEST_PRIORITY_ALERT__;
-  if (!latest) return null;
-  // Berlaku 15 menit untuk sinkronisasi tab web aktif
-  if (Date.now() - (latest.timestamp || 0) > 15 * 60 * 1000) {
-    return null;
+function normalizeIdentifierList(raw) {
+  const out = [];
+  const pushVal = (v) => {
+    const clean = String(v || '').trim().toLowerCase();
+    if (!clean || clean === 'guest' || clean === 'seller' || clean === 'member') return;
+    for (const part of clean.split('|')) {
+      const p = part.trim();
+      if (p && !out.includes(p)) out.push(p);
+    }
+  };
+  if (Array.isArray(raw)) {
+    raw.forEach(pushVal);
+  } else if (raw) {
+    pushVal(raw);
   }
-  return latest;
+  return out;
 }
 
-function recordLatestPriorityAlert(payload) {
-  globalThis.__JUALRUGI_LATEST_PRIORITY_ALERT__ = {
-    eventId: `${payload.listingId || 'bu'}-${payload.timestamp || Date.now()}`,
+function getPersonalAlertMap() {
+  if (!globalThis.__JUALRUGI_LATEST_PERSONAL_ALERTS__) {
+    globalThis.__JUALRUGI_LATEST_PERSONAL_ALERTS__ = new Map();
+  }
+  return globalThis.__JUALRUGI_LATEST_PERSONAL_ALERTS__;
+}
+
+export function getLatestPriorityAlert(userIdentifiers = null) {
+  const ids = normalizeIdentifierList(userIdentifiers);
+  const personalMap = getPersonalAlertMap();
+  let latestPersonal = null;
+
+  for (const id of ids) {
+    const candidate = personalMap.get(id);
+    if (candidate && Date.now() - (candidate.timestamp || 0) <= 15 * 60 * 1000) {
+      if (!latestPersonal || (candidate.timestamp || 0) > (latestPersonal.timestamp || 0)) {
+        latestPersonal = candidate;
+      }
+    }
+  }
+
+  const latestGlobal = globalThis.__JUALRUGI_LATEST_PRIORITY_ALERT__;
+  const validGlobal =
+    latestGlobal && Date.now() - (latestGlobal.timestamp || 0) <= 15 * 60 * 1000
+      ? latestGlobal
+      : null;
+
+  if (latestPersonal && validGlobal) {
+    return (latestPersonal.timestamp || 0) >= (validGlobal.timestamp || 0)
+      ? latestPersonal
+      : validGlobal;
+  }
+  return latestPersonal || validGlobal;
+}
+
+function recordLatestPriorityAlert(payload, targetUserIds = null) {
+  const enriched = {
+    eventId: `${payload.type || 'bu'}-${payload.listingId || 'notif'}-${payload.timestamp || Date.now()}`,
     ...payload,
   };
-  return globalThis.__JUALRUGI_LATEST_PRIORITY_ALERT__;
+  const ids = normalizeIdentifierList(targetUserIds);
+  if (ids.length > 0 && payload.type && payload.type !== 'priority_bu') {
+    const personalMap = getPersonalAlertMap();
+    for (const id of ids) {
+      personalMap.set(id, enriched);
+    }
+    return enriched;
+  }
+  globalThis.__JUALRUGI_LATEST_PRIORITY_ALERT__ = enriched;
+  return enriched;
 }
 
 export function uint8ArrayToBase64Url(bytes) {
@@ -681,6 +733,187 @@ export async function broadcastPriorityWebPush(input = {}, env = {}, localStore 
     failed,
     removedExpired,
     totalSubscribers: Math.max(0, subscriptions.length - removedExpired),
+    supabaseConfigured,
+    supabaseTableReady,
+    latestAlert,
+    errors: errors.length > 0 ? errors : undefined,
+    payloadSummary: {
+      title: payload.title,
+      url: payload.url,
+    },
+  };
+}
+
+export function buildEventPushPayload(input = {}) {
+  const eventType = String(input.eventType || input.type || 'priority_bu').trim();
+  if (eventType === 'priority_bu') {
+    return {
+      ...buildPriorityPushPayload(input),
+      eventType: 'priority_bu',
+    };
+  }
+
+  const siteOrigin = String(input.siteOrigin || 'https://jualrugi.my.id').replace(/\/+$/, '');
+  const cleanId = String(input.listingId || eventType).trim();
+  const cleanTitle = String(input.listingTitle || 'Iklan JualRugi.my.id').trim();
+  const timestamp = Number(input.timestamp || Date.now());
+
+  let title = input.title || '🔔 Pemberitahuan JualRugi.my.id';
+  let body = input.body || 'Ada pembaruan penting pada akun JualRugi.my.id Anda.';
+  let url = input.url || '/';
+  let adLink = input.adLink || `${siteOrigin}${url}`;
+  let tag = `jualrugi-${eventType}-${cleanId}`;
+
+  if (eventType === 'ad_published') {
+    const isEdit = Boolean(input.isEdit);
+    title = input.title || (isEdit ? `✅ Pembaruan Iklan Tayang: ${cleanTitle}` : `🎉 Iklan Resmi Tayang: ${cleanTitle}`);
+    body =
+      input.body ||
+      `Selamat ${input.recipientName || 'Juragan'}, ${isEdit ? 'perubahan iklan' : 'iklan'} "${cleanTitle}" resmi tayang di JualRugi.my.id!`;
+    url = input.url || `/?id=${encodeURIComponent(cleanId)}`;
+    adLink = input.adLink || `${siteOrigin}/?id=${encodeURIComponent(cleanId)}`;
+  } else if (eventType === 'quota_activated') {
+    const added = Number(input.addedQuota || 1);
+    const total = Number(input.newTotalQuota || added);
+    title = input.title || `⚡ +${added} Kuota Iklan Sudah Aktif!`;
+    body =
+      input.body ||
+      `Selamat ${input.recipientName || 'Juragan'}, kuota iklan Anda telah diperbarui (+${added}, total ${total} slot). Silakan pasang iklan Anda sekarang!`;
+    url = input.url || '/?action=post';
+    adLink = input.adLink || `${siteOrigin}/?action=post`;
+  } else if (eventType === 'ad_takedown') {
+    const reason = String(input.takedownReason || 'Pelanggaran SOP / laporan pembeli terverifikasi').trim();
+    title = input.title || `🚨 Iklan Di-Take Down Admin: ${cleanTitle}`;
+    body =
+      input.body ||
+      `Iklan "${cleanTitle}" (${cleanId}) dihapus permanen. Alasan: ${reason}. Kuota iklan tidak dikembalikan.`;
+    url = input.url || `/?status=takedown&id=${encodeURIComponent(cleanId)}`;
+    adLink = input.adLink || `${siteOrigin}/?status=takedown&id=${encodeURIComponent(cleanId)}`;
+  }
+
+  return {
+    source: 'jualrugi-webpush',
+    type: eventType,
+    eventType,
+    listingId: cleanId,
+    listingTitle: cleanTitle,
+    title,
+    body,
+    icon: '/pwa-192x192.png',
+    badge: '/favicon.png',
+    tag,
+    url,
+    adLink,
+    timestamp,
+    isTest: Boolean(input.isTest),
+  };
+}
+
+/**
+ * Mengirim Native Web Push untuk event personal/umum:
+ * - ad_published (Iklan Tayang -> target seller / device aktif)
+ * - quota_activated (Aktivasi Kuota Iklan -> target pembeli kuota / device aktif)
+ * - ad_takedown (Take Down Laporan Buyer -> target seller / device aktif)
+ * - priority_bu (Iklan Prioritas BU -> seluruh subscriber)
+ */
+export async function broadcastEventWebPush(input = {}, env = {}, localStore = null, clientConfig = null) {
+  const eventType = String(input.eventType || input.type || 'priority_bu').trim();
+  if (eventType === 'priority_bu') {
+    return broadcastPriorityWebPush(input, env, localStore, clientConfig);
+  }
+
+  const payload = buildEventPushPayload(input);
+  const targetIdentifiers = normalizeIdentifierList([
+    input.targetUserId,
+    input.userId,
+    input.sellerId,
+    input.recipientEmail,
+    input.targetEmail,
+  ]);
+  const latestAlert = recordLatestPriorityAlert(payload, targetIdentifiers);
+
+  const resolvedClientConfig = clientConfig || input.supabaseConfig || null;
+  const fallbackSubRaw = input.fallbackSubscription || input.currentSubscription || null;
+  const normalizedFallback = normalizeRecord(fallbackSubRaw);
+  if (normalizedFallback) {
+    await upsertPushSubscription(
+      normalizedFallback,
+      env,
+      localStore,
+      resolvedClientConfig
+    ).catch(() => {});
+  }
+
+  const { subscriptions: listedSubs, supabaseConfigured, supabaseTableReady } = await listPushSubscriptions(
+    env,
+    localStore,
+    resolvedClientConfig
+  );
+
+  let targetSubs = [];
+  if (targetIdentifiers.length > 0) {
+    targetSubs = listedSubs.filter((sub) => {
+      const subIds = normalizeIdentifierList(sub.userId);
+      return subIds.some((id) => targetIdentifiers.includes(id));
+    });
+  }
+
+  if (normalizedFallback && !targetSubs.some((s) => s.endpoint === normalizedFallback.endpoint)) {
+    if (targetSubs.length === 0 || input.includeFallback !== false) {
+      targetSubs.push(normalizedFallback);
+    }
+  }
+
+  if (targetSubs.length === 0) {
+    return {
+      attempted: true,
+      eventType,
+      sent: 0,
+      failed: 0,
+      removedExpired: 0,
+      totalSubscribers: listedSubs.length,
+      matchedSubscribers: 0,
+      supabaseConfigured,
+      supabaseTableReady,
+      latestAlert,
+      message: 'Belum ada perangkat target yang mengaktifkan izin Push Notifikasi OS.',
+    };
+  }
+
+  const results = await Promise.allSettled(
+    targetSubs.map((sub) => sendSingleWebPush(sub, payload, env))
+  );
+
+  let sent = 0;
+  let failed = 0;
+  let removedExpired = 0;
+  const errors = [];
+
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const sub = targetSubs[i];
+    if (r.status === 'fulfilled' && r.value?.ok) {
+      sent++;
+    } else {
+      failed++;
+      const errMsg =
+        r.status === 'fulfilled' ? r.value?.error : r.reason?.message || 'Unknown push error';
+      if (errors.length < 3) errors.push(errMsg);
+      if (r.status === 'fulfilled' && r.value?.expired) {
+        removedExpired++;
+        await deletePushSubscription(sub.endpoint, env, localStore, resolvedClientConfig);
+      }
+    }
+  }
+
+  return {
+    attempted: true,
+    eventType,
+    sent,
+    failed,
+    removedExpired,
+    totalSubscribers: listedSubs.length,
+    matchedSubscribers: targetSubs.length,
     supabaseConfigured,
     supabaseTableReady,
     latestAlert,

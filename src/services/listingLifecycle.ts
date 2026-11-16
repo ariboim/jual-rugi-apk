@@ -7,6 +7,117 @@ export const LISTING_LIFESPAN_DAYS = 30;
 export const LISTING_LIFESPAN_MS = LISTING_LIFESPAN_DAYS * 24 * 60 * 60 * 1000;
 
 /**
+ * Durasi Promosi Berbayar:
+ * - Sundul Iklan (Rp 50.000): 24 jam sejak diaktifkan Admin
+ * - BU Prioritas / PALING BU (Rp 250.000): 7 hari sejak diaktivasi Admin
+ */
+export const SUNDUL_DURATION_MS = 24 * 60 * 60 * 1000;
+export const PRIORITY_BU_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+
+const PROMO_EXPIRIES_STORAGE_KEY = 'jualrugi_promo_expiries';
+
+export interface SavedPromoExpiry {
+  isSuperBU?: boolean;
+  superBUActivatedAt?: string;
+  superBUExpiresAt?: string;
+  sundulAt?: string;
+  sundulExpiresAt?: string;
+}
+
+export function getSavedPromoExpiries(): Record<string, SavedPromoExpiry> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(PROMO_EXPIRIES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveListingPromoExpiry(listingId: string, patch: SavedPromoExpiry): void {
+  if (typeof window === 'undefined' || !listingId) return;
+  try {
+    const all = getSavedPromoExpiries();
+    all[listingId] = {
+      ...(all[listingId] || {}),
+      ...patch,
+    };
+    localStorage.setItem(PROMO_EXPIRIES_STORAGE_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+export function applySavedPromoExpiries(listings: Listing[]): Listing[] {
+  const saved = getSavedPromoExpiries();
+  return listings.map((item) => {
+    const promo = saved[item.id];
+    const hasPriorityFlag = Boolean(
+      item.isSuperBU || (item as any).is_priority || (item as any).is_super_bu
+    );
+
+    let next: Listing = { ...item };
+    if (promo) {
+      if (promo.superBUActivatedAt) next.superBUActivatedAt = promo.superBUActivatedAt;
+      if (promo.superBUExpiresAt) next.superBUExpiresAt = promo.superBUExpiresAt;
+      if (typeof promo.isSuperBU === 'boolean') next.isSuperBU = promo.isSuperBU;
+      if (promo.sundulAt) next.sundulAt = promo.sundulAt;
+      if (promo.sundulExpiresAt) next.sundulExpiresAt = promo.sundulExpiresAt;
+    } else if (hasPriorityFlag && !next.superBUExpiresAt) {
+      next.isSuperBU = true;
+    }
+    return next;
+  });
+}
+
+export function isSundulActive(listing: Listing, nowMs: number = Date.now()): boolean {
+  if (!listing?.sundulAt) return false;
+  if (listing.status && listing.status !== 'active') return false;
+  const expiryMs = listing.sundulExpiresAt
+    ? new Date(listing.sundulExpiresAt).getTime()
+    : new Date(listing.sundulAt).getTime() + SUNDUL_DURATION_MS;
+  if (Number.isNaN(expiryMs)) return true;
+  return expiryMs > nowMs;
+}
+
+export function isPriorityBUActive(listing: Listing, nowMs: number = Date.now()): boolean {
+  const flagged = Boolean(
+    listing?.isSuperBU || (listing as any)?.is_priority || (listing as any)?.is_super_bu
+  );
+  if (!flagged) return false;
+  if (listing.status === 'expired' || listing.status === 'deleted') return false;
+  if (listing.superBUExpiresAt) {
+    const expMs = new Date(listing.superBUExpiresAt).getTime();
+    if (!Number.isNaN(expMs) && expMs <= nowMs) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function getRemainingPromoTimeLabel(
+  expiresAt?: string,
+  fallbackFrom?: string,
+  durationMs: number = PRIORITY_BU_DURATION_MS
+): string {
+  const targetMs = expiresAt
+    ? new Date(expiresAt).getTime()
+    : fallbackFrom
+    ? new Date(fallbackFrom).getTime() + durationMs
+    : NaN;
+  if (Number.isNaN(targetMs)) {
+    return durationMs >= PRIORITY_BU_DURATION_MS ? '7 Hari Aktif' : '24 Jam Aktif';
+  }
+  const diff = targetMs - Date.now();
+  if (diff <= 0) return 'Berakhir';
+  const totalHours = Math.ceil(diff / (1000 * 60 * 60));
+  if (totalHours >= 24) {
+    const days = Math.floor(totalHours / 24);
+    const remHours = totalHours % 24;
+    return remHours > 0 ? `${days}h ${remHours}j lagi` : `${days} hari lagi`;
+  }
+  return `${totalHours} jam lagi`;
+}
+
+/**
  * ============================================================================
  * 4. AUTO-SEEDING / MOCK IKLAN TERJUAL (MINIMAL 3 IKLAN ORGANIK PER HARI)
  * ============================================================================
@@ -158,12 +269,28 @@ export function checkAndExpireListings(
       return expiredItem;
     }
 
+    // Bersihkan status Sundul (24 jam) & BU Prioritas (7 hari) jika sudah melewati masa berlaku
+    let cleaned = listing;
+    if (cleaned.sundulAt && !isSundulActive(cleaned, now)) {
+      cleaned = {
+        ...cleaned,
+        sundulAt: undefined,
+        sundulExpiresAt: undefined,
+      };
+    }
+    if (cleaned.isSuperBU && !isPriorityBUActive(cleaned, now)) {
+      cleaned = {
+        ...cleaned,
+        isSuperBU: false,
+      };
+    }
+
     // Default status active
     return {
-      ...listing,
-      status: listing.status || 'active',
+      ...cleaned,
+      status: cleaned.status || 'active',
       expiresAt:
-        listing.expiresAt || new Date(createdTime + LISTING_LIFESPAN_MS).toISOString(),
+        cleaned.expiresAt || new Date(createdTime + LISTING_LIFESPAN_MS).toISOString(),
     };
   });
 

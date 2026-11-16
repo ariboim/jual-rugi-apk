@@ -13,7 +13,14 @@ function getOptionalSupabaseConfig() {
   return undefined;
 }
 
+export type WebPushEventType = 'priority_bu' | 'ad_published' | 'quota_activated' | 'ad_takedown';
+
 export interface PriorityWebAlertPayload {
+  type?: WebPushEventType;
+  eventType?: WebPushEventType;
+  eventId?: string;
+  targetUserId?: string;
+  targetEmail?: string;
   listingId: string;
   listingTitle: string;
   title: string;
@@ -34,8 +41,9 @@ export const PRIORITY_ALERT_CHANNEL = 'jualrugi-priority-alerts';
 export function emitLocalPriorityWebAlert(
   input: Partial<PriorityWebAlertPayload> & { listingId: string; listingTitle: string }
 ): PriorityWebAlertPayload {
-  const cleanId = String(input.listingId || 'bu-prioritas').trim();
-  const cleanTitle = String(input.listingTitle || 'Barang BU Prioritas Baru').trim();
+  const eventType: WebPushEventType = input.eventType || input.type || 'priority_bu';
+  const cleanId = String(input.listingId || (eventType === 'quota_activated' ? 'quota-activation' : 'bu-prioritas')).trim();
+  const cleanTitle = String(input.listingTitle || 'Pemberitahuan JualRugi.my.id').trim();
   const sellingPrice = Number(input.sellingPrice || 0);
   const discountPercentage = Number(input.discountPercentage || 0);
   const location = String(input.location || 'Indonesia (COD Aman)').trim();
@@ -43,19 +51,42 @@ export function emitLocalPriorityWebAlert(
     sellingPrice > 0 ? `Rp ${sellingPrice.toLocaleString('id-ID')}` : 'Harga BU Spesial';
   const discLabel = discountPercentage > 0 ? ` • Hemat ${discountPercentage}%` : '';
 
+  let defaultTitle = `🔥 BU PRIORITAS: ${cleanTitle}`;
+  let defaultBody = `${priceLabel}${discLabel} • COD ${location}. Klik untuk cek & tawar sebelum terjual!`;
+  let defaultUrl = `/?id=${encodeURIComponent(cleanId)}`;
+  let defaultAdLink = `https://jualrugi.my.id/?id=${encodeURIComponent(cleanId)}`;
+
+  if (eventType === 'ad_published') {
+    defaultTitle = `🎉 Iklan Resmi Tayang: ${cleanTitle}`;
+    defaultBody = `Selamat! Iklan "${cleanTitle}" sudah aktif tayang di JualRugi.my.id.`;
+  } else if (eventType === 'quota_activated') {
+    defaultTitle = '⚡ Kuota Iklan Sudah Aktif!';
+    defaultBody = 'Selamat kuota iklan Anda telah diperbarui. Silakan pasang iklan Anda sekarang!';
+    defaultUrl = '/?action=post';
+    defaultAdLink = 'https://jualrugi.my.id/?action=post';
+  } else if (eventType === 'ad_takedown') {
+    defaultTitle = `🚨 Iklan Di-Take Down Admin: ${cleanTitle}`;
+    defaultBody = `Iklan "${cleanTitle}" dihapus permanen karena laporan pembeli terverifikasi. Kuota iklan tidak dikembalikan.`;
+    defaultUrl = `/?status=takedown&id=${encodeURIComponent(cleanId)}`;
+    defaultAdLink = `https://jualrugi.my.id/?status=takedown&id=${encodeURIComponent(cleanId)}`;
+  }
+
   const alertPayload: PriorityWebAlertPayload = {
+    type: eventType,
+    eventType,
+    eventId: input.eventId || `${eventType}-${cleanId}-${Number(input.timestamp || Date.now())}`,
+    targetUserId: input.targetUserId,
+    targetEmail: input.targetEmail,
     listingId: cleanId,
     listingTitle: cleanTitle,
-    title: input.title || `🔥 BU PRIORITAS: ${cleanTitle}`,
-    body:
-      input.body ||
-      `${priceLabel}${discLabel} • COD ${location}. Klik untuk cek & tawar sebelum terjual!`,
+    title: input.title || defaultTitle,
+    body: input.body || defaultBody,
     sellingPrice: sellingPrice || undefined,
     discountPercentage: discountPercentage || undefined,
     location,
     image: input.image,
-    adLink: input.adLink || `https://jualrugi.my.id/?id=${encodeURIComponent(cleanId)}`,
-    url: input.url || `/?id=${encodeURIComponent(cleanId)}`,
+    adLink: input.adLink || defaultAdLink,
+    url: input.url || defaultUrl,
     timestamp: Number(input.timestamp || Date.now()),
     isTest: Boolean(input.isTest),
   };
@@ -76,9 +107,16 @@ export function emitLocalPriorityWebAlert(
   return alertPayload;
 }
 
-export async function fetchLatestPriorityWebAlert(): Promise<PriorityWebAlertPayload | null> {
+export async function fetchLatestPriorityWebAlert(
+  userId?: string,
+  email?: string
+): Promise<PriorityWebAlertPayload | null> {
   try {
-    const res = await fetch('/api/push/latest');
+    const params = new URLSearchParams();
+    if (userId && userId !== 'guest') params.set('userId', userId);
+    if (email) params.set('email', email);
+    const qs = params.toString();
+    const res = await fetch(qs ? `/api/push/latest?${qs}` : '/api/push/latest');
     if (!res.ok) return null;
     const data = await res.json().catch(() => null);
     if (data?.alert?.listingId) {

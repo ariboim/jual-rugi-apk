@@ -16,7 +16,12 @@ import {
 import { sendFonnteWhatsApp, normalizeWhatsAppNumber } from './fonnteService';
 import { getStoredUsers } from './userService';
 import { getSupabaseCredentials, isSupabaseConfigured } from './supabase';
-import { getCurrentBrowserPushSubscriptionJson } from './notificationService';
+import {
+  getCurrentBrowserPushSubscriptionJson,
+  emitLocalPriorityWebAlert,
+  triggerEventWebPush,
+  sendSystemPushNotification,
+} from './notificationService';
 
 // =============================================================================
 // [1. KONFIGURASI URL IKLAN LANGSUNG]
@@ -46,6 +51,7 @@ export interface AdPublishedEmailPayload {
   listingId: string;
   listingTitle: string;
   recipientEmail: string;
+  userId?: string;
   recipientPhone?: string;
   whatsapp?: string;
   recipientName?: string;

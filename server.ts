@@ -10,6 +10,7 @@ import { generateDynamicSitemap } from './src/services/sitemapService';
 import { INITIAL_LISTINGS } from './src/data/initialData';
 import {
   PUSH_SUBSCRIPTIONS_SQL,
+  broadcastEventWebPush,
   broadcastPriorityWebPush,
   deletePushSubscription,
   getLatestPriorityAlert,
@@ -582,10 +583,33 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
             }
           }
 
+          // C. Kirim Native Web Push Notification untuk event "Iklan Tayang"
+          const clientSupabaseCfg =
+            req.body?.supabaseConfig || extractPushClientSupabaseConfig(req);
+          const requestOrigin = `${req.protocol}://${req.get('host') || 'jualrugi.my.id'}`;
+          const webPushSummary = await broadcastEventWebPush(
+            {
+              eventType: 'ad_published',
+              listingId: cleanListingId,
+              listingTitle: targetTitle,
+              recipientName: userName,
+              recipientEmail: targetEmail,
+              targetUserId: req.body?.targetUserId || req.body?.userId,
+              targetEmail: targetEmail,
+              isEdit: Boolean(isEdit),
+              adLink: directAdLink,
+              siteOrigin: requestOrigin,
+              fallbackSubscription: req.body?.fallbackSubscription || req.body?.currentSubscription,
+            },
+            process.env,
+            pushLocalStore,
+            clientSupabaseCfg
+          ).catch((e: any) => ({ attempted: true, sent: 0, error: e?.message }));
+
           if (brevoRes.ok) {
             return res.status(200).json({
               success: true,
-              message: `Notifikasi "Iklan Tayang" berhasil dikirim (Email: Terkirim, WA: ${fonnteResult ? 'Terkirim' : 'Sesuai Nomor'})!`,
+              message: `Notifikasi "Iklan Tayang" berhasil dikirim (Email: Terkirim, WA: ${fonnteResult ? 'Terkirim' : 'Sesuai Nomor'}, Web Push: ${webPushSummary?.sent || 0} perangkat)!`,
               sentTo: targetEmail,
               listingId,
               adLink,
@@ -593,6 +617,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
               provider: 'brevo_and_fonnte',
               messageId: brevoData.messageId,
               whatsapp: fonnteResult,
+              webPush: webPushSummary,
             });
           } else {
             console.error(`[Brevo Error]: Status ${brevoRes.status}`, brevoData);
@@ -601,6 +626,7 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
               error: `Brevo API menolak pengiriman (Status ${brevoRes.status}): ${brevoData.message || 'Terjadi kesalahan pada akun Brevo.'}`,
               details: brevoData,
               whatsapp: fonnteResult,
+              webPush: webPushSummary,
             });
           }
         } catch (dispatchErr: any) {
@@ -947,10 +973,12 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
     });
   });
 
-  app.get('/api/push/latest', (_req, res) => {
+  app.get('/api/push/latest', (req, res) => {
+    const userId = typeof req.query.userId === 'string' ? req.query.userId : '';
+    const email = typeof req.query.email === 'string' ? req.query.email : '';
     return res.json({
       success: true,
-      alert: getLatestPriorityAlert(),
+      alert: getLatestPriorityAlert([userId, email]),
     });
   });
 
@@ -1054,6 +1082,32 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       return res.status(500).json({
         success: false,
         error: err.message || 'Gagal mengirim Web Push notifikasi.',
+      });
+    }
+  });
+
+  app.post('/api/push/send-event', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const requestOrigin = `${req.protocol}://${req.get('host') || 'jualrugi.my.id'}`;
+      const clientConfig = extractPushClientSupabaseConfig(req);
+      const summary = await broadcastEventWebPush(
+        {
+          ...body,
+          siteOrigin: body.siteOrigin || requestOrigin,
+        },
+        process.env,
+        pushLocalStore,
+        clientConfig
+      );
+      return res.json({
+        success: true,
+        ...summary,
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal mengirim Web Push notifikasi event.',
       });
     }
   });
@@ -1290,11 +1344,36 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         }
       }
 
+      // 3. Kirim Native Web Push Notification untuk event Aktivasi Kuota Iklan
+      const clientSupabaseCfg =
+        req.body?.supabaseConfig || extractPushClientSupabaseConfig(req);
+      const requestOrigin = `${req.protocol}://${req.get('host') || 'jualrugi.my.id'}`;
+      const webPushSummary = await broadcastEventWebPush(
+        {
+          eventType: 'quota_activated',
+          listingId: 'quota-activation',
+          listingTitle: `Aktivasi +${quotaNum} Kuota Iklan`,
+          recipientName: userName,
+          recipientEmail: targetEmail,
+          targetUserId: req.body?.targetUserId || req.body?.userId,
+          targetEmail: targetEmail,
+          addedQuota: quotaNum,
+          newTotalQuota: totalNum,
+          adLink: postLink,
+          siteOrigin: requestOrigin,
+          fallbackSubscription: req.body?.fallbackSubscription || req.body?.currentSubscription,
+        },
+        process.env,
+        pushLocalStore,
+        clientSupabaseCfg
+      ).catch((e: any) => ({ attempted: true, sent: 0, error: e?.message }));
+
       return res.status(200).json({
         success: true,
-        message: `Double notifikasi kuota iklan diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Tercatat'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Tercatat'}).`,
+        message: `Notifikasi kuota iklan diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Tercatat'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Tercatat'}, Web Push: ${webPushSummary?.sent || 0} perangkat).`,
         email: { sentTo: targetEmail, success: brevoSuccess, detail: brevoResult },
         whatsapp: { sentTo: targetPhone, success: fonnteSuccess, detail: fonnteResult },
+        webPush: webPushSummary,
       });
     } catch (err: any) {
       console.error('[Server - Quota Notification Exception]:', err);
@@ -1500,11 +1579,35 @@ Team Admin jualrugi.my.id`;
         }
       }
 
+      // 3. Kirim Native Web Push Notification untuk event Take Down Iklan
+      const clientSupabaseCfg =
+        req.body?.supabaseConfig || extractPushClientSupabaseConfig(req);
+      const requestOrigin = `${req.protocol}://${req.get('host') || 'jualrugi.my.id'}`;
+      const webPushSummary = await broadcastEventWebPush(
+        {
+          eventType: 'ad_takedown',
+          listingId: adId,
+          listingTitle: title,
+          recipientName: userName,
+          recipientEmail: targetEmail,
+          sellerId: userId,
+          targetUserId: req.body?.targetUserId || userId,
+          targetEmail: targetEmail,
+          takedownReason: reason,
+          siteOrigin: requestOrigin,
+          fallbackSubscription: req.body?.fallbackSubscription || req.body?.currentSubscription,
+        },
+        process.env,
+        pushLocalStore,
+        clientSupabaseCfg
+      ).catch((e: any) => ({ attempted: true, sent: 0, error: e?.message }));
+
       return res.status(200).json({
         success: true,
-        message: `Double notifikasi take down diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Tercatat'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Tercatat'}).`,
+        message: `Notifikasi take down diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Tercatat'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Tercatat'}, Web Push: ${webPushSummary?.sent || 0} perangkat).`,
         email: { sentTo: targetEmail, success: brevoSuccess, detail: brevoResult },
         whatsapp: { sentTo: targetPhone, success: fonnteSuccess, detail: fonnteResult },
+        webPush: webPushSummary,
       });
     } catch (err: any) {
       console.error('[Server - Take Down Notification Exception]:', err);
@@ -1567,12 +1670,12 @@ Team Admin jualrugi.my.id`;
     const pricingMap: Record<string, { name: string; amount: number; baseUrl: string }> = {
       sundul: {
         name: 'Sundul Iklan',
-        amount: 25000,
+        amount: 50000,
         baseUrl: 'https://jualrugi.mayar.link/pl/sundul-iklan',
       },
       prioritas_bu: {
         name: 'Prioritas BU Banget',
-        amount: 75000,
+        amount: 250000,
         baseUrl: 'https://jualrugi.mayar.link/pl/prioritas-bu-banget',
       },
     };
@@ -1640,16 +1743,31 @@ Team Admin jualrugi.my.id`;
         transactionId,
         packageType,
         listingId,
-        amount: payload?.data?.amount || (packageType === 'sundul' ? 25000 : 75000),
+        amount: payload?.data?.amount || (packageType === 'sundul' ? 50000 : 250000),
         processedAt: new Date().toISOString(),
       });
 
       // Tandai transaksi telah selesai diproses untuk mencegah replikasi
       processedMayarTransactions.add(transactionId);
 
+      // Trigger Web Push untuk aktivasi kuota otomatis via webhook Mayar
+      broadcastEventWebPush(
+        {
+          eventType: 'quota_activated',
+          listingId: listingId || 'quota-activation',
+          listingTitle: `Aktivasi +1 Kuota Iklan (${packageType === 'sundul' ? 'Sundul 24 Jam' : 'BU Prioritas 7 Hari'})`,
+          targetUserId,
+          targetEmail: payload?.data?.customer_email || payload?.data?.email,
+          addedQuota: 1,
+          newTotalQuota: userData.quota,
+        },
+        process.env,
+        pushLocalStore
+      ).catch(() => {});
+
       console.log(
         `✅ [Mayar Webhook] Pembayaran ${packageType} Rp ${
-          packageType === 'sundul' ? '25.000' : '75.000'
+          packageType === 'sundul' ? '50.000' : '250.000'
         } diverifikasi. Kuota user ${targetUserId} bertambah +1 (Total kuota: ${userData.quota}).`
       );
 

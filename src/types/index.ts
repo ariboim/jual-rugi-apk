@@ -63,8 +63,10 @@ export interface Listing {
   photoAngles?: PhotoAngle[];
   photos?: ProductPhoto[];
   isSuperBU: boolean;
+  superBUActivatedAt?: string;
   superBUExpiresAt?: string;
   sundulAt?: string;
+  sundulExpiresAt?: string;
   createdAt: string; // ISO string for sorting & "Sundul"
   expiresAt?: string; // Masa tayang 30 hari (createdAt + 30 days)
   soldAt?: string; // Tanggal terjual jika status === 'sold'
@@ -121,7 +123,7 @@ export type MonetizationPackage = 'sundul' | 'prioritas_bu';
 export interface MayarProductConfig {
   id: MonetizationPackage;
   name: string;
-  price: number; // 25000 or 75000
+  price: number; // 50000 (Sundul 24 jam) or 250000 (BU Prioritas 7 hari)
   paymentUrl: string;
   description: string;
   features: string[];

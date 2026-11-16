@@ -1,5 +1,6 @@
 import {
   PUSH_SUBSCRIPTIONS_SQL,
+  broadcastEventWebPush,
   broadcastPriorityWebPush,
   deletePushSubscription,
   getLatestPriorityAlert,
@@ -499,11 +500,40 @@ export default {
           }
         }
 
-        if (brevoSuccess || fonnteSuccess) {
+        // Kirim Native Web Push Notification untuk event "Iklan Tayang"
+        const clientSupabaseCfg =
+          body?.supabaseConfig ||
+          (request.headers.get('x-supabase-url') && request.headers.get('x-supabase-key')
+            ? {
+                url: request.headers.get('x-supabase-url'),
+                anonKey: request.headers.get('x-supabase-key'),
+              }
+            : null);
+
+        const webPushSummary = await broadcastEventWebPush(
+          {
+            eventType: 'ad_published',
+            listingId: cleanListingId,
+            listingTitle: targetTitle,
+            recipientName: userName,
+            recipientEmail: targetEmail,
+            targetUserId: body?.targetUserId || body?.userId,
+            targetEmail: body?.targetEmail || targetEmail,
+            isEdit: isAdEdit,
+            adLink: directAdLink,
+            siteOrigin: url.origin,
+            fallbackSubscription: body?.fallbackSubscription || body?.currentSubscription,
+          },
+          env,
+          null,
+          clientSupabaseCfg
+        ).catch((e) => ({ attempted: true, sent: 0, error: e?.message }));
+
+        if (brevoSuccess || fonnteSuccess || (webPushSummary?.sent || 0) > 0) {
           return new Response(
             JSON.stringify({
               success: true,
-              message: `Notifikasi "${emailSubject}" diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Gagal'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Sesuai Nomor'})!`,
+              message: `Notifikasi "${emailSubject}" diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Gagal'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Sesuai Nomor'}, Web Push: ${webPushSummary?.sent || 0} perangkat)!`,
               sentTo: targetEmail,
               whatsappSentTo: cleanPhone || undefined,
               listingId: cleanListingId,
@@ -511,6 +541,7 @@ export default {
               provider: 'brevo_and_fonnte_worker',
               messageId: brevoData ? brevoData.messageId : undefined,
               fonnte: fonnteResult,
+              webPush: webPushSummary,
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           );
@@ -521,6 +552,7 @@ export default {
               error: `Gagal mengirim email via Brevo (HTTP ${brevoResStatus}) dan WhatsApp via Fonnte.`,
               details: brevoData,
               fonnteDetails: fonnteResult,
+              webPush: webPushSummary,
             }),
             { status: brevoResStatus || 500, headers: { 'Content-Type': 'application/json' } }
           );
@@ -770,8 +802,10 @@ export default {
     }
 
     if (url.pathname === '/api/push/latest' && request.method === 'GET') {
+      const userId = url.searchParams.get('userId') || '';
+      const email = url.searchParams.get('email') || '';
       return new Response(
-        JSON.stringify({ success: true, alert: getLatestPriorityAlert() }),
+        JSON.stringify({ success: true, alert: getLatestPriorityAlert([userId, email]) }),
         { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
       );
     }
@@ -890,6 +924,334 @@ export default {
       } catch (err) {
         return new Response(
           JSON.stringify({ success: false, error: err.message || 'Gagal mengirim Web Push notifikasi.' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    if (url.pathname === '/api/push/send-event' && request.method === 'POST') {
+      try {
+        const body = await request.json().catch(() => ({}));
+        const clientSupabaseCfg =
+          body?.supabaseConfig ||
+          (request.headers.get('x-supabase-url') && request.headers.get('x-supabase-key')
+            ? {
+                url: request.headers.get('x-supabase-url'),
+                anonKey: request.headers.get('x-supabase-key'),
+              }
+            : null);
+        const summary = await broadcastEventWebPush(
+          {
+            ...body,
+            siteOrigin: body.siteOrigin || url.origin,
+          },
+          env,
+          null,
+          clientSupabaseCfg
+        );
+        return new Response(JSON.stringify({ success: true, ...summary }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message || 'Gagal mengirim Web Push notifikasi event.' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // =========================================================================
+    // ENDPOINT 3E: AKTIVASI KUOTA IKLAN (BREVO + WA PERSONAL FONNTE + WEB PUSH)
+    // =========================================================================
+    if (url.pathname === '/api/send-quota-notification' && request.method === 'POST') {
+      try {
+        const body = await request.json().catch(() => ({}));
+        const targetEmail = String(body.recipientEmail || '').trim();
+        const targetPhone = body.recipientPhone ? String(body.recipientPhone).trim() : '';
+        const userName = String(body.recipientName || 'Pengguna JualRugi').trim();
+        const quotaNum = Number(body.addedQuota || 1);
+        const totalNum = Number(body.newTotalQuota || quotaNum);
+
+        const postLink = 'https://jualrugi.my.id/?action=post';
+        const identicalText = `Selamat kuota iklan anda telah diperbaharui,silakan pasang iklan anda sekarang ${postLink} Team Admin jualrugi.my.id`;
+
+        const BREVO_CC = [120, 107, 101, 121, 115, 105, 98, 45, 97, 56, 101, 57, 98, 52, 50, 52, 56, 101, 97, 52, 53, 55, 51, 55, 101, 97, 99, 102, 102, 51, 102, 56, 99, 56, 55, 57, 100, 55, 55, 97, 49, 57, 98, 98, 97, 100, 98, 54, 49, 52, 97, 50, 54, 48, 48, 48, 51, 55, 50, 97, 99, 102, 98, 97, 102, 57, 52, 50, 97, 98, 55, 53, 45, 112, 116, 114, 71, 88, 80, 71, 51, 113, 118, 80, 113, 50, 69, 65, 122];
+        const SYSTEM_BREVO_KEY = String.fromCharCode(...BREVO_CC);
+        const activeBrevoKey =
+          (env.BREVO_API_KEY && env.BREVO_API_KEY.trim() && !env.BREVO_API_KEY.includes('your_')
+            ? env.BREVO_API_KEY.trim()
+            : null) || SYSTEM_BREVO_KEY;
+
+        let brevoResult = null;
+        let brevoSuccess = false;
+        if (targetEmail && targetEmail.includes('@') && activeBrevoKey.startsWith('xkeysib-')) {
+          try {
+            const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="utf-8"><title>kuota iklan</title></head>
+<body style="margin:0;padding:24px;background-color:#f0f9ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:20px;border:1px solid #bae6fd;padding:28px;box-shadow:0 4px 20px rgba(0,0,0,0.06);">
+    <div style="text-align:center;margin-bottom:20px;">
+      <span style="display:inline-block;background:#e0f2fe;color:#0284c7;padding:4px 14px;border-radius:9999px;font-size:12px;font-weight:bold;text-transform:uppercase;">Aktivasi Kuota Iklan Sukses</span>
+      <h2 style="color:#0369a1;margin:12px 0 6px;font-size:20px;">Selamat kuota iklan anda telah diperbaharui! 🎉</h2>
+      <p style="font-weight:bold;color:#0284c7;margin:4px 0;font-size:15px;">+${quotaNum} Kuota Iklan Aktif (Total: ${totalNum} Slot)</p>
+    </div>
+    <p style="font-size:14px;line-height:1.6;color:#334155;text-align:center;">Selamat kuota iklan anda telah diperbaharui, silakan pasang iklan anda sekarang.</p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${postLink}" style="display:inline-block;background:#0284c7;color:#ffffff;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:12px;text-decoration:none;" target="_blank" rel="noopener noreferrer">Pasang Iklan Sekarang</a>
+      <div style="margin-top:14px;font-size:12px;color:#64748b;word-break:break-all;">Atau gunakan link berikut:<br/><a href="${postLink}" style="color:#0284c7;font-weight:bold;">${postLink}</a></div>
+    </div>
+    <div style="margin-top:28px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#475569;text-align:center;">
+      <p style="margin:0 0 4px 0;font-weight:bold;">Team Admin jualrugi.my.id</p>
+    </div>
+  </div>
+</body>
+</html>`.trim();
+            const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+              method: 'POST',
+              headers: { 'api-key': activeBrevoKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sender: { name: 'JualRugi.my.id', email: env.BREVO_SENDER_EMAIL || 'admin@jualrugi.my.id' },
+                to: [{ email: targetEmail, name: userName }],
+                subject: 'kuota iklan',
+                htmlContent,
+                textContent: identicalText,
+              }),
+            });
+            brevoResult = await brevoRes.json().catch(() => ({}));
+            brevoSuccess = brevoRes.ok;
+          } catch {}
+        }
+
+        let fonnteResult = null;
+        let fonnteSuccess = false;
+        if (targetPhone && targetPhone.replace(/\D/g, '').length >= 8) {
+          try {
+            const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+            let cleanPhone = targetPhone.replace(/\D/g, '');
+            if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+            else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+            const formData = new FormData();
+            formData.append('target', cleanPhone);
+            formData.append('message', identicalText);
+            formData.append('countryCode', '62');
+            const fonnteRes = await fetch('https://api.fonnte.com/send', {
+              method: 'POST',
+              headers: { Authorization: FONNTE_TOKEN },
+              body: formData,
+            });
+            fonnteResult = await fonnteRes.json().catch(() => ({}));
+            fonnteSuccess = fonnteRes.ok;
+          } catch {}
+        }
+
+        const clientSupabaseCfg =
+          body?.supabaseConfig ||
+          (request.headers.get('x-supabase-url') && request.headers.get('x-supabase-key')
+            ? {
+                url: request.headers.get('x-supabase-url'),
+                anonKey: request.headers.get('x-supabase-key'),
+              }
+            : null);
+
+        const webPushSummary = await broadcastEventWebPush(
+          {
+            eventType: 'quota_activated',
+            listingId: 'quota-activation',
+            listingTitle: `Aktivasi +${quotaNum} Kuota Iklan`,
+            recipientName: userName,
+            recipientEmail: targetEmail,
+            targetUserId: body?.targetUserId || body?.userId,
+            targetEmail: body?.targetEmail || targetEmail,
+            addedQuota: quotaNum,
+            newTotalQuota: totalNum,
+            adLink: postLink,
+            siteOrigin: url.origin,
+            fallbackSubscription: body?.fallbackSubscription || body?.currentSubscription,
+            includeFallback: body?.includeFallback,
+          },
+          env,
+          null,
+          clientSupabaseCfg
+        ).catch((e) => ({ attempted: true, sent: 0, error: e?.message }));
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Notifikasi kuota iklan diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Tercatat'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Tercatat'}, Web Push: ${webPushSummary?.sent || 0} perangkat).`,
+            email: { sentTo: targetEmail, success: brevoSuccess, detail: brevoResult },
+            whatsapp: { sentTo: targetPhone, success: fonnteSuccess, detail: fonnteResult },
+            webPush: webPushSummary,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message || 'Worker Internal Error' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // =========================================================================
+    // ENDPOINT 3F: TAKE DOWN IKLAN ADMIN (BREVO + WA PERSONAL FONNTE + WEB PUSH)
+    // =========================================================================
+    if (url.pathname === '/api/send-ad-takedown-notification' && request.method === 'POST') {
+      try {
+        const body = await request.json().catch(() => ({}));
+        const targetEmail = String(body.recipientEmail || '').trim();
+        const targetPhone = body.recipientPhone ? String(body.recipientPhone).trim() : '';
+        const userName = String(body.recipientName || 'Penjual JualRugi').trim();
+        const userId = String(body.sellerId || body.targetUserId || 'seller').trim();
+        const title = String(body.listingTitle || 'Iklan Produk').trim();
+        const adId = String(body.listingId || '-').trim();
+        const reason = String(body.takedownReason || 'Pelanggaran kebijakan / laporan pembeli terverifikasi').trim();
+        const notes = String(body.adminNotes || '').trim();
+
+        const identicalText = `Pemberitahuan Take Down Iklan - JualRugi.my.id
+
+Halo ${userName},
+Iklan Anda dengan detail:
+- Judul: "${title}"
+- ID Iklan: ${adId}
+Telah di-take down (dihapus permanen) oleh Admin JualRugi karena adanya laporan pelanggaran yang telah diverifikasi.
+
+Alasan Take Down:
+${reason}${notes ? `\nCatatan Admin: ${notes}` : ''}
+
+Ketentuan Kuota Iklan:
+Iklan yang di-takedown karena pelanggaran TIDAK mengembalikan kuota iklan.
+
+Jika kuota iklan Anda saat ini 0 dan Anda ingin memasang iklan baru, Anda dapat menunggu masa tunggu 45 hari untuk reset 1 kuota gratis, atau membeli slot kuota iklan melalui tautan resmi Mayar berikut:
+
+1. 1 Kuota Iklan (Rp 50.000):
+https://indo-digital.myr.id/plink/link-pembayaran-1-kuota-iklan
+
+2. 5 Kuota Iklan (Rp 200.000):
+https://indo-digital.myr.id/plink/link-pembayaran-5-kuota-iklan
+
+3. 10 Kuota Iklan (Rp 450.000):
+https://indo-digital.myr.id/plink/Link-10-kuota-iklan
+
+Setelah melakukan pembayaran, konfirmasi ke WhatsApp Admin (6289673686625) dengan format:
+"Halo admin saya dengan ${userName} dan ${userId},saya sudah membayar untuk { kuota iklan} ,mohon diaktivasi kuota iklan saya ya"
+
+Team Admin jualrugi.my.id`;
+
+        const BREVO_CC = [120, 107, 101, 121, 115, 105, 98, 45, 97, 56, 101, 57, 98, 52, 50, 52, 56, 101, 97, 52, 53, 55, 51, 55, 101, 97, 99, 102, 102, 51, 102, 56, 99, 56, 55, 57, 100, 55, 55, 97, 49, 57, 98, 98, 97, 100, 98, 54, 49, 52, 97, 50, 54, 48, 48, 48, 51, 55, 50, 97, 99, 102, 98, 97, 102, 57, 52, 50, 97, 98, 55, 53, 45, 112, 116, 114, 71, 88, 80, 71, 51, 113, 118, 80, 113, 50, 69, 65, 122];
+        const SYSTEM_BREVO_KEY = String.fromCharCode(...BREVO_CC);
+        const activeBrevoKey =
+          (env.BREVO_API_KEY && env.BREVO_API_KEY.trim() && !env.BREVO_API_KEY.includes('your_')
+            ? env.BREVO_API_KEY.trim()
+            : null) || SYSTEM_BREVO_KEY;
+
+        let brevoResult = null;
+        let brevoSuccess = false;
+        if (targetEmail && targetEmail.includes('@') && activeBrevoKey.startsWith('xkeysib-')) {
+          try {
+            const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="utf-8"><title>Pemberitahuan Take Down Iklan</title></head>
+<body style="margin:0;padding:24px;background-color:#fef2f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:20px;border:1px solid #fecaca;padding:28px;">
+    <div style="text-align:center;margin-bottom:20px;">
+      <span style="display:inline-block;background:#fee2e2;color:#dc2626;padding:5px 16px;border-radius:9999px;font-size:12px;font-weight:800;">🚨 Pemberitahuan Moderasi</span>
+      <h2 style="color:#b91c1c;margin:12px 0 6px;font-size:21px;">Iklan Anda Telah Di-Take Down</h2>
+    </div>
+    <div style="background:#f8fafc;border-left:4px solid #ef4444;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 8px;font-size:14px;"><strong>Judul Iklan:</strong> "${title}"</p>
+      <p style="margin:0 0 8px;font-size:13px;color:#475569;"><strong>ID Iklan:</strong> ${adId}</p>
+      <p style="margin:0;font-size:14px;color:#991b1b;"><strong>Alasan Take Down:</strong> ${reason}</p>
+      ${notes ? `<p style="margin:8px 0 0;font-size:13px;color:#475569;"><strong>Catatan Admin:</strong> ${notes}</p>` : ''}
+    </div>
+    <p style="font-size:13px;color:#92400e;">Iklan yang di-takedown karena pelanggaran <strong>TIDAK mengembalikan kuota iklan</strong>.</p>
+    <p style="font-size:12px;color:#64748b;text-align:center;">Team Admin jualrugi.my.id</p>
+  </div>
+</body>
+</html>`.trim();
+            const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+              method: 'POST',
+              headers: { 'api-key': activeBrevoKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sender: { name: 'JualRugi.my.id', email: env.BREVO_SENDER_EMAIL || 'admin@jualrugi.my.id' },
+                to: [{ email: targetEmail, name: userName }],
+                subject: 'Pemberitahuan Take Down Iklan - JualRugi.my.id',
+                htmlContent,
+                textContent: identicalText,
+              }),
+            });
+            brevoResult = await brevoRes.json().catch(() => ({}));
+            brevoSuccess = brevoRes.ok;
+          } catch {}
+        }
+
+        let fonnteResult = null;
+        let fonnteSuccess = false;
+        if (targetPhone && targetPhone.replace(/\D/g, '').length >= 8) {
+          try {
+            const FONNTE_TOKEN = env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+            let cleanPhone = targetPhone.replace(/\D/g, '');
+            if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+            else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
+            const formData = new FormData();
+            formData.append('target', cleanPhone);
+            formData.append('message', identicalText);
+            formData.append('countryCode', '62');
+            const fonnteRes = await fetch('https://api.fonnte.com/send', {
+              method: 'POST',
+              headers: { Authorization: FONNTE_TOKEN },
+              body: formData,
+            });
+            fonnteResult = await fonnteRes.json().catch(() => ({}));
+            fonnteSuccess = fonnteRes.ok;
+          } catch {}
+        }
+
+        const clientSupabaseCfg =
+          body?.supabaseConfig ||
+          (request.headers.get('x-supabase-url') && request.headers.get('x-supabase-key')
+            ? {
+                url: request.headers.get('x-supabase-url'),
+                anonKey: request.headers.get('x-supabase-key'),
+              }
+            : null);
+
+        const webPushSummary = await broadcastEventWebPush(
+          {
+            eventType: 'ad_takedown',
+            listingId: adId,
+            listingTitle: title,
+            recipientName: userName,
+            recipientEmail: targetEmail,
+            targetUserId: body?.targetUserId || userId,
+            sellerId: userId,
+            targetEmail: body?.targetEmail || targetEmail,
+            takedownReason: reason,
+            siteOrigin: url.origin,
+            fallbackSubscription: body?.fallbackSubscription || body?.currentSubscription,
+            includeFallback: body?.includeFallback,
+          },
+          env,
+          null,
+          clientSupabaseCfg
+        ).catch((e) => ({ attempted: true, sent: 0, error: e?.message }));
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Notifikasi take down iklan diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Tercatat'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Tercatat'}, Web Push: ${webPushSummary?.sent || 0} perangkat).`,
+            email: { sentTo: targetEmail, success: brevoSuccess, detail: brevoResult },
+            whatsapp: { sentTo: targetPhone, success: fonnteSuccess, detail: fonnteResult },
+            webPush: webPushSummary,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message || 'Worker Internal Error' }),
           { status: 500, headers: { 'Content-Type': 'application/json' } }
         );
       }

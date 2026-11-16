@@ -12,7 +12,7 @@ export interface ClientSupabaseConfig {
 export const DEFAULT_VAPID_PUBLIC_KEY: string;
 export const PUSH_SUBSCRIPTIONS_SQL: string;
 
-export function getLatestPriorityAlert(): Record<string, any> | null;
+export function getLatestPriorityAlert(userIdentifiers?: string | string[] | null): Record<string, any> | null;
 export function uint8ArrayToBase64Url(bytes: Uint8Array): string;
 export function base64UrlToUint8Array(base64String: string): Uint8Array;
 export function getVapidConfig(env?: Record<string, any>): {
@@ -93,6 +93,29 @@ export function broadcastPriorityWebPush(
   failed: number;
   removedExpired: number;
   totalSubscribers: number;
+  supabaseConfigured?: boolean;
+  supabaseTableReady?: boolean;
+  latestAlert?: Record<string, any>;
+  message?: string;
+  errors?: string[];
+  payloadSummary?: { title: string; url: string };
+}>;
+
+export function buildEventPushPayload(input?: Record<string, any>): Record<string, any>;
+
+export function broadcastEventWebPush(
+  input?: Record<string, any>,
+  env?: Record<string, any>,
+  localStore?: PushLocalStore | null,
+  clientConfig?: ClientSupabaseConfig | null
+): Promise<{
+  attempted: boolean;
+  eventType?: string;
+  sent: number;
+  failed: number;
+  removedExpired: number;
+  totalSubscribers: number;
+  matchedSubscribers?: number;
   supabaseConfigured?: boolean;
   supabaseTableReady?: boolean;
   latestAlert?: Record<string, any>;

@@ -1,8 +1,16 @@
+import { broadcastEventWebPush } from '../../shared/webPushCore.js';
+
 interface Env {
   BREVO_API_KEY?: string;
   BREVO_SENDER_EMAIL?: string;
   BREVO_SENDER_NAME?: string;
   FONNTE_TOKEN?: string;
+  SUPABASE_URL?: string;
+  SUPABASE_ANON_KEY?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
 }
 
 export async function onRequestPost(context: { request: Request; env: Env }) {
@@ -255,11 +263,41 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       }
     }
 
-    if (brevoSuccess || fonnteSuccess) {
+    // C. Kirim Native Web Push Notification untuk event "Iklan Tayang"
+    const originUrl = new URL(request.url).origin;
+    const clientSupabaseCfg =
+      body?.supabaseConfig ||
+      (request.headers.get('x-supabase-url') && request.headers.get('x-supabase-key')
+        ? {
+            url: request.headers.get('x-supabase-url'),
+            anonKey: request.headers.get('x-supabase-key'),
+          }
+        : null);
+
+    const webPushSummary = await broadcastEventWebPush(
+      {
+        eventType: 'ad_published',
+        listingId: cleanListingId,
+        listingTitle: targetTitle,
+        recipientName: userName,
+        recipientEmail: targetEmail,
+        targetUserId: body?.targetUserId || body?.userId,
+        targetEmail: body?.targetEmail || targetEmail,
+        isEdit: Boolean(isEdit),
+        adLink: directAdLink,
+        siteOrigin: originUrl,
+        fallbackSubscription: body?.fallbackSubscription || body?.currentSubscription,
+      },
+      env as any,
+      null,
+      clientSupabaseCfg
+    ).catch((e: any) => ({ attempted: true, sent: 0, error: e?.message }));
+
+    if (brevoSuccess || fonnteSuccess || (webPushSummary as any)?.sent > 0) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: `Notifikasi "${emailSubject}" diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Gagal'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Sesuai Nomor'})!`,
+          message: `Notifikasi "${emailSubject}" diproses (Email: ${brevoSuccess ? 'Terkirim' : 'Gagal'}, WA: ${fonnteSuccess ? 'Terkirim' : 'Sesuai Nomor'}, Web Push: ${(webPushSummary as any)?.sent || 0} perangkat)!`,
           sentTo: targetEmail,
           whatsappSentTo: cleanPhone || undefined,
           listingId: cleanListingId,
@@ -268,6 +306,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
           provider: 'brevo_cloudflare_pages',
           messageId: brevoData.messageId,
           fonnte: fonnteResult,
+          webPush: webPushSummary,
         }),
         {
           status: 200,
@@ -281,6 +320,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
           success: false,
           error: `Gagal mengirim email via Brevo (Status ${brevoRes.status}): ${brevoData.message || 'Terjadi penolakan dari API Brevo.'}`,
           details: brevoData,
+          webPush: webPushSummary,
         }),
         {
           status: brevoRes.status,
