@@ -1,7 +1,13 @@
-import React from 'react';
-import { Flame, ShieldCheck, RefreshCw, LogOut, LogIn } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Flame, ShieldCheck, RefreshCw, LogOut, LogIn, Bell, BellRing, BellOff, Loader2 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { UserProfile } from '../types';
+import {
+  getWebPushClientState,
+  subscribeToWebPushNotifications,
+  unsubscribeFromWebPushNotifications,
+  WebPushClientState,
+} from '../services/notificationService';
 
 import { BrandLogo } from './BrandLogo';
 
@@ -15,6 +21,7 @@ interface NavbarProps {
   onLogin?: () => void;
   onLogout?: () => void;
   onOpenAdmin?: () => void;
+  onPushFeedback?: (msg: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -26,7 +33,72 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogin,
   onLogout,
   onOpenAdmin,
+  onPushFeedback,
 }) => {
+  const [pushState, setPushState] = useState<WebPushClientState>({
+    supported: false,
+    permission: 'default',
+    subscribed: false,
+    muted: false,
+  });
+  const [isUpdatingPush, setIsUpdatingPush] = useState(false);
+
+  const refreshPushState = async () => {
+    const state = await getWebPushClientState();
+    setPushState(state);
+  };
+
+  useEffect(() => {
+    refreshPushState();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshPushState();
+      }
+    };
+    const handlePushUpdated = () => {
+      refreshPushState();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('jualrugi-push-state-changed', handlePushUpdated);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('jualrugi-push-state-changed', handlePushUpdated);
+    };
+  }, []);
+
+  const handleTogglePush = async () => {
+    if (isUpdatingPush) return;
+    if (!pushState.supported) {
+      onPushFeedback?.('Browser ini belum mendukung Web Push Notification.');
+      return;
+    }
+
+    if (pushState.permission === 'denied') {
+      onPushFeedback?.(
+        '⚠️ Izin notifikasi diblokir browser. Aktifkan melalui ikon gembok/izin di address bar.'
+      );
+      return;
+    }
+
+    setIsUpdatingPush(true);
+    try {
+      if (pushState.subscribed) {
+        const res = await unsubscribeFromWebPushNotifications();
+        onPushFeedback?.(res.message);
+      } else {
+        const res = await subscribeToWebPushNotifications({
+          userId: currentUser?.id,
+          userRole: currentUser?.role,
+        });
+        onPushFeedback?.(res.message);
+      }
+      await refreshPushState();
+      window.dispatchEvent(new Event('jualrugi-push-state-changed'));
+    } finally {
+      setIsUpdatingPush(false);
+    }
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-sky-100 shadow-xs">
       {/* Live Distress Sale Warning Marquee Bar - Soft Sky Tint */}
@@ -65,9 +137,49 @@ export const Navbar: React.FC<NavbarProps> = ({
           <BrandLogo size="md" showBadge={true} />
         </div>
 
-        {/* Right Action Icons: PWA Install + User Switcher + Logout/Login */}
+        {/* Right Action Icons: PWA Install + Push Alert Bell + User Switcher + Logout/Login */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           <PWAInstallButton />
+
+          {pushState.supported && (
+            <button
+              type="button"
+              onClick={handleTogglePush}
+              disabled={isUpdatingPush}
+              title={
+                pushState.subscribed
+                  ? 'Push Notifikasi Iklan BU Prioritas Aktif (Klik untuk matikan)'
+                  : pushState.permission === 'denied'
+                  ? 'Izin Notifikasi Diblokir Browser'
+                  : 'Aktifkan Push Notifikasi Iklan BU Prioritas (Tetap masuk meski aplikasi ditutup)'
+              }
+              aria-label={
+                pushState.subscribed
+                  ? 'Push Notifikasi BU Prioritas Aktif'
+                  : 'Aktifkan Push Notifikasi BU Prioritas'
+              }
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer active:scale-95 shadow-xs disabled:opacity-60 ${
+                pushState.subscribed
+                  ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                  : pushState.permission === 'denied'
+                  ? 'border-slate-200 bg-slate-100 text-slate-500'
+                  : 'border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-700'
+              }`}
+            >
+              {isUpdatingPush ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : pushState.subscribed ? (
+                <BellRing className="w-3.5 h-3.5 text-emerald-600" />
+              ) : pushState.permission === 'denied' ? (
+                <BellOff className="w-3.5 h-3.5 text-slate-400" />
+              ) : (
+                <Bell className="w-3.5 h-3.5 text-sky-600" />
+              )}
+              <span className="hidden md:inline">
+                {pushState.subscribed ? 'Notif Aktif' : 'Notif BU'}
+              </span>
+            </button>
+          )}
 
           {/* Quick Simulation User Switcher (Buyer vs Seller) */}
           <button

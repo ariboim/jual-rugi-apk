@@ -1,6 +1,16 @@
+import { broadcastPriorityWebPush } from '../../shared/webPushCore.js';
+
 interface Env {
   FONNTE_TOKEN?: string;
   PRIORITY_WA_GROUP_JID?: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
+  SUPABASE_URL?: string;
+  VITE_SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_ANON_KEY?: string;
+  VITE_SUPABASE_ANON_KEY?: string;
 }
 
 const DEFAULT_GROUP_JID = '120363413910178396@g.us';
@@ -12,6 +22,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   const { request, env } = context;
 
   try {
+    const reqUrl = new URL(request.url);
     const body: any = await request.json().catch(() => ({}));
     const {
       listingId,
@@ -120,13 +131,49 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       return { ok: resp.ok && data?.status !== false, data };
     };
 
-    let result = await sendViaFonnte(resolvedMediaUrl);
-    let mediaFallbackUsed = false;
+    const sendWaTask = async () => {
+      let result = await sendViaFonnte(resolvedMediaUrl);
+      let mediaFallbackUsed = false;
 
-    if (!result.ok) {
-      result = await sendViaFonnte();
-      mediaFallbackUsed = result.ok;
-    }
+      if (!result.ok) {
+        result = await sendViaFonnte();
+        mediaFallbackUsed = result.ok;
+      }
+      return { ...result, mediaFallbackUsed };
+    };
+
+    const skipWebPush = body?.skipWebPush === true;
+    const [waSettled, pushSettled] = await Promise.allSettled([
+      sendWaTask(),
+      skipWebPush
+        ? Promise.resolve({ skipped: true, sent: 0, totalSubscribers: 0 })
+        : broadcastPriorityWebPush(
+            {
+              listingId: cleanId,
+              listingTitle: title,
+              sellingPrice,
+              normalPrice,
+              discountPercentage,
+              location,
+              category,
+              imageUrl: resolvedMediaUrl,
+              adLink: directAdLink,
+              siteOrigin: reqUrl.origin,
+              isTest: Boolean(body?.isTest),
+            },
+            env
+          ),
+    ]);
+
+    const result =
+      waSettled.status === 'fulfilled'
+        ? waSettled.value
+        : { ok: false, data: { reason: waSettled.reason?.message }, mediaFallbackUsed: false };
+
+    const webPushSummary =
+      pushSettled.status === 'fulfilled'
+        ? pushSettled.value
+        : { attempted: true, sent: 0, failed: 1, error: (pushSettled as any).reason?.message };
 
     const isOk = result.ok;
     const fonnteData = result.data;
@@ -142,8 +189,9 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         groupName: resolvedGroupName,
         groupInviteUrl: resolvedInviteUrl,
         adLink: directAdLink,
-        imageUrl: mediaFallbackUsed ? null : resolvedMediaUrl,
-        mediaFallbackUsed,
+        imageUrl: result.mediaFallbackUsed ? null : resolvedMediaUrl,
+        mediaFallbackUsed: result.mediaFallbackUsed,
+        webPush: webPushSummary,
         detail: fonnteData,
       }),
       {

@@ -151,19 +151,103 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// 4. Notification Click Event
+// 4. Native Web Push Event (Muncul meski aplikasi/browser tertutup total, tanpa pihak ketiga)
+self.addEventListener('push', (event) => {
+  let payload = {};
+  let rawText = '';
+
+  if (event.data) {
+    try {
+      payload = event.data.json() || {};
+    } catch (_) {
+      try {
+        rawText = event.data.text() || '';
+        payload = JSON.parse(rawText);
+      } catch (__) {
+        payload = rawText ? { body: rawText } : {};
+      }
+    }
+  }
+
+  // Biarkan payload khusus Monetag ditangani oleh script Monetag tanpa tumpang tindih
+  const isMonetagInternal =
+    payload &&
+    payload.source !== 'jualrugi-webpush' &&
+    Boolean(payload.zoneId || payload.ymid || payload.on_click || payload.url_params);
+
+  if (isMonetagInternal) {
+    return;
+  }
+
+  const title = payload.title || '🔥 BU Prioritas Baru — JualRugi.my.id';
+  const targetUrl =
+    payload.url ||
+    (payload.listingId ? `/?id=${encodeURIComponent(payload.listingId)}` : '/');
+
+  const options = {
+    body:
+      payload.body ||
+      'Ada iklan Prioritas Butuh Uang (BU) baru yang disetujui Admin. Cek sekarang!',
+    icon: payload.icon || '/pwa-192x192.png',
+    badge: payload.badge || '/favicon.png',
+    tag: payload.tag || `jualrugi-priority-${payload.listingId || Date.now()}`,
+    renotify: true,
+    vibrate: [200, 100, 200],
+    data: {
+      url: targetUrl,
+      listingId: payload.listingId || null,
+      source: 'jualrugi-webpush',
+      timestamp: payload.timestamp || Date.now(),
+    },
+  };
+
+  if (payload.image && typeof payload.image === 'string') {
+    options.image = payload.image;
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// 5. Notification Click Event (Membuka iklan langsung meski aplikasi sebelumnya tertutup)
 self.addEventListener('notificationclick', (event) => {
+  const notifData = (event.notification && event.notification.data) || {};
+  const tag = (event.notification && event.notification.tag) || '';
+  const isJualRugiNotif =
+    notifData.source === 'jualrugi-webpush' ||
+    Boolean(notifData.url) ||
+    Boolean(notifData.listingId) ||
+    tag.startsWith('jualrugi-') ||
+    tag.startsWith('ad-approved-');
+
+  if (!isJualRugiNotif && (notifData.on_click || notifData.zoneId || notifData.ymid)) {
+    return;
+  }
+
   event.notification.close();
+
+  const rawTarget =
+    notifData.url ||
+    (notifData.listingId ? `/?id=${encodeURIComponent(notifData.listingId)}` : '/');
+  const resolvedUrl = new URL(rawTarget, self.location.origin).href;
+
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
       for (const client of clientList) {
-        if ('focus' in client) {
-          return client.focus();
-        }
+        try {
+          if (client.url && client.url.startsWith(self.location.origin)) {
+            if ('navigate' in client && client.url !== resolvedUrl) {
+              await client.navigate(resolvedUrl);
+            }
+            if ('focus' in client) {
+              return client.focus();
+            }
+          }
+        } catch (_) {}
       }
       if (clients.openWindow) {
-        return clients.openWindow('/');
+        return clients.openWindow(resolvedUrl);
       }
     })
   );
 });
+

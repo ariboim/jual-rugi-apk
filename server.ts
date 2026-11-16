@@ -8,12 +8,42 @@ import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { generateDynamicSitemap } from './src/services/sitemapService';
 import { INITIAL_LISTINGS } from './src/data/initialData';
+import {
+  PUSH_SUBSCRIPTIONS_SQL,
+  broadcastPriorityWebPush,
+  deletePushSubscription,
+  getVapidConfig,
+  listPushSubscriptions,
+  upsertPushSubscription,
+} from './shared/webPushCore.js';
 
 dotenv.config();
 dotenv.config({ path: '.env.local' });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PUSH_SUBS_FILE_PATH = path.resolve(__dirname, 'push-subscriptions.json');
+
+const pushLocalStore = {
+  load() {
+    try {
+      if (fs.existsSync(PUSH_SUBS_FILE_PATH)) {
+        const parsed = JSON.parse(fs.readFileSync(PUSH_SUBS_FILE_PATH, 'utf8'));
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    } catch (err) {
+      console.warn('[Server Push Subs Load Warn]:', err);
+    }
+    return [];
+  },
+  save(list: any[]) {
+    try {
+      fs.writeFileSync(PUSH_SUBS_FILE_PATH, JSON.stringify(list, null, 2), 'utf8');
+    } catch (err) {
+      console.warn('[Server Push Subs Save Warn]:', err);
+    }
+  },
+};
 
 function getServerEmailConfig(): { brevoApiKey?: string; brevoSenderEmail?: string } {
   try {
@@ -802,23 +832,64 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       };
 
       console.log(
-        `[Server - Priority Group WA] Meneruskan iklan prioritas "${title}" (${cleanId}) ke Grup ${resolvedGroupName} (${targetGroupJid}) dengan media: ${resolvedMediaUrl}`
+        `[Server - Priority Group WA + Web Push] Memproses "${title}" (${cleanId}) ke Grup ${resolvedGroupName} (${targetGroupJid}) + Native Web Push`
       );
-      let result = await sendViaFonnte(resolvedMediaUrl);
-      let mediaFallbackUsed = false;
 
-      if (!result.ok) {
-        console.warn(
-          '[Server - Priority Group WA] Pengiriman dengan gambar gagal, mencoba ulang mode teks:',
-          result.data
-        );
-        result = await sendViaFonnte();
-        mediaFallbackUsed = result.ok;
-      }
+      const skipWebPush = req.body?.skipWebPush === true;
+
+      const sendWaTask = async () => {
+        let result = await sendViaFonnte(resolvedMediaUrl);
+        let mediaFallbackUsed = false;
+
+        if (!result.ok) {
+          console.warn(
+            '[Server - Priority Group WA] Pengiriman dengan gambar gagal, mencoba ulang mode teks:',
+            result.data
+          );
+          result = await sendViaFonnte();
+          mediaFallbackUsed = result.ok;
+        }
+        return { ...result, mediaFallbackUsed };
+      };
+
+      const requestOrigin = `${req.protocol}://${req.get('host') || 'jualrugi.my.id'}`;
+      const [waSettled, pushSettled] = await Promise.allSettled([
+        sendWaTask(),
+        skipWebPush
+          ? Promise.resolve({ skipped: true, sent: 0, totalSubscribers: 0 })
+          : broadcastPriorityWebPush(
+              {
+                listingId: cleanId,
+                listingTitle: title,
+                sellingPrice,
+                normalPrice,
+                discountPercentage,
+                location,
+                category,
+                imageUrl: resolvedMediaUrl,
+                adLink: directAdLink,
+                siteOrigin: requestOrigin,
+                isTest: Boolean(req.body?.isTest),
+              },
+              process.env,
+              pushLocalStore
+            ),
+      ]);
+
+      const result =
+        waSettled.status === 'fulfilled'
+          ? waSettled.value
+          : { ok: false, status: 502, data: { reason: waSettled.reason?.message }, mediaFallbackUsed: false };
+
+      const webPushSummary =
+        pushSettled.status === 'fulfilled'
+          ? pushSettled.value
+          : { attempted: true, sent: 0, failed: 1, error: pushSettled.reason?.message };
 
       const isOk = result.ok;
       const fonnteData = result.data;
       console.log(`[Server - Priority Group WA Response]: ${result.status}`, fonnteData);
+      console.log('[Server - Native Web Push Response]:', webPushSummary);
 
       return res.status(isOk ? 200 : 502).json({
         success: isOk,
@@ -829,8 +900,9 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
         groupName: resolvedGroupName,
         groupInviteUrl: resolvedInviteUrl,
         adLink: directAdLink,
-        imageUrl: mediaFallbackUsed ? null : resolvedMediaUrl,
-        mediaFallbackUsed,
+        imageUrl: result.mediaFallbackUsed ? null : resolvedMediaUrl,
+        mediaFallbackUsed: result.mediaFallbackUsed,
+        webPush: webPushSummary,
         detail: fonnteData,
       });
     } catch (err: any) {
@@ -838,6 +910,113 @@ Tanggapi HANYA dengan format JSON valid sesuai skema:
       return res.status(500).json({
         success: false,
         error: err.message || 'Gagal meneruskan notifikasi iklan prioritas ke Grup WA.',
+      });
+    }
+  });
+
+  // =========================================================================
+  // NATIVE W3C WEB PUSH API (VAPID RFC 8292 + AES128GCM RFC 8291) - ZERO 3RD PARTY
+  // =========================================================================
+  app.get('/api/push/vapid-public-key', (req, res) => {
+    const vapid = getVapidConfig(process.env);
+    return res.json({
+      success: true,
+      publicKey: vapid.publicKey,
+      subject: vapid.subject,
+    });
+  });
+
+  app.get('/api/push/status', async (req, res) => {
+    try {
+      const vapid = getVapidConfig(process.env);
+      const { subscriptions, supabaseConfigured, supabaseTableReady } =
+        await listPushSubscriptions(process.env, pushLocalStore);
+      return res.json({
+        success: true,
+        configured: true,
+        engine: 'native-webpush-vapid',
+        publicKey: vapid.publicKey,
+        totalSubscribers: subscriptions.length,
+        supabaseConfigured,
+        supabaseTableReady,
+        sqlSetup: PUSH_SUBSCRIPTIONS_SQL,
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal memeriksa status push notification.',
+      });
+    }
+  });
+
+  app.post('/api/push/subscribe', async (req, res) => {
+    try {
+      const { subscription, endpoint, keys, userId, userRole, userAgent } = req.body || {};
+      const targetSub = subscription || (endpoint ? { endpoint, keys } : null);
+      if (!targetSub?.endpoint || !targetSub?.keys?.p256dh || !targetSub?.keys?.auth) {
+        return res.status(400).json({
+          success: false,
+          error: 'Data PushSubscription (endpoint, keys.p256dh, keys.auth) wajib dikirim.',
+        });
+      }
+
+      const result = await upsertPushSubscription(
+        {
+          endpoint: targetSub.endpoint,
+          keys: targetSub.keys,
+          userId,
+          userRole,
+          userAgent: userAgent || req.get('user-agent') || '',
+        },
+        process.env,
+        pushLocalStore
+      );
+
+      return res.status(result.success ? 200 : 400).json(result);
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal menyimpan subscription push.',
+      });
+    }
+  });
+
+  app.post('/api/push/unsubscribe', async (req, res) => {
+    try {
+      const endpoint = req.body?.endpoint || req.body?.subscription?.endpoint;
+      if (!endpoint) {
+        return res.status(400).json({ success: false, error: 'Endpoint wajib disertakan.' });
+      }
+      await deletePushSubscription(endpoint, process.env, pushLocalStore);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal menghapus subscription push.',
+      });
+    }
+  });
+
+  app.post('/api/push/send-priority', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const requestOrigin = `${req.protocol}://${req.get('host') || 'jualrugi.my.id'}`;
+      const summary = await broadcastPriorityWebPush(
+        {
+          ...body,
+          siteOrigin: body.siteOrigin || requestOrigin,
+        },
+        process.env,
+        pushLocalStore
+      );
+      return res.json({
+        success: true,
+        ...summary,
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Gagal mengirim Web Push notifikasi.',
       });
     }
   });

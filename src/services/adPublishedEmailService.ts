@@ -507,16 +507,25 @@ export interface PriorityGroupWaResponse {
   groupInviteUrl: string;
   adLink: string;
   provider: 'fonnte_server' | 'fonnte_direct' | 'simulation' | 'disabled';
+  webPush?: {
+    attempted?: boolean;
+    deduplicated?: boolean;
+    sent?: number;
+    failed?: number;
+    totalSubscribers?: number;
+    message?: string;
+  };
   detail?: any;
 }
 
 /**
  * Mengirimkan Notifikasi WhatsApp Otomatis ke Grup WA Resmi JualRugi.my.id
  * setiap kali Iklan Prioritas (BU Prioritas) di-approve oleh Admin.
+ * Server /api/send-priority-group-wa juga memicu Native Web Push Notification secara bersamaan.
  */
 export async function triggerPriorityAdGroupWhatsApp(
   payload: PriorityGroupBroadcastPayload,
-  options?: { forceSend?: boolean }
+  options?: { forceSend?: boolean; skipWebPush?: boolean }
 ): Promise<PriorityGroupWaResponse> {
   const cfg = getPriorityGroupConfig();
   const adLink = payload.adLink || getDynamicAdLink(payload.listingId);
@@ -558,7 +567,7 @@ export async function triggerPriorityAdGroupWhatsApp(
     );
   } catch {}
 
-  // 1. Prioritas Utama: Kirim lewat backend proxy /api/send-priority-group-wa (Bebas CORS)
+  // 1. Prioritas Utama: Kirim lewat backend proxy /api/send-priority-group-wa (Sekaligus Web Push paralel)
   try {
     const serverRes = await fetch('/api/send-priority-group-wa', {
       method: 'POST',
@@ -571,13 +580,14 @@ export async function triggerPriorityAdGroupWhatsApp(
         groupInviteUrl: cfg.groupInviteUrl,
         groupName: cfg.groupName,
         customMessage: message,
+        skipWebPush: options?.skipWebPush === true,
       }),
     });
 
     if (serverRes.ok) {
       const serverData = await serverRes.json().catch(() => ({}));
       const isOk = serverData?.success !== false && serverData?.detail?.status !== false;
-      console.log('✅ [Priority Group WA] Terkirim via server proxy:', serverData);
+      console.log('✅ [Priority Group WA + Web Push] Terkirim via server proxy:', serverData);
       return {
         success: isOk,
         message:
@@ -588,6 +598,7 @@ export async function triggerPriorityAdGroupWhatsApp(
         groupInviteUrl: cfg.groupInviteUrl,
         adLink,
         provider: 'fonnte_server',
+        webPush: serverData.webPush,
         detail: serverData,
       };
     }

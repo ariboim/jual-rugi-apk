@@ -46,6 +46,7 @@ import {
   ListFilter,
   SlidersHorizontal,
   UserPlus,
+  BellRing,
 } from 'lucide-react';
 import { Listing, UserProfile } from '../types';
 import { WA_ADMIN_PHONE } from '../data/mayarConfig';
@@ -92,6 +93,13 @@ import {
   saveBrevoConfig,
   sendWelcomeEmailAutomation,
 } from '../services/welcomeEmail';
+import {
+  fetchWebPushServerStatus,
+  getWebPushClientState,
+  subscribeToWebPushNotifications,
+  triggerPriorityWebPush,
+  WebPushServerStatus,
+} from '../services/notificationService';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -207,6 +215,22 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [isSavingPriorityWebhook, setIsSavingPriorityWebhook] = useState(false);
   const [isTestingMakeWebhook, setIsTestingMakeWebhook] = useState(false);
 
+  // Native Web Push (VAPID) State - Zero Third-Party (Tanpa OneSignal)
+  const [pushServerStatus, setPushServerStatus] = useState<WebPushServerStatus | null>(null);
+  const [isBrowserPushSubscribed, setIsBrowserPushSubscribed] = useState(false);
+  const [isSubscribingPush, setIsSubscribingPush] = useState(false);
+  const [isTestingWebPush, setIsTestingWebPush] = useState(false);
+  const [showPushSqlModal, setShowPushSqlModal] = useState(false);
+
+  const loadWebPushDiagnostics = async () => {
+    const [srv, cli] = await Promise.all([
+      fetchWebPushServerStatus(),
+      getWebPushClientState(),
+    ]);
+    if (srv) setPushServerStatus(srv);
+    setIsBrowserPushSubscribed(cli.subscribed);
+  };
+
   // Brevo API Key Configuration State
   const [brevoKeyInput, setBrevoKeyInput] = useState('');
   const [brevoSenderEmail, setBrevoSenderEmail] = useState('admin@jualrugi.my.id');
@@ -246,6 +270,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       loadEmailLogs();
       setPersistentUsers(getStoredUsers());
       setAdReports(getStoredAdReports());
+      loadWebPushDiagnostics();
 
       // Sinkronisasi data pengguna dari server & Supabase
       syncUsersFromServer().then((latest) => {
@@ -929,7 +954,52 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
-  // Tes kirim notifikasi Iklan Prioritas ke Grup WA
+  // Aktifkan Native Web Push di perangkat Admin saat ini
+  const handleSubscribeAdminPush = async () => {
+    setIsSubscribingPush(true);
+    try {
+      const res = await subscribeToWebPushNotifications({
+        userId: 'admin',
+        userRole: 'admin',
+      });
+      await loadWebPushDiagnostics();
+      window.dispatchEvent(new Event('jualrugi-push-state-changed'));
+      showNotification(res.message);
+    } finally {
+      setIsSubscribingPush(false);
+    }
+  };
+
+  // Tes kirim Native Web Push tanpa spam Grup WA
+  const handleTestWebPushBroadcast = async () => {
+    const sample = listings.find((l) => !!l.isSuperBU) || listings[0];
+    setIsTestingWebPush(true);
+    try {
+      const res = await triggerPriorityWebPush({
+        listingId: sample?.id || 'bu-prioritas-test',
+        listingTitle: sample?.title || 'Tes Iklan Prioritas JualRugi.my.id',
+        sellingPrice: sample?.sellingPrice || 4500000,
+        normalPrice: sample?.normalPrice || 7500000,
+        discountPercentage: sample?.discountPercentage || 40,
+        location: sample?.location || 'Jakarta Selatan',
+        category: sample?.category || 'HP & Gadget',
+        imageUrl: sample?.imageUrl || sample?.images?.[0],
+        isTest: true,
+      });
+      await loadWebPushDiagnostics();
+      if (res.sent > 0) {
+        showNotification(`🔔 Push Notifikasi berhasil dikirim ke ${res.sent} perangkat!`);
+      } else if (res.totalSubscribers === 0) {
+        showNotification('ℹ️ Belum ada perangkat aktif. Klik "Aktifkan Push Perangkat Ini" dahulu.');
+      } else {
+        showNotification(`⚠️ Push diproses (${res.sent} terkirim, ${res.failed} gagal).`);
+      }
+    } finally {
+      setIsTestingWebPush(false);
+    }
+  };
+
+  // Tes kirim notifikasi Iklan Prioritas ke Grup WA + Native Web Push berbarengan
   const handleTestPriorityGroupBroadcast = async () => {
     const sample = listings.find((l) => !!l.isSuperBU) || listings[0];
     setIsTestingGroupWa(true);
@@ -951,9 +1021,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         { forceSend: true }
       );
       loadEmailLogs();
+      loadWebPushDiagnostics();
+      const pushCount = res.webPush?.sent || 0;
+      const pushNote = pushCount > 0 ? ` & Push ke ${pushCount} perangkat` : '';
       showNotification(
         res.success
-          ? `✅ Tes kirim Grup WA "${res.groupName}" berhasil!`
+          ? `✅ Tes kirim Grup WA "${res.groupName}"${pushNote} berhasil!`
           : `⚠️ ${res.message}`
       );
     } catch {
@@ -963,29 +1036,34 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
-  // Kirim manual iklan prioritas terpilih ke Grup WA
+  // Kirim manual iklan prioritas terpilih ke Grup WA + Push Notifikasi paralel
   const handleManualBroadcastPriorityGroup = async (listing: Listing) => {
     setBroadcastingListingId(listing.id);
     try {
-      const res = await triggerPriorityAdGroupWhatsApp(
-        {
-          listingId: listing.id,
-          listingTitle: listing.title,
-          sellingPrice: listing.sellingPrice,
-          normalPrice: listing.normalPrice,
-          discountPercentage: listing.discountPercentage,
-          location: listing.location,
-          category: listing.category,
-          urgentReason: listing.urgentReason,
-          sellerName: listing.seller?.name,
-          imageUrl: listing.imageUrl || listing.images?.[0],
-        },
-        { forceSend: true }
-      );
+      const payload = {
+        listingId: listing.id,
+        listingTitle: listing.title,
+        sellingPrice: listing.sellingPrice,
+        normalPrice: listing.normalPrice,
+        discountPercentage: listing.discountPercentage,
+        location: listing.location,
+        category: listing.category,
+        urgentReason: listing.urgentReason,
+        sellerName: listing.seller?.name,
+        imageUrl: listing.imageUrl || listing.images?.[0],
+      };
+      const res = await triggerPriorityAdGroupWhatsApp(payload, { forceSend: true });
+      if (!res.webPush?.attempted) {
+        await triggerPriorityWebPush(payload).catch(() => {});
+      }
       loadEmailLogs();
+      loadWebPushDiagnostics();
+      const pushSent = res.webPush?.sent || 0;
       showNotification(
         res.success
-          ? `📢 Iklan "${listing.title}" berhasil diteruskan ke Grup WA ${res.groupName}!`
+          ? `📢 Iklan "${listing.title}" diteruskan ke Grup WA ${res.groupName}${
+              pushSent > 0 ? ` + Push (${pushSent} perangkat)` : ''
+            }!`
           : `⚠️ ${res.message}`
       );
     } finally {
@@ -1063,7 +1141,22 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         '';
 
       try {
-        // Jalankan ketiga aksi secara paralel agar POST ke Make.com langsung dieksekusi tanpa menunggu email/WA
+        const groupPayload = {
+          listingId: listing.id,
+          listingTitle: listing.title,
+          sellingPrice: listing.sellingPrice,
+          normalPrice: listing.normalPrice,
+          discountPercentage: listing.discountPercentage,
+          location: listing.location,
+          category: listing.category,
+          urgentReason: listing.urgentReason,
+          sellerName: listing.seller?.name || matchedUser?.name || 'Pengiklan JualRugi',
+          imageUrl: listing.imageUrl || listing.images?.[0],
+        };
+
+        // Jalankan seluruh notifikasi secara paralel:
+        // /api/send-priority-group-wa otomatis mengeksekusi Grup WA + Native Web Push berbarengan;
+        // Jika Grup WA dinonaktifkan atau proxy gagal, fallback langsung ke /api/push/send-priority.
         const [emailResult, groupResult, makeResult] = await Promise.allSettled([
           // 1. Notifikasi Email & WA ke Penjual
           triggerMonetizationActivatedEmail({
@@ -1075,19 +1168,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             recipientName: listing.seller?.name || matchedUser?.name || 'Pengiklan',
             packageType: 'prioritas',
           }),
-          // 2. Forward otomatis Iklan Prioritas ke Grup WA Resmi (Jualrugi.my.id)
-          triggerPriorityAdGroupWhatsApp({
-            listingId: listing.id,
-            listingTitle: listing.title,
-            sellingPrice: listing.sellingPrice,
-            normalPrice: listing.normalPrice,
-            discountPercentage: listing.discountPercentage,
-            location: listing.location,
-            category: listing.category,
-            urgentReason: listing.urgentReason,
-            sellerName: listing.seller?.name || matchedUser?.name || 'Pengiklan JualRugi',
-            imageUrl: listing.imageUrl || listing.images?.[0],
-          }),
+          // 2. Forward otomatis Iklan Prioritas ke Grup WA Resmi + Native Web Push berbarengan
+          triggerPriorityAdGroupWhatsApp(groupPayload),
           // 3. POST Payload JSON Iklan BU Prioritas ke Webhook Make.com
           triggerPriorityMakeWebhook(listing, {
             sellerName: listing.seller?.name || matchedUser?.name || 'Member JualRugi',
@@ -1098,11 +1180,28 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         const groupRes = groupResult.status === 'fulfilled' ? groupResult.value : null;
         const makeRes = makeResult.status === 'fulfilled' ? makeResult.value : null;
 
+        let pushSentCount = groupRes?.webPush?.sent || 0;
+        let pushAttempted = Boolean(groupRes?.webPush?.attempted);
+
+        if (!pushAttempted) {
+          const directPush = await triggerPriorityWebPush(groupPayload).catch(() => null);
+          if (directPush) {
+            pushSentCount = directPush.sent;
+            pushAttempted = true;
+          }
+        }
+
         const groupNote = groupRes?.success
           ? ` & Grup WA ${groupRes.groupName}`
           : groupRes?.skipped
           ? ' (Grup WA nonaktif)'
           : '';
+        const pushNote =
+          pushAttempted && pushSentCount > 0
+            ? ` & Push (${pushSentCount} perangkat)`
+            : pushAttempted
+            ? ' & Web Push siap'
+            : '';
         const makeNote = makeRes?.success
           ? ' & Webhook Make.com terkirim!'
           : makeRes?.message
@@ -1114,9 +1213,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         }
 
         showNotification(
-          `🔥 BU Prioritas di-approve! Notifikasi ke seller${groupNote}${makeNote}`
+          `🔥 BU Prioritas di-approve! Notifikasi ke seller${groupNote}${pushNote}${makeNote}`
         );
         loadEmailLogs();
+        loadWebPushDiagnostics();
       } catch (e) {
         showNotification('BU Prioritas aktif! (Log notifikasi tersimpan)');
       }
@@ -1781,6 +1881,105 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <span>{isTestingGroupWa ? 'Mengirim...' : 'Tes Kirim Grup WA'}</span>
                     </button>
                   </div>
+                </div>
+
+                {/* Banner Status & Kontrol Native Web Push (VAPID - Zero Third-Party) */}
+                <div className="rounded-2xl border border-sky-200 bg-sky-50/75 p-3.5 space-y-2.5 shadow-2xs">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <BellRing className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-black text-sky-950">
+                            Push Notifikasi Aplikasi Native (VAPID — Tanpa OneSignal)
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-600 text-white">
+                            {pushServerStatus ? `${pushServerStatus.totalSubscribers} Perangkat Aktif` : 'Siap'}
+                          </span>
+                          {pushServerStatus?.supabaseConfigured && !pushServerStatus?.supabaseTableReady && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              Tabel push_subscriptions belum dibuat
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-relaxed">
+                          Terkirim otomatis berbarengan dengan Grup WA saat Admin menyetujui iklan <strong>BU Prioritas</strong>. Tetap muncul di HP &amp; Desktop meski aplikasi tertutup.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleSubscribeAdminPush}
+                        disabled={isSubscribingPush}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer border flex items-center gap-1.5 disabled:opacity-60 ${
+                          isBrowserPushSubscribed
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                            : 'bg-white text-sky-800 border-sky-300 hover:bg-sky-100'
+                        }`}
+                      >
+                        {isSubscribingPush ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <BellRing className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {isBrowserPushSubscribed ? 'Perangkat Ini Aktif ✓' : 'Aktifkan Push Perangkat Ini'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleTestWebPushBroadcast}
+                        disabled={isTestingWebPush}
+                        className="px-3 py-1.5 rounded-xl text-xs font-black bg-sky-600 hover:bg-sky-700 text-white shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
+                        title="Kirim tes Push Notifikasi langsung ke semua subscriber tanpa mengirim ke Grup WA"
+                      >
+                        {isTestingWebPush ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Send className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isTestingWebPush ? 'Mengirim...' : 'Tes Push Aplikasi'}</span>
+                      </button>
+
+                      {pushServerStatus?.sqlSetup && (
+                        <button
+                          type="button"
+                          onClick={() => setShowPushSqlModal(!showPushSqlModal)}
+                          className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 cursor-pointer"
+                        >
+                          {showPushSqlModal ? 'Tutup SQL' : 'SQL Supabase'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {showPushSqlModal && pushServerStatus?.sqlSetup && (
+                    <div className="p-3 rounded-xl bg-slate-900 text-slate-100 text-[11px] font-mono space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sky-300 font-bold">
+                          Jalankan SQL ini sekali di Supabase SQL Editor agar subscriber tersimpan lintas-server/Cloudflare:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(pushServerStatus.sqlSetup || '');
+                            showNotification('✅ SQL tabel push_subscriptions berhasil disalin!');
+                          }}
+                          className="px-2 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-sans font-bold cursor-pointer shrink-0"
+                        >
+                          Salin SQL
+                        </button>
+                      </div>
+                      <pre className="overflow-x-auto whitespace-pre-wrap text-[10px] text-emerald-300 leading-relaxed">
+                        {pushServerStatus.sqlSetup}
+                      </pre>
+                    </div>
+                  )}
                 </div>
 
                 {/* Baris Konfigurasi URL Webhook Make.com untuk Approve BU Prioritas */}

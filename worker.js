@@ -1,3 +1,12 @@
+import {
+  PUSH_SUBSCRIPTIONS_SQL,
+  broadcastPriorityWebPush,
+  deletePushSubscription,
+  getVapidConfig,
+  listPushSubscriptions,
+  upsertPushSubscription,
+} from './shared/webPushCore.js';
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -665,13 +674,49 @@ export default {
           return { ok: resp.ok && data?.status !== false, data };
         };
 
-        let result = await sendViaFonnte(resolvedMediaUrl);
-        let mediaFallbackUsed = false;
+        const sendWaTask = async () => {
+          let result = await sendViaFonnte(resolvedMediaUrl);
+          let mediaFallbackUsed = false;
 
-        if (!result.ok) {
-          result = await sendViaFonnte();
-          mediaFallbackUsed = result.ok;
-        }
+          if (!result.ok) {
+            result = await sendViaFonnte();
+            mediaFallbackUsed = result.ok;
+          }
+          return { ...result, mediaFallbackUsed };
+        };
+
+        const skipWebPush = body?.skipWebPush === true;
+        const [waSettled, pushSettled] = await Promise.allSettled([
+          sendWaTask(),
+          skipWebPush
+            ? Promise.resolve({ skipped: true, sent: 0, totalSubscribers: 0 })
+            : broadcastPriorityWebPush(
+                {
+                  listingId: cleanId,
+                  listingTitle: title,
+                  sellingPrice,
+                  normalPrice,
+                  discountPercentage,
+                  location,
+                  category,
+                  imageUrl: resolvedMediaUrl,
+                  adLink: directAdLink,
+                  siteOrigin: url.origin,
+                  isTest: Boolean(body?.isTest),
+                },
+                env
+              ),
+        ]);
+
+        const result =
+          waSettled.status === 'fulfilled'
+            ? waSettled.value
+            : { ok: false, data: { reason: waSettled.reason?.message }, mediaFallbackUsed: false };
+
+        const webPushSummary =
+          pushSettled.status === 'fulfilled'
+            ? pushSettled.value
+            : { attempted: true, sent: 0, failed: 1, error: pushSettled.reason?.message };
 
         const isOk = result.ok;
         const fonnteData = result.data;
@@ -686,8 +731,9 @@ export default {
             groupName: resolvedGroupName,
             groupInviteUrl: resolvedInviteUrl,
             adLink: directAdLink,
-            imageUrl: mediaFallbackUsed ? null : resolvedMediaUrl,
-            mediaFallbackUsed,
+            imageUrl: result.mediaFallbackUsed ? null : resolvedMediaUrl,
+            mediaFallbackUsed: result.mediaFallbackUsed,
+            webPush: webPushSummary,
             detail: fonnteData,
           }),
           { status: isOk ? 200 : 502, headers: { 'Content-Type': 'application/json' } }
@@ -695,6 +741,119 @@ export default {
       } catch (err) {
         return new Response(
           JSON.stringify({ success: false, error: err.message || 'Worker Internal Error' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // =========================================================================
+    // ENDPOINT 3C-PUSH: NATIVE W3C WEB PUSH API (VAPID) - ZERO 3RD PARTY
+    // =========================================================================
+    if (url.pathname === '/api/push/vapid-public-key' && request.method === 'GET') {
+      const vapid = getVapidConfig(env);
+      return new Response(
+        JSON.stringify({ success: true, publicKey: vapid.publicKey, subject: vapid.subject }),
+        { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    if (url.pathname === '/api/push/status' && request.method === 'GET') {
+      try {
+        const vapid = getVapidConfig(env);
+        const { subscriptions, supabaseConfigured, supabaseTableReady } = await listPushSubscriptions(env);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            configured: true,
+            engine: 'native-webpush-vapid',
+            publicKey: vapid.publicKey,
+            totalSubscribers: subscriptions.length,
+            supabaseConfigured,
+            supabaseTableReady,
+            sqlSetup: PUSH_SUBSCRIPTIONS_SQL,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message || 'Worker Error' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    if (url.pathname === '/api/push/subscribe' && request.method === 'POST') {
+      try {
+        const body = await request.json().catch(() => ({}));
+        const targetSub = body.subscription || (body.endpoint ? { endpoint: body.endpoint, keys: body.keys } : null);
+        if (!targetSub?.endpoint || !targetSub?.keys?.p256dh || !targetSub?.keys?.auth) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Data PushSubscription (endpoint, keys.p256dh, keys.auth) wajib dikirim.' }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        const result = await upsertPushSubscription(
+          {
+            endpoint: targetSub.endpoint,
+            keys: targetSub.keys,
+            userId: body.userId,
+            userRole: body.userRole,
+            userAgent: body.userAgent || request.headers.get('user-agent') || '',
+          },
+          env
+        );
+        return new Response(JSON.stringify(result), {
+          status: result.success ? 200 : 400,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message || 'Gagal menyimpan subscription push.' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    if (url.pathname === '/api/push/unsubscribe' && request.method === 'POST') {
+      try {
+        const body = await request.json().catch(() => ({}));
+        const endpoint = body?.endpoint || body?.subscription?.endpoint;
+        if (!endpoint) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Endpoint wajib disertakan.' }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        await deletePushSubscription(endpoint, env);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message || 'Gagal menghapus subscription push.' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    if (url.pathname === '/api/push/send-priority' && request.method === 'POST') {
+      try {
+        const body = await request.json().catch(() => ({}));
+        const summary = await broadcastPriorityWebPush(
+          {
+            ...body,
+            siteOrigin: body.siteOrigin || url.origin,
+          },
+          env
+        );
+        return new Response(JSON.stringify({ success: true, ...summary }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message || 'Gagal mengirim Web Push notifikasi.' }),
           { status: 500, headers: { 'Content-Type': 'application/json' } }
         );
       }

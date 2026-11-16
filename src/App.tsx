@@ -32,6 +32,8 @@ import {
   scheduleModerationPushNotification,
   sendSystemPushNotification,
   getPendingModerations,
+  syncExistingWebPushSubscription,
+  triggerPriorityWebPush,
 } from './services/notificationService';
 import {
   triggerAdPublishedEmail,
@@ -205,6 +207,15 @@ export default function App() {
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  // Sinkronisasi subscription Web Push Native secara diam-diam jika izin notifikasi sudah granted
+  useEffect(() => {
+    syncExistingWebPushSubscription().then((synced) => {
+      if (synced) {
+        window.dispatchEvent(new Event('jualrugi-push-state-changed'));
+      }
+    });
   }, []);
 
   // Active navigation tab
@@ -822,9 +833,9 @@ export default function App() {
           });
         }
 
-        // Jika termasuk iklan prioritas (BU Prioritas), teruskan otomatis ke Grup WA Resmi
+        // Jika termasuk iklan prioritas (BU Prioritas), teruskan otomatis ke Grup WA Resmi + Native Web Push paralel
         if (newListing.isSuperBU) {
-          triggerPriorityAdGroupWhatsApp({
+          const priorityPayload = {
             listingId: newListing.id,
             listingTitle: newListing.title,
             sellingPrice: newListing.sellingPrice,
@@ -835,7 +846,16 @@ export default function App() {
             urgentReason: newListing.urgentReason,
             sellerName: currentUser.name || newListing.seller?.name || 'Member JualRugi',
             imageUrl: newListing.imageUrl || newListing.images?.[0],
-          }).catch(() => {});
+          };
+          triggerPriorityAdGroupWhatsApp(priorityPayload)
+            .then((waRes) => {
+              if (waRes?.skipped || !waRes?.webPush?.attempted) {
+                triggerPriorityWebPush(priorityPayload).catch(() => {});
+              }
+            })
+            .catch(() => {
+              triggerPriorityWebPush(priorityPayload).catch(() => {});
+            });
         }
 
         // 2. Set banner notifikasi lengkap dengan link dinamis
@@ -910,7 +930,7 @@ export default function App() {
     // Kembalikan status listing ke 'active' (resmi tayang)
     const approvedItem = listings.find((item) => item.id === pendingModeration.id);
     if (approvedItem?.isSuperBU) {
-      triggerPriorityAdGroupWhatsApp({
+      const priorityPayload = {
         listingId: approvedItem.id,
         listingTitle: approvedItem.title,
         sellingPrice: approvedItem.sellingPrice,
@@ -921,7 +941,16 @@ export default function App() {
         urgentReason: approvedItem.urgentReason,
         sellerName: currentUser.name || approvedItem.seller?.name || 'Member JualRugi',
         imageUrl: approvedItem.imageUrl || approvedItem.images?.[0],
-      }).catch(() => {});
+      };
+      triggerPriorityAdGroupWhatsApp(priorityPayload)
+        .then((waRes) => {
+          if (waRes?.skipped || !waRes?.webPush?.attempted) {
+            triggerPriorityWebPush(priorityPayload).catch(() => {});
+          }
+        })
+        .catch(() => {
+          triggerPriorityWebPush(priorityPayload).catch(() => {});
+        });
     }
 
     setListings((prev) =>
@@ -1045,9 +1074,9 @@ export default function App() {
           isEdit: true,
         });
 
-        // Jika termasuk iklan prioritas (BU Prioritas), teruskan otomatis ke Grup WA Resmi
+        // Jika termasuk iklan prioritas (BU Prioritas), teruskan otomatis ke Grup WA Resmi + Native Web Push paralel
         if (target.isSuperBU) {
-          triggerPriorityAdGroupWhatsApp({
+          const priorityPayload = {
             listingId: target.id,
             listingTitle: target.title,
             sellingPrice: target.sellingPrice,
@@ -1058,7 +1087,16 @@ export default function App() {
             urgentReason: target.urgentReason,
             sellerName: currentUser.name || target.seller?.name || 'Member JualRugi',
             imageUrl: target.imageUrl || target.images?.[0],
-          }).catch(() => {});
+          };
+          triggerPriorityAdGroupWhatsApp(priorityPayload)
+            .then((waRes) => {
+              if (waRes?.skipped || !waRes?.webPush?.attempted) {
+                triggerPriorityWebPush(priorityPayload).catch(() => {});
+              }
+            })
+            .catch(() => {
+              triggerPriorityWebPush(priorityPayload).catch(() => {});
+            });
         }
 
         // Tampilkan push / in-app notification banner
@@ -1580,6 +1618,7 @@ export default function App() {
         onLogin={handleOpenLogin}
         onLogout={handlePromptLogout}
         onOpenAdmin={() => setIsAdminModalOpen(true)}
+        onPushFeedback={showToast}
       />
 
       {/* Active Moderation Tracker Banner (2-3 Menit Jeda Moderasi) */}

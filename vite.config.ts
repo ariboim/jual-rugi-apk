@@ -14,6 +14,96 @@ self.lary = ""
 importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
 `;
 
+const NATIVE_WEB_PUSH_SW_BLOCK = `
+// Native Web Push (VAPID) JualRugi.my.id — Tanpa Pihak Ketiga
+self.addEventListener('push', function (event) {
+  var payload = {};
+  var rawText = '';
+  if (event.data) {
+    try {
+      payload = event.data.json() || {};
+    } catch (e) {
+      try {
+        rawText = event.data.text() || '';
+        payload = JSON.parse(rawText);
+      } catch (e2) {
+        payload = rawText ? { body: rawText } : {};
+      }
+    }
+  }
+  var isMonetagInternal =
+    payload &&
+    payload.source !== 'jualrugi-webpush' &&
+    Boolean(payload.zoneId || payload.ymid || payload.on_click || payload.url_params);
+  if (isMonetagInternal) return;
+
+  var title = payload.title || '🔥 BU Prioritas Baru — JualRugi.my.id';
+  var targetUrl =
+    payload.url ||
+    (payload.listingId ? '/?id=' + encodeURIComponent(payload.listingId) : '/');
+
+  var options = {
+    body:
+      payload.body ||
+      'Ada iklan Prioritas Butuh Uang (BU) baru yang disetujui Admin. Cek sekarang!',
+    icon: payload.icon || '/pwa-192x192.png',
+    badge: payload.badge || '/favicon.png',
+    tag: payload.tag || 'jualrugi-priority-' + (payload.listingId || Date.now()),
+    renotify: true,
+    vibrate: [200, 100, 200],
+    data: {
+      url: targetUrl,
+      listingId: payload.listingId || null,
+      source: 'jualrugi-webpush',
+      timestamp: payload.timestamp || Date.now(),
+    },
+  };
+  if (payload.image && typeof payload.image === 'string') {
+    options.image = payload.image;
+  }
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', function (event) {
+  var notifData = (event.notification && event.notification.data) || {};
+  var tag = (event.notification && event.notification.tag) || '';
+  var isJualRugiNotif =
+    notifData.source === 'jualrugi-webpush' ||
+    Boolean(notifData.url) ||
+    Boolean(notifData.listingId) ||
+    tag.indexOf('jualrugi-') === 0 ||
+    tag.indexOf('ad-approved-') === 0;
+  if (!isJualRugiNotif && (notifData.on_click || notifData.zoneId || notifData.ymid)) return;
+
+  event.notification.close();
+  var rawTarget =
+    notifData.url ||
+    (notifData.listingId ? '/?id=' + encodeURIComponent(notifData.listingId) : '/');
+  var resolvedUrl = new URL(rawTarget, self.location.origin).href;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async function (clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        try {
+          if (client.url && client.url.indexOf(self.location.origin) === 0) {
+            if ('navigate' in client && client.url !== resolvedUrl) {
+              await client.navigate(resolvedUrl);
+            }
+            if ('focus' in client) {
+              return client.focus();
+            }
+          }
+        } catch (err) {}
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(resolvedUrl);
+      }
+    })
+  );
+});
+`;
+
 function monetagServiceWorkerPlugin(): Plugin {
   let outDir = 'dist';
   return {
@@ -28,14 +118,14 @@ function monetagServiceWorkerPlugin(): Plugin {
       sequential: true,
       async handler() {
         const swPath = path.resolve(outDir, 'sw.js');
-        if (fs.existsSync(swPath)) {
-          const current = fs.readFileSync(swPath, 'utf8');
-          if (!current.includes('12274867')) {
-            fs.writeFileSync(swPath, `${MONETAG_SW_HEADER}\n${current}`, 'utf8');
-          }
-        } else {
-          fs.writeFileSync(swPath, MONETAG_SW_HEADER, 'utf8');
+        let next = fs.existsSync(swPath) ? fs.readFileSync(swPath, 'utf8') : '';
+        if (!next.includes('12274867')) {
+          next = `${MONETAG_SW_HEADER}\n${next}`;
         }
+        if (!next.includes('jualrugi-webpush')) {
+          next = `${next}\n${NATIVE_WEB_PUSH_SW_BLOCK}`;
+        }
+        fs.writeFileSync(swPath, next, 'utf8');
       },
     },
   };
