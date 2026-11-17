@@ -80,11 +80,6 @@ export const QRISModal: React.FC<QRISModalProps> = ({
   // Dummy Transaction ID for Mayar receipt
   const dummyTxId = `MYR-TX-${idIklan.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase() || '789123'}`;
 
-  const handleOpenPaymentLink = (url: string) => {
-    setHasClickedPay(true);
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
   const handleCopyWAMessage = () => {
     navigator.clipboard?.writeText(rawWaMessage);
     setCopiedWA(true);
@@ -269,24 +264,27 @@ export const QRISModal: React.FC<QRISModalProps> = ({
 
           {/* Action Buttons: Buka Link Mayar Resmi */}
           <div className="space-y-2.5 pt-1">
-            <button
-              onClick={() => handleOpenPaymentLink(payUrl)}
+            <a
+              href={payUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setHasClickedPay(true)}
               className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm text-white shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-98 ${
                 isSundul
                   ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-500/25'
                   : 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/25'
               }`}
             >
-              <CreditCard className="w-4 h-4" />
+              <CreditCard className="w-4 h-4 shrink-0" />
               <span>
                 {isSundul
                   ? 'Bayar Sundul Iklan - Rp 50.000 via Mayar'
                   : 'Pasang BU Prioritas - Rp 250.000 via Mayar'}
               </span>
-              <ExternalLink className="w-3.5 h-3.5 text-white/80" />
-            </button>
+              <ExternalLink className="w-3.5 h-3.5 text-white/80 shrink-0" />
+            </a>
 
-            <p className="text-[10.5px] text-center text-slate-500">
+            <p className="text-[10.5px] text-center text-slate-500 break-all">
               Link resmi: <span className="font-mono text-slate-700 font-semibold">{payUrl}</span>
             </p>
           </div>

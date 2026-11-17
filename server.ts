@@ -1667,17 +1667,19 @@ Team Admin jualrugi.my.id`;
   // Endpoint: Buat URL Link Pembayaran Mayar Resmi
   app.post('/api/mayar/create-payment-link', (req, res) => {
     const { packageType, userId, listingId } = req.body;
+    const priorityProduct = {
+      name: 'Prioritas BU Banget',
+      amount: 250000,
+      baseUrl: 'https://indo-digital.myr.id/plink/link-pembayaran-iklan-prioritas-bu',
+    };
     const pricingMap: Record<string, { name: string; amount: number; baseUrl: string }> = {
       sundul: {
         name: 'Sundul Iklan',
         amount: 50000,
         baseUrl: 'https://indo-digital.myr.id/plink/link-pembayaran-sundul-iklan',
       },
-      prioritas_bu: {
-        name: 'Prioritas BU Banget',
-        amount: 250000,
-        baseUrl: 'https://indo-digital.myr.id/plink/link-pembayaran-iklan-prioritas-bu',
-      },
+      prioritas_bu: priorityProduct,
+      superbu: priorityProduct,
     };
 
     const targetProduct = pricingMap[packageType] || pricingMap.sundul;

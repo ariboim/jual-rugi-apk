@@ -1336,6 +1336,50 @@ Team Admin jualrugi.my.id`;
     }
 
     // =========================================================================
+    // ENDPOINT 3E: BUAT URL LINK PEMBAYARAN MAYAR RESMI (SUNDUL 50RB / BU PRIORITAS 250RB)
+    // =========================================================================
+    if (url.pathname === '/api/mayar/create-payment-link' && request.method === 'POST') {
+      try {
+        const body = await request.json().catch(() => ({}));
+        const packageType = String(body.packageType || 'sundul').trim();
+        const userId = String(body.userId || 'guest').trim();
+        const listingId = String(body.listingId || 'general').trim();
+
+        const isPriority = packageType === 'prioritas_bu' || packageType === 'superbu';
+        const targetProduct = isPriority
+          ? {
+              name: 'Prioritas BU Banget',
+              amount: 250000,
+              baseUrl: 'https://indo-digital.myr.id/plink/link-pembayaran-iklan-prioritas-bu',
+            }
+          : {
+              name: 'Sundul Iklan',
+              amount: 50000,
+              baseUrl: 'https://indo-digital.myr.id/plink/link-pembayaran-sundul-iklan',
+            };
+
+        const paymentUrl = `${targetProduct.baseUrl}?amount=${targetProduct.amount}&customer_id=${encodeURIComponent(
+          userId
+        )}&item_id=${encodeURIComponent(listingId)}`;
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            product: targetProduct.name,
+            amount: targetProduct.amount,
+            paymentUrl,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message || 'Worker Internal Error' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // =========================================================================
     // SEO SITEMAP XML (/sitemap.xml) - Daftar dinamis seluruh iklan aktif & tayang
     // =========================================================================
     if (url.pathname === '/sitemap.xml' && (request.method === 'GET' || request.method === 'HEAD')) {

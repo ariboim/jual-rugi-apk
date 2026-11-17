@@ -223,6 +223,19 @@ export const QuotaExceededModal: React.FC<QuotaExceededModalProps> = ({
             </span>
           </button>
         </div>
+
+        <p className="mt-2.5 text-[10.5px] text-center text-slate-500 break-all">
+          Link Mayar resmi:{' '}
+          <a
+            href={MAYAR_PRODUCTS[selectedPlan].paymentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-sky-700 font-semibold hover:underline inline-flex items-center gap-1"
+          >
+            <span>{MAYAR_PRODUCTS[selectedPlan].paymentUrl}</span>
+            <ExternalLink className="w-3 h-3 inline shrink-0" />
+          </a>
+        </p>
       </div>
     </div>
   );
