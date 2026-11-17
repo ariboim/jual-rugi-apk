@@ -22,7 +22,7 @@ import { Listing, UserProfile } from '../types';
 import { getListingPhotos } from '../data/initialData';
 import { ProductGallery } from './gallery/ProductGallery';
 import { ListingStatsBar } from './ListingStatsBar';
-import { getAdExpiryInfo, isListingOwner } from '../services/listingLifecycle';
+import { getAdExpiryInfo, isListingOwner, isPriorityBUActive } from '../services/listingLifecycle';
 import {
   getSellerWhatsAppNumber,
   buildSellerWhatsAppChatUrl,
@@ -111,6 +111,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   const isSold = listing.status === 'sold';
   const isExpired = listing.status === 'expired' || (!isSold && listing.createdAt && (Date.now() - new Date(listing.createdAt).getTime() >= 30 * 24 * 60 * 60 * 1000));
   const isInactive = isSold || isExpired;
+  const isPriorityActive = !isInactive && isPriorityBUActive(listing);
 
   // Nomor WhatsApp Seller dinamis & Tautan Direct Chat WhatsApp resmi:
   // wa.me/[nomor_hp_seller]?text=Halo kak, saya tertarik dengan produk *[nama_produk]* yang ada di JualRugi.my.id
@@ -204,7 +205,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
               {listing.category}
             </span>
-            {listing.isSuperBU && (
+            {isPriorityActive && (
               <span className="flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-full bg-amber-300 text-amber-950 border border-amber-400 shadow-xs animate-pulse">
                 <Flame className="w-3.5 h-3.5 fill-red-600 text-red-600" /> PALING BU
               </span>
@@ -298,7 +299,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                     ⏳ KEDALUWARSA (30 HARI)
                   </span>
                 )}
-                {listing.isSuperBU && !isInactive && (
+                {isPriorityActive && (
                   <span className="px-3 py-1 rounded-xl bg-amber-400 text-amber-950 font-black text-xs sm:text-sm tracking-tight shadow-md flex items-center gap-1.5 border border-amber-500 animate-pulse">
                     <Flame className="w-3.5 h-3.5 fill-red-600 text-red-600" />
                     PALING BU

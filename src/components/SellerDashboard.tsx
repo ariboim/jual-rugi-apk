@@ -24,7 +24,14 @@ import { Listing, UserProfile } from '../types';
 import { MonetizationType } from './QRISModal';
 import { APK_DOWNLOAD_URL } from './PWAInstallButton';
 import { isSupabaseConfigured } from '../services/supabase';
-import { getAdExpiryInfo } from '../services/listingLifecycle';
+import {
+  getAdExpiryInfo,
+  isPriorityBUActive,
+  isSundulActive,
+  getRemainingPromoTimeLabel,
+  SUNDUL_DURATION_MS,
+  PRIORITY_BU_DURATION_MS,
+} from '../services/listingLifecycle';
 import type { AdminTestPreset } from '../data/adminTestPresets';
 
 interface SellerDashboardProps {
@@ -85,11 +92,13 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
           (l as any).seller_email === 'bca.ccpl@gmail.com'
       )
       .sort((a, b) => {
-        const aSundul = a.sundulAt ? new Date(a.sundulAt).getTime() : 0;
-        const bSundul = b.sundulAt ? new Date(b.sundulAt).getTime() : 0;
+        const aSundul = isSundulActive(a) && a.sundulAt ? new Date(a.sundulAt).getTime() : 0;
+        const bSundul = isSundulActive(b) && b.sundulAt ? new Date(b.sundulAt).getTime() : 0;
         if (aSundul !== bSundul) return bSundul - aSundul;
-        if (a.isSuperBU && !b.isSuperBU) return -1;
-        if (!a.isSuperBU && b.isSuperBU) return 1;
+        const aPrio = isPriorityBUActive(a);
+        const bPrio = isPriorityBUActive(b);
+        if (aPrio && !bPrio) return -1;
+        if (!aPrio && bPrio) return 1;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [listings, currentUser.id]);
@@ -294,14 +303,17 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="font-bold text-sm text-sky-950">Sundul Iklan</h4>
               <span className="text-xs font-black bg-sky-100 text-sky-900 px-2 py-0.5 rounded-md">
-                Rp 25.000
+                Rp 50.000
+              </span>
+              <span className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded-md">
+                Lock 1x24 Jam
               </span>
               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">
                 +1 Slot Kuota
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-              Pindahkan posisi iklan langsung ke urutan #1 teratas di feed secara instan + bonus otomatis 1 kuota posting iklan baru via Mayar.id.
+              Posisi di-lock di urutan Sundul teratas selama <strong>1x24 jam</strong> sejak diaktifkan Admin + bonus 1 kuota iklan. Setelah selesai kembali jadi iklan biasa &amp; bergeser jika ada iklan baru.
             </p>
           </div>
         </div>
@@ -314,14 +326,17 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="font-bold text-sm text-sky-950">Prioritas BU Banget</h4>
               <span className="text-xs font-black bg-amber-200 text-amber-950 px-2 py-0.5 rounded-md">
-                Rp 75.000
+                Rp 250.000
+              </span>
+              <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-md">
+                Lock 3x24 Jam
               </span>
               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">
                 +1 Slot Kuota
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-              Highlight emas menyala & label darurat PALING BU selama 24 jam penuh + bonus otomatis 1 kuota posting iklan baru via Mayar.id.
+              Di-lock di posisi Prioritas + highlight emas selama <strong>3x24 jam</strong>, siaran ke Grup WA &amp; Push Notifikasi App + bonus 1 kuota. Setelah selesai kembali jadi iklan biasa.
             </p>
           </div>
         </div>
@@ -361,11 +376,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
             </button>
           </div>
         ) : (
-          myListings.map((item) => (
+          myListings.map((item) => {
+            const isPriorityActive = isPriorityBUActive(item);
+            const isSundulAct = isSundulActive(item);
+            return (
             <div
               key={item.id}
               className={`p-4 rounded-2xl transition-all shadow-xs ${
-                item.isSuperBU
+                isPriorityActive
                   ? 'bg-amber-50/95 border-2 border-amber-400 ring-2 ring-amber-300 shadow-md shadow-amber-500/15'
                   : 'bg-white border border-sky-100'
               }`}
@@ -377,7 +395,7 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                   className="flex items-start gap-3 cursor-pointer grow"
                 >
                   <div className={`relative w-20 h-20 rounded-xl overflow-hidden shrink-0 border ${
-                    item.isSuperBU ? 'bg-amber-100 border-amber-300' : 'bg-sky-50 border-sky-100'
+                    isPriorityActive ? 'bg-amber-100 border-amber-300' : 'bg-sky-50 border-sky-100'
                   }`}>
                     <img
                       src={item.imageUrl}
@@ -394,14 +412,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-50 text-sky-700">
                         {item.category}
                       </span>
-                      {item.isSuperBU && (
+                      {isPriorityActive && (
                         <span className="flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-300 text-amber-950 border border-amber-400 shadow-xs animate-pulse">
-                          <Flame className="w-3 h-3 fill-red-600 text-red-600" /> PALING BU AKTIF
+                          <Flame className="w-3 h-3 fill-red-600 text-red-600" /> PALING BU ({getRemainingPromoTimeLabel(item.superBUExpiresAt, item.superBUActivatedAt || item.createdAt, PRIORITY_BU_DURATION_MS)})
                         </span>
                       )}
-                      {item.sundulAt && (
+                      {isSundulAct && (
                         <span className="flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 border border-sky-300">
-                          <ArrowUp className="w-3 h-3 text-sky-600" /> SUNDUL TERATAS
+                          <ArrowUp className="w-3 h-3 text-sky-600" /> SUNDUL ({getRemainingPromoTimeLabel(item.sundulExpiresAt, item.sundulAt, SUNDUL_DURATION_MS)})
                         </span>
                       )}
                       {item.status === 'in_moderation' ? (
@@ -416,14 +434,14 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                     </div>
 
                     <h4 className={`text-sm font-bold hover:text-sky-600 line-clamp-1 ${
-                      item.isSuperBU ? 'text-amber-950 font-black' : 'text-sky-950'
+                      isPriorityActive ? 'text-amber-950 font-black' : 'text-sky-950'
                     }`}>
                       {item.title}
                     </h4>
 
                     <div className="flex items-baseline gap-2">
                       <span className={`text-sm font-black ${
-                        item.isSuperBU ? 'text-amber-950' : 'text-sky-900'
+                        isPriorityActive ? 'text-amber-950' : 'text-sky-900'
                       }`}>
                         Rp {item.sellingPrice.toLocaleString('id-ID')}
                       </span>
@@ -510,24 +528,24 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                       <button
                         onClick={() => onOpenQRIS(item, 'sundul')}
                         className="grow sm:grow-0 py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-xs"
-                        title="Sundul Iklan (Rp 25.000) - Naikkan ke posisi paling atas feed"
+                        title="Sundul Iklan (Rp 50.000) - Di-lock di posisi paling atas selama 1x24 jam"
                       >
                         <ArrowUp className="w-3.5 h-3.5 text-sky-600" />
-                        <span>Sundul (Rp 25.000)</span>
+                        <span>Sundul (Rp 50.000)</span>
                       </button>
 
                       {/* Paling BU Button */}
                       <button
                         onClick={() => onOpenQRIS(item, 'superbu')}
                         className={`grow sm:grow-0 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 ${
-                          item.isSuperBU
+                          isPriorityActive
                             ? 'bg-amber-300 hover:bg-amber-400 text-amber-950 border border-amber-400 font-black shadow-xs'
                             : 'bg-amber-400 hover:bg-amber-500 text-amber-950 border border-amber-500 font-black shadow-xs'
                         }`}
-                        title="Pasang Highlight Kuning & Badge PALING BU (Rp 75.000) via Mayar"
+                        title="Pasang Highlight Kuning & Badge PALING BU (Rp 250.000) - Di-lock 3x24 jam via Mayar"
                       >
                         <Flame className="w-3.5 h-3.5 fill-red-600 text-red-600" />
-                        <span>Paling BU (Rp 75.000)</span>
+                        <span>Paling BU (Rp 250.000)</span>
                       </button>
 
                       {/* Delete Button */}
@@ -547,7 +565,8 @@ export const SellerDashboard: React.FC<SellerDashboardProps> = ({
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 

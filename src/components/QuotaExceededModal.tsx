@@ -90,8 +90,8 @@ export const QuotaExceededModal: React.FC<QuotaExceededModalProps> = ({
         </div>
 
         {/* Promotional Packages Selection with Mayar Pricing */}
-        <div className="space-y-3 mb-5">
-          {/* Option 1: Sundul Iklan - Rp 25.000 */}
+        <div className="space-y-3 mb-4">
+          {/* Option 1: Sundul Iklan - Rp 50.000 */}
           <div
             onClick={() => setSelectedPlan('sundul')}
             className={`p-4 rounded-2xl border-2 transition cursor-pointer relative ${
@@ -106,25 +106,28 @@ export const QuotaExceededModal: React.FC<QuotaExceededModalProps> = ({
                   <ArrowUp className="w-5 h-5 stroke-[2.5]" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-black text-sm text-sky-950">Sundul Iklan</h4>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-200">
+                      Lock 1x24 Jam
+                    </span>
                     <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                       +1 Slot Iklan Baru
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Naikkan iklan ke posisi #1 feed teratas + buka 1 slot posting baru.
+                    Di-lock di posisi Sundul teratas selama 1x24 jam sejak diaktifkan Admin + buka 1 slot kuota baru. Setelah 1x24 jam kembali menjadi iklan biasa.
                   </p>
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-base font-black text-sky-950">Rp 25.000</div>
+                <div className="text-base font-black text-sky-950">Rp 50.000</div>
                 <span className="text-[10px] font-bold text-sky-600">Mayar Checkout</span>
               </div>
             </div>
           </div>
 
-          {/* Option 2: Prioritas BU Banget - Rp 75.000 */}
+          {/* Option 2: Prioritas BU Banget - Rp 250.000 */}
           <div
             onClick={() => setSelectedPlan('prioritas_bu')}
             className={`p-4 rounded-2xl border-2 transition cursor-pointer relative ${
@@ -139,23 +142,37 @@ export const QuotaExceededModal: React.FC<QuotaExceededModalProps> = ({
                   <Flame className="w-5 h-5 fill-amber-950 stroke-[2.5]" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-black text-sm text-slate-900">Prioritas BU Banget</h4>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-300 text-amber-950 border border-amber-400">
+                      Lock 3x24 Jam
+                    </span>
                     <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-200 text-amber-950 border border-amber-300">
                       +1 Slot Iklan Baru
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Highlight kuning emas & lencana eksklusif 24 jam + buka 1 slot posting baru.
+                    Di-lock posisi Prioritas 3x24 jam, highlight kuning emas &amp; badge PALING BU, siaran ke Grup WA &amp; Push App + buka 1 slot kuota baru.
                   </p>
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-base font-black text-amber-900">Rp 75.000</div>
+                <div className="text-base font-black text-amber-900">Rp 250.000</div>
                 <span className="text-[10px] font-bold text-amber-700">Mayar Checkout</span>
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Keterangan Benefit Perbedaan Paket */}
+        <div className="mb-4 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-[11px] text-slate-700 space-y-1">
+          <div className="font-black text-slate-900">
+            📌 Perbedaan Benefit Sundul vs Prioritas BU:
+          </div>
+          <p className="leading-relaxed">
+            <strong>Sundul (Rp 50rb):</strong> Posisi di-lock <strong>1x24 jam</strong> di urutan teratas (tampilan standar).{' '}
+            <strong>Prioritas BU (Rp 250rb):</strong> Posisi di-lock <strong>3x24 jam</strong> di zona Prioritas + <strong>highlight emas, badge PALING BU, siaran Grup WA &amp; Push Notifikasi</strong>. Setelah masa aktif selesai, iklan otomatis menjadi iklan biasa &amp; bergeser jika ada iklan baru.
+          </p>
         </div>
 
         {/* Opsi Beli Slot Kuota Iklan (1, 5, 10 Kuota) */}

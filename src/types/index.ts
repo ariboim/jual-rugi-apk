@@ -123,7 +123,7 @@ export type MonetizationPackage = 'sundul' | 'prioritas_bu';
 export interface MayarProductConfig {
   id: MonetizationPackage;
   name: string;
-  price: number; // 50000 (Sundul 24 jam) or 250000 (BU Prioritas 7 hari)
+  price: number; // 50000 (Sundul 1x24 jam) or 250000 (BU Prioritas 3x24 jam)
   paymentUrl: string;
   description: string;
   features: string[];

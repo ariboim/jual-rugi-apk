@@ -7,12 +7,12 @@ export const LISTING_LIFESPAN_DAYS = 30;
 export const LISTING_LIFESPAN_MS = LISTING_LIFESPAN_DAYS * 24 * 60 * 60 * 1000;
 
 /**
- * Durasi Promosi Berbayar:
- * - Sundul Iklan (Rp 50.000): 24 jam sejak diaktifkan Admin
- * - BU Prioritas / PALING BU (Rp 250.000): 7 hari sejak diaktivasi Admin
+ * Durasi Promosi Berbayar (Di-Lock di Posisi Masing-Masing):
+ * - Sundul Iklan (Rp 50.000): 1x24 jam sejak diaktifkan Admin
+ * - BU Prioritas / PALING BU (Rp 250.000): 3x24 jam (72 jam) sejak diaktivasi Admin
  */
 export const SUNDUL_DURATION_MS = 24 * 60 * 60 * 1000;
-export const PRIORITY_BU_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+export const PRIORITY_BU_DURATION_MS = 3 * 24 * 60 * 60 * 1000;
 
 const PROMO_EXPIRIES_STORAGE_KEY = 'jualrugi_promo_expiries';
 
@@ -83,12 +83,16 @@ export function isPriorityBUActive(listing: Listing, nowMs: number = Date.now())
     listing?.isSuperBU || (listing as any)?.is_priority || (listing as any)?.is_super_bu
   );
   if (!flagged) return false;
-  if (listing.status === 'expired' || listing.status === 'deleted') return false;
-  if (listing.superBUExpiresAt) {
-    const expMs = new Date(listing.superBUExpiresAt).getTime();
-    if (!Number.isNaN(expMs) && expMs <= nowMs) {
-      return false;
-    }
+  if (listing.status === 'expired' || listing.status === 'deleted' || listing.status === 'sold') {
+    return false;
+  }
+  const expMs = listing.superBUExpiresAt
+    ? new Date(listing.superBUExpiresAt).getTime()
+    : listing.superBUActivatedAt
+    ? new Date(listing.superBUActivatedAt).getTime() + PRIORITY_BU_DURATION_MS
+    : NaN;
+  if (!Number.isNaN(expMs) && expMs <= nowMs) {
+    return false;
   }
   return true;
 }
@@ -104,7 +108,7 @@ export function getRemainingPromoTimeLabel(
     ? new Date(fallbackFrom).getTime() + durationMs
     : NaN;
   if (Number.isNaN(targetMs)) {
-    return durationMs >= PRIORITY_BU_DURATION_MS ? '7 Hari Aktif' : '24 Jam Aktif';
+    return durationMs >= PRIORITY_BU_DURATION_MS ? '3x24 Jam Aktif' : '1x24 Jam Aktif';
   }
   const diff = targetMs - Date.now();
   if (diff <= 0) return 'Berakhir';
@@ -112,7 +116,7 @@ export function getRemainingPromoTimeLabel(
   if (totalHours >= 24) {
     const days = Math.floor(totalHours / 24);
     const remHours = totalHours % 24;
-    return remHours > 0 ? `${days}h ${remHours}j lagi` : `${days} hari lagi`;
+    return remHours > 0 ? `${days}h ${remHours}j lagi` : `${days}x24 jam lagi`;
   }
   return `${totalHours} jam lagi`;
 }
@@ -269,7 +273,7 @@ export function checkAndExpireListings(
       return expiredItem;
     }
 
-    // Bersihkan status Sundul (24 jam) & BU Prioritas (7 hari) jika sudah melewati masa berlaku
+    // Bersihkan status Sundul (1x24 jam) & BU Prioritas (3x24 jam) jika sudah melewati masa berlaku
     let cleaned = listing;
     if (cleaned.sundulAt && !isSundulActive(cleaned, now)) {
       cleaned = {
@@ -282,6 +286,8 @@ export function checkAndExpireListings(
       cleaned = {
         ...cleaned,
         isSuperBU: false,
+        superBUActivatedAt: undefined,
+        superBUExpiresAt: undefined,
       };
     }
 

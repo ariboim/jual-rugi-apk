@@ -1671,12 +1671,12 @@ Team Admin jualrugi.my.id`;
       sundul: {
         name: 'Sundul Iklan',
         amount: 50000,
-        baseUrl: 'https://jualrugi.mayar.link/pl/sundul-iklan',
+        baseUrl: 'https://indo-digital.myr.id/plink/link-pembayaran-sundul-iklan',
       },
       prioritas_bu: {
         name: 'Prioritas BU Banget',
         amount: 250000,
-        baseUrl: 'https://jualrugi.mayar.link/pl/prioritas-bu-banget',
+        baseUrl: 'https://indo-digital.myr.id/plink/link-pembayaran-iklan-prioritas-bu',
       },
     };
 
@@ -1755,7 +1755,7 @@ Team Admin jualrugi.my.id`;
         {
           eventType: 'quota_activated',
           listingId: listingId || 'quota-activation',
-          listingTitle: `Aktivasi +1 Kuota Iklan (${packageType === 'sundul' ? 'Sundul 24 Jam' : 'BU Prioritas 7 Hari'})`,
+          listingTitle: `Aktivasi +1 Kuota Iklan (${packageType === 'sundul' ? 'Sundul 1x24 Jam' : 'BU Prioritas 3x24 Jam'})`,
           targetUserId,
           targetEmail: payload?.data?.customer_email || payload?.data?.email,
           addedQuota: 1,

@@ -98,7 +98,7 @@ export const DEFAULT_ACTIVITIES: ActivityNotification[] = [
     avatarText: 'DA',
     avatarBg: 'bg-amber-600',
     type: 'prioritas_bu',
-    title: 'Mengaktifkan Highlight Emas 24 Jam',
+    title: 'Mengaktifkan Highlight Emas 3x24 Jam',
     highlightText: 'Iklan Kamera Sony A7 III',
     location: 'Surabaya',
     timeAgo: '4 menit yang lalu',

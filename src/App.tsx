@@ -25,6 +25,8 @@ import {
   Check,
   ArrowRight,
   Tag,
+  AlertTriangle,
+  Zap,
 } from 'lucide-react';
 
 import { Category, CATEGORIES, Listing, UserProfile, MonetizationPackage } from './types';
@@ -84,6 +86,12 @@ import {
 } from './services/supabase';
 import {
   checkAndExpireListings,
+  applySavedPromoExpiries,
+  saveListingPromoExpiry,
+  isSundulActive,
+  isPriorityBUActive,
+  SUNDUL_DURATION_MS,
+  PRIORITY_BU_DURATION_MS,
   DAILY_SOLD_SEEDED_LISTINGS,
 } from './services/listingLifecycle';
 
@@ -172,8 +180,9 @@ export default function App() {
       const seededToAdd = DAILY_SOLD_SEEDED_LISTINGS.filter((item) => !existingIds.has(item.id));
       const combined = [...base, ...seededToAdd];
 
-      // Aturan Bisnis 1: Cek durasi tayang 30 hari
-      const { updatedListings } = checkAndExpireListings(combined);
+      // Hydrate status lock promo Sundul / BU Prioritas tersimpan & cek durasi tayang
+      const hydrated = applySavedPromoExpiries(combined);
+      const { updatedListings } = checkAndExpireListings(hydrated);
       return updatedListings;
     } catch (e) {
       console.error(e);
@@ -197,7 +206,8 @@ export default function App() {
         try {
           const onlineData = await fetchListingsFromSupabase();
           if (isMounted && onlineData && onlineData.length > 0) {
-            const { updatedListings } = checkAndExpireListings(onlineData);
+            const hydrated = applySavedPromoExpiries(onlineData);
+            const { updatedListings } = checkAndExpireListings(hydrated);
             const existingIds = new Set(updatedListings.map((item) => item.id));
             const seededToAdd = DAILY_SOLD_SEEDED_LISTINGS.filter((item) => !existingIds.has(item.id));
             setListings([...updatedListings, ...seededToAdd]);
@@ -214,79 +224,33 @@ export default function App() {
     };
   }, []);
 
-  // Sinkronisasi subscription Web Push Native secara diam-diam jika izin notifikasi sudah granted
-  useEffect(() => {
-    syncExistingWebPushSubscription().then((synced) => {
-      if (synced) {
-        window.dispatchEvent(new Event('jualrugi-push-state-changed'));
-      }
-    });
-  }, []);
-
-  // State & listener live in-web Alert Iklan BU Prioritas (sinkron antar tab + polling /api/push/latest)
+  // State live in-web Alert Notifikasi (BU Prioritas, Iklan Tayang, Kuota Aktif, Take Down)
   const [livePriorityAlert, setLivePriorityAlert] = useState<PriorityWebAlertPayload | null>(null);
   const lastPriorityAlertKeyRef = React.useRef<string>('');
   const livePriorityTimerRef = React.useRef<number | null>(null);
 
+  // Timer periodik 60 detik: otomatis turunkan posisi Sundul (1x24 jam) & BU Prioritas (3x24 jam) saat masa lock berakhir
   useEffect(() => {
-    const presentAlert = (alert: PriorityWebAlertPayload | null | undefined, isFromPoll = false) => {
-      if (!alert || !alert.listingId) return;
-      const alertKey = `${alert.listingId}:${alert.timestamp || 0}`;
-      if (lastPriorityAlertKeyRef.current === alertKey) return;
-
-      if (isFromPoll) {
-        const ageMs = Date.now() - Number(alert.timestamp || 0);
-        if (ageMs > 5 * 60 * 1000) return;
-        try {
-          if (sessionStorage.getItem('jualrugi_last_dismissed_priority_alert') === alertKey) {
-            return;
+    const expiryTicker = window.setInterval(() => {
+      setListings((prev) => {
+        let changed = false;
+        const { updatedListings } = checkAndExpireListings(prev);
+        for (let i = 0; i < prev.length; i++) {
+          const oldItem = prev[i];
+          const newItem = updatedListings[i];
+          if (
+            oldItem.status !== newItem.status ||
+            oldItem.sundulAt !== newItem.sundulAt ||
+            oldItem.isSuperBU !== newItem.isSuperBU
+          ) {
+            changed = true;
+            break;
           }
-        } catch {}
-      }
-
-      lastPriorityAlertKeyRef.current = alertKey;
-      setLivePriorityAlert(alert);
-
-      if (livePriorityTimerRef.current) {
-        window.clearTimeout(livePriorityTimerRef.current);
-      }
-      livePriorityTimerRef.current = window.setTimeout(() => {
-        setLivePriorityAlert((cur) =>
-          cur && `${cur.listingId}:${cur.timestamp}` === alertKey ? null : cur
-        );
-      }, 18000);
-    };
-
-    const handleCustomEvent = (e: Event) => {
-      presentAlert((e as CustomEvent<PriorityWebAlertPayload>).detail, false);
-    };
-    window.addEventListener(PRIORITY_ALERT_EVENT, handleCustomEvent);
-
-    let bc: BroadcastChannel | null = null;
-    try {
-      if ('BroadcastChannel' in window) {
-        bc = new BroadcastChannel(PRIORITY_ALERT_CHANNEL);
-        bc.onmessage = (e) => presentAlert(e.data, false);
-      }
-    } catch {}
-
-    const checkLatestFromServer = async () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      const latest = await fetchLatestPriorityWebAlert();
-      if (latest) presentAlert(latest, true);
-    };
-
-    checkLatestFromServer();
-    const pollInterval = window.setInterval(checkLatestFromServer, 15000);
-
-    return () => {
-      window.removeEventListener(PRIORITY_ALERT_EVENT, handleCustomEvent);
-      if (bc) bc.close();
-      window.clearInterval(pollInterval);
-      if (livePriorityTimerRef.current) {
-        window.clearTimeout(livePriorityTimerRef.current);
-      }
-    };
+        }
+        return changed ? updatedListings : prev;
+      });
+    }, 60 * 1000);
+    return () => window.clearInterval(expiryTicker);
   }, []);
 
   // Active navigation tab
@@ -636,6 +600,81 @@ export default function App() {
     return BUYER_USER;
   });
 
+  // Sinkronisasi subscription Web Push Native secara diam-diam dengan identitas user aktif
+  useEffect(() => {
+    syncExistingWebPushSubscription({
+      userId: currentUser.id,
+      userEmail: currentUser.email,
+      userRole: currentUser.role,
+    }).then((synced) => {
+      if (synced) {
+        window.dispatchEvent(new Event('jualrugi-push-state-changed'));
+      }
+    });
+  }, [currentUser.id, currentUser.email, currentUser.role]);
+
+  // Listener live in-web Alert (sinkron antar tab + polling /api/push/latest per user/email)
+  useEffect(() => {
+    const presentAlert = (alert: PriorityWebAlertPayload | null | undefined, isFromPoll = false) => {
+      if (!alert || !alert.listingId) return;
+      const alertKey = `${alert.eventId || alert.listingId}:${alert.timestamp || 0}`;
+      if (lastPriorityAlertKeyRef.current === alertKey) return;
+
+      if (isFromPoll) {
+        const ageMs = Date.now() - Number(alert.timestamp || 0);
+        if (ageMs > 5 * 60 * 1000) return;
+        try {
+          if (sessionStorage.getItem('jualrugi_last_dismissed_priority_alert') === alertKey) {
+            return;
+          }
+        } catch {}
+      }
+
+      lastPriorityAlertKeyRef.current = alertKey;
+      setLivePriorityAlert(alert);
+
+      if (livePriorityTimerRef.current) {
+        window.clearTimeout(livePriorityTimerRef.current);
+      }
+      livePriorityTimerRef.current = window.setTimeout(() => {
+        setLivePriorityAlert((cur) =>
+          cur && `${cur.eventId || cur.listingId}:${cur.timestamp}` === alertKey ? null : cur
+        );
+      }, 18000);
+    };
+
+    const handleCustomEvent = (e: Event) => {
+      presentAlert((e as CustomEvent<PriorityWebAlertPayload>).detail, false);
+    };
+    window.addEventListener(PRIORITY_ALERT_EVENT, handleCustomEvent);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      if ('BroadcastChannel' in window) {
+        bc = new BroadcastChannel(PRIORITY_ALERT_CHANNEL);
+        bc.onmessage = (e) => presentAlert(e.data, false);
+      }
+    } catch {}
+
+    const checkLatestFromServer = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const latest = await fetchLatestPriorityWebAlert(currentUser.id, currentUser.email);
+      if (latest) presentAlert(latest, true);
+    };
+
+    checkLatestFromServer();
+    const pollInterval = window.setInterval(checkLatestFromServer, 15000);
+
+    return () => {
+      window.removeEventListener(PRIORITY_ALERT_EVENT, handleCustomEvent);
+      if (bc) bc.close();
+      window.clearInterval(pollInterval);
+      if (livePriorityTimerRef.current) {
+        window.clearTimeout(livePriorityTimerRef.current);
+      }
+    };
+  }, [currentUser.id, currentUser.email]);
+
   // Approval Push Notification Banner
   const [aiApprovalNotification, setAiApprovalNotification] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -876,10 +915,11 @@ export default function App() {
             ? currentUser.email
             : 'bca.ccpl@gmail.com';
 
-        // 1. Eksekusi pengiriman double notifikasi otomatis "Iklan Tayang" (Email Brevo + WA Fonnte)
+        // 1. Eksekusi pengiriman notifikasi otomatis "Iklan Tayang" (Email Brevo + WA Personal + Web Push)
         await triggerAdPublishedEmail({
           listingId: newListing.id,
           listingTitle: newListing.title,
+          userId: currentUser.id,
           recipientEmail: recipient,
           recipientPhone: currentUser.phone || currentUser.whatsapp,
           whatsapp: currentUser.phone || currentUser.whatsapp,
@@ -895,6 +935,7 @@ export default function App() {
           triggerAdPublishedEmail({
             listingId: newListing.id,
             listingTitle: newListing.title,
+            userId: currentUser.id,
             recipientEmail: 'bca.ccpl@gmail.com',
             recipientName: 'Admin JualRugi',
             sellingPrice: newListing.sellingPrice,
@@ -975,10 +1016,11 @@ export default function App() {
       }
     );
 
-    // Kirim double notifikasi "Iklan Tayang" (Email Brevo + WA Fonnte)
+    // Kirim notifikasi "Iklan Tayang" (Email Brevo + WA Personal + Web Push)
     await triggerAdPublishedEmail({
       listingId: pendingModeration.id,
       listingTitle: pendingModeration.title,
+      userId: currentUser.id,
       recipientEmail: recipient,
       recipientPhone: currentUser.phone || currentUser.whatsapp,
       whatsapp: currentUser.phone || currentUser.whatsapp,
@@ -992,6 +1034,7 @@ export default function App() {
       triggerAdPublishedEmail({
         listingId: pendingModeration.id,
         listingTitle: pendingModeration.title,
+        userId: currentUser.id,
         recipientEmail: 'bca.ccpl@gmail.com',
         recipientName: 'Admin JualRugi',
         category: pendingModeration.category,
@@ -1135,10 +1178,11 @@ export default function App() {
         const dynamicUrl = getDynamicAdLink(target.id);
         const recipient = currentUser.email || 'seller@jualrugi.my.id';
 
-        // Kirim double notifikasi "Iklan Tayang" (Email Brevo + WA Fonnte)
+        // Kirim notifikasi "Iklan Tayang" (Email Brevo + WA Personal + Web Push)
         await triggerAdPublishedEmail({
           listingId: target.id,
           listingTitle: target.title,
+          userId: currentUser.id,
           recipientEmail: recipient,
           recipientPhone: currentUser.phone || currentUser.whatsapp,
           whatsapp: currentUser.phone || currentUser.whatsapp,
@@ -1193,8 +1237,11 @@ export default function App() {
   };
 
   const handleQRISSuccess = (listingId: string, type: MonetizationType) => {
-    const now = new Date().toISOString();
-    let updatedTitle = '';
+    const nowMs = Date.now();
+    const now = new Date(nowMs).toISOString();
+    const isPriorityPackage = type === 'superbu' || type === 'prioritas_bu';
+    const sundulExpiresAt = new Date(nowMs + SUNDUL_DURATION_MS).toISOString();
+    const superBUExpiresAt = new Date(nowMs + PRIORITY_BU_DURATION_MS).toISOString();
 
     // Tambah Kuota Posting +1 Slot Iklan Baru (Aturan Monetisasi Mayar)
     setCurrentUser((prev) => ({
@@ -1202,11 +1249,25 @@ export default function App() {
       listingQuota: prev.listingQuota + 1,
     }));
 
+    // Simpan lock durasi promo lokal (Sundul 1x24 jam / Prioritas BU 3x24 jam)
+    saveListingPromoExpiry(
+      listingId,
+      isPriorityPackage
+        ? {
+            isSuperBU: true,
+            superBUActivatedAt: now,
+            superBUExpiresAt,
+          }
+        : {
+            sundulAt: now,
+            sundulExpiresAt,
+          }
+    );
+
     // Update status prioritas/sundul di Supabase
     updateListingInSupabase(listingId, {
       createdAt: now,
-      sundulAt: now,
-      isSuperBU: type === 'superbu' || type === 'prioritas_bu',
+      ...(isPriorityPackage ? { isSuperBU: true } : { sundulAt: now }),
     });
 
     setListings((prev) => {
@@ -1214,27 +1275,28 @@ export default function App() {
       if (idx === -1) return prev;
 
       const target = { ...prev[idx] };
-      updatedTitle = target.title;
       target.createdAt = now;
-      target.sundulAt = now;
 
-      if (type === 'superbu' || type === 'prioritas_bu') {
+      if (isPriorityPackage) {
         target.isSuperBU = true;
-        target.superBUExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        target.superBUActivatedAt = now;
+        target.superBUExpiresAt = superBUExpiresAt;
+      } else {
+        target.sundulAt = now;
+        target.sundulExpiresAt = sundulExpiresAt;
       }
 
-      // Move directly to the very top (index 0) of the listings array
       const remaining = prev.filter((item) => item.id !== listingId);
       return [target, ...remaining];
     });
 
-    if (type === 'sundul') {
-      showToast('🚀 Pembayaran Mayar Rp 25.000 Berhasil! Iklan Disundul ke #1 & Kuota +1 Slot Aktif!');
+    if (!isPriorityPackage) {
+      showToast('🚀 Pembayaran Mayar Rp 50.000 Berhasil! Iklan Di-Lock di Posisi Sundul 1x24 Jam & Kuota +1 Slot Aktif!');
     } else {
-      showToast('🔥 Pembayaran Mayar Rp 75.000 Berhasil! Highlight Emas Aktif 24 Jam & Kuota +1 Slot Aktif!');
+      showToast('🔥 Pembayaran Mayar Rp 250.000 Berhasil! Iklan Di-Lock di Posisi Prioritas BU 3x24 Jam & Kuota +1 Slot Aktif!');
     }
 
-    // Switch to home feed so user immediately sees their listing at the very top
+    // Switch to home feed so user immediately sees their listing at the locked position
     setActiveTab('home');
   };
 
@@ -1303,9 +1365,10 @@ export default function App() {
         return updated;
       });
 
-      // Pemicu Double Notifikasi Otomatis 'kuota iklan' via Brevo API & Fonnte WA
-      if (currentUser.email) {
+      // Pemicu Notifikasi Otomatis 'kuota iklan' via Brevo API + WA Personal + Web Push
+      if (currentUser.email || currentUser.phone || currentUser.whatsapp) {
         triggerQuotaActivatedEmail({
+          userId: currentUser.id,
           recipientEmail: currentUser.email,
           recipientPhone: currentUser.phone || currentUser.whatsapp,
           whatsapp: currentUser.phone || currentUser.whatsapp,
@@ -1334,8 +1397,15 @@ export default function App() {
   };
 
   const handleAdminToggleSundul = (listingId: string, currentStatus: boolean) => {
-    const now = new Date().toISOString();
+    const nowMs = Date.now();
+    const now = new Date(nowMs).toISOString();
+    const sundulExpiresAt = new Date(nowMs + SUNDUL_DURATION_MS).toISOString();
     const willActivate = !currentStatus;
+
+    saveListingPromoExpiry(listingId, {
+      sundulAt: willActivate ? now : undefined,
+      sundulExpiresAt: willActivate ? sundulExpiresAt : undefined,
+    });
 
     setListings((prev) => {
       const idx = prev.findIndex((l) => l.id === listingId);
@@ -1343,11 +1413,13 @@ export default function App() {
       const target = { ...prev[idx] };
       if (willActivate) {
         target.sundulAt = now;
+        target.sundulExpiresAt = sundulExpiresAt;
         target.createdAt = now;
         const remaining = prev.filter((l) => l.id !== listingId);
         return [target, ...remaining];
       } else {
         delete target.sundulAt;
+        delete target.sundulExpiresAt;
         return prev.map((l) => (l.id === listingId ? target : l));
       }
     });
@@ -1360,7 +1432,15 @@ export default function App() {
 
   const handleAdminToggleSuperBU = (listingId: string, currentStatus: boolean) => {
     const willActivate = !currentStatus;
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const nowMs = Date.now();
+    const now = new Date(nowMs).toISOString();
+    const expiresAt = new Date(nowMs + PRIORITY_BU_DURATION_MS).toISOString();
+
+    saveListingPromoExpiry(listingId, {
+      isSuperBU: willActivate,
+      superBUActivatedAt: willActivate ? now : undefined,
+      superBUExpiresAt: willActivate ? expiresAt : undefined,
+    });
 
     setListings((prev) =>
       prev.map((l) => {
@@ -1368,6 +1448,7 @@ export default function App() {
           return {
             ...l,
             isSuperBU: willActivate,
+            superBUActivatedAt: willActivate ? now : undefined,
             superBUExpiresAt: willActivate ? expiresAt : undefined,
           };
         }
@@ -1436,10 +1517,11 @@ export default function App() {
     const dynamicUrl = getDynamicAdLink(newId);
     const targetAdminEmail = 'bca.ccpl@gmail.com';
 
-    // 1. Kirim notifikasi email "Iklan Tayang" ke email admin bca.ccpl@gmail.com
+    // 1. Kirim notifikasi "Iklan Tayang" (Email + WA Personal + Web Push)
     triggerAdPublishedEmail({
       listingId: newId,
       listingTitle: newListing.title,
+      userId: currentUser.id,
       recipientEmail: targetAdminEmail,
       recipientName: 'Admin JualRugi',
       sellingPrice: newListing.sellingPrice,
@@ -1452,6 +1534,7 @@ export default function App() {
       triggerAdPublishedEmail({
         listingId: newId,
         listingTitle: newListing.title,
+        userId: currentUser.id,
         recipientEmail: currentUser.email,
         recipientPhone: currentUser.phone || currentUser.whatsapp,
         whatsapp: currentUser.phone || currentUser.whatsapp,
@@ -1628,19 +1711,26 @@ export default function App() {
         return true;
       })
       .sort((a, b) => {
-        // 1. Most recent sundul timestamp always places an item at the absolute #1 top
-        const aSundul = a.sundulAt ? new Date(a.sundulAt).getTime() : 0;
-        const bSundul = b.sundulAt ? new Date(b.sundulAt).getTime() : 0;
-        if (aSundul > 0 || bSundul > 0) {
-          if (aSundul !== bSundul) {
-            return bSundul - aSundul;
-          }
+        // 1. Iklan Sundul aktif (di-lock 1x24 jam) tetap terkunci di posisi Sundul teratas
+        const aSundulActive = isSundulActive(a);
+        const bSundulActive = isSundulActive(b);
+        if (aSundulActive !== bSundulActive) {
+          return aSundulActive ? -1 : 1;
+        }
+        if (aSundulActive && bSundulActive) {
+          const aSundul = new Date(a.sundulAt || 0).getTime();
+          const bSundul = new Date(b.sundulAt || 0).getTime();
+          if (aSundul !== bSundul) return bSundul - aSundul;
         }
 
-        // 2. PALING BU (isSuperBU) listings always prioritized at the top of the feed
-        if (a.isSuperBU && !b.isSuperBU) return -1;
-        if (!a.isSuperBU && b.isSuperBU) return 1;
+        // 2. Iklan BU Prioritas aktif (di-lock 3x24 jam) tetap terkunci di zona Prioritas di atas iklan biasa
+        const aPriorityActive = isPriorityBUActive(a);
+        const bPriorityActive = isPriorityBUActive(b);
+        if (aPriorityActive !== bPriorityActive) {
+          return aPriorityActive ? -1 : 1;
+        }
 
+        // 3. Setelah masa durasi Sundul/Prioritas habis, otomatis jadi iklan biasa & tergeser iklan baru
         if (sortOption === 'discount') {
           return b.discountPercentage - a.discountPercentage;
         }
@@ -1735,83 +1825,170 @@ export default function App() {
         </div>
       )}
 
-      {/* Live In-Web Alert Notification Iklan BU Prioritas Baru (Tampil berbarengan dengan WA Group & OS Web Push) */}
-      {livePriorityAlert && (
-        <div className="fixed top-3 sm:top-auto sm:bottom-6 right-3 left-3 sm:right-4 sm:left-auto sm:max-w-md z-[60] animate-slide-down">
-          <div className="bg-white border-2 border-amber-400 rounded-2xl shadow-2xl shadow-amber-950/20 p-3.5 flex items-start gap-3">
-            {livePriorityAlert.image ? (
-              <img
-                src={livePriorityAlert.image}
-                alt={livePriorityAlert.listingTitle}
-                className="w-14 h-14 rounded-xl object-cover shrink-0 border border-amber-200 bg-slate-100"
-              />
-            ) : (
-              <div className="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
-                <Flame className="w-6 h-6" />
-              </div>
-            )}
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] font-black uppercase tracking-wide">
-                  <Flame className="w-3 h-3 text-amber-600" />
-                  <span>BU Prioritas Disetujui</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      sessionStorage.setItem(
-                        'jualrugi_last_dismissed_priority_alert',
-                        `${livePriorityAlert.listingId}:${livePriorityAlert.timestamp}`
-                      );
-                    } catch {}
-                    setLivePriorityAlert(null);
-                  }}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
-                  aria-label="Tutup notifikasi prioritas"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <h4 className="text-xs sm:text-sm font-black text-slate-900 line-clamp-1">
-                {livePriorityAlert.listingTitle}
-              </h4>
-              <p className="text-[11px] text-slate-600 line-clamp-2 leading-snug">
-                {livePriorityAlert.body}
-              </p>
-              <div className="pt-1 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const matched = listings.find((l) => l.id === livePriorityAlert.listingId);
-                    if (matched) {
-                      setSelectedListing(matched);
-                    } else if (livePriorityAlert.listingId) {
-                      fetchListingByIdFromSupabase(livePriorityAlert.listingId).then((found) => {
-                        if (found) setSelectedListing(found);
-                      });
-                    }
-                    setLivePriorityAlert(null);
-                  }}
-                  className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black transition cursor-pointer inline-flex items-center gap-1"
-                >
-                  <span>Lihat Iklan</span>
-                  <ArrowRight className="w-3 h-3" />
-                </button>
-                <a
-                  href={livePriorityAlert.adLink || getDynamicAdLink(livePriorityAlert.listingId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[11px] font-bold text-sky-700 hover:underline inline-flex items-center gap-1"
-                >
-                  <span>Buka Link</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+      {/* Live In-Web Alert Notification (BU Prioritas, Iklan Tayang, Kuota Aktif, Take Down Admin) */}
+      {livePriorityAlert && (() => {
+        const eventType = livePriorityAlert.eventType || livePriorityAlert.type || 'priority_bu';
+        const isPublished = eventType === 'ad_published';
+        const isQuota = eventType === 'quota_activated';
+        const isTakedown = eventType === 'ad_takedown';
+
+        const cardBorder = isPublished
+          ? 'border-emerald-400 shadow-emerald-950/20'
+          : isQuota
+          ? 'border-sky-400 shadow-sky-950/20'
+          : isTakedown
+          ? 'border-rose-400 shadow-rose-950/20'
+          : 'border-amber-400 shadow-amber-950/20';
+
+        const iconBg = isPublished
+          ? 'bg-emerald-500 text-white'
+          : isQuota
+          ? 'bg-sky-500 text-white'
+          : isTakedown
+          ? 'bg-rose-600 text-white'
+          : 'bg-amber-500 text-white';
+
+        const badgeClass = isPublished
+          ? 'bg-emerald-100 text-emerald-900'
+          : isQuota
+          ? 'bg-sky-100 text-sky-900'
+          : isTakedown
+          ? 'bg-rose-100 text-rose-900'
+          : 'bg-amber-100 text-amber-900';
+
+        const badgeText = isPublished
+          ? 'Iklan Resmi Tayang'
+          : isQuota
+          ? 'Kuota Iklan Aktif'
+          : isTakedown
+          ? 'Iklan Di-Take Down'
+          : 'BU Prioritas Disetujui';
+
+        const ctaClass = isPublished
+          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+          : isQuota
+          ? 'bg-sky-600 hover:bg-sky-700 text-white'
+          : isTakedown
+          ? 'bg-rose-600 hover:bg-rose-700 text-white'
+          : 'bg-amber-500 hover:bg-amber-600 text-white';
+
+        return (
+          <div className="fixed top-3 sm:top-auto sm:bottom-6 right-3 left-3 sm:right-4 sm:left-auto sm:max-w-md z-[60] animate-slide-down">
+            <div className={`bg-white border-2 ${cardBorder} rounded-2xl shadow-2xl p-3.5 flex items-start gap-3`}>
+              {livePriorityAlert.image && !isQuota && !isTakedown ? (
+                <img
+                  src={livePriorityAlert.image}
+                  alt={livePriorityAlert.listingTitle}
+                  className="w-14 h-14 rounded-xl object-cover shrink-0 border border-slate-200 bg-slate-100"
+                />
+              ) : (
+                <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}>
+                  {isPublished ? (
+                    <CheckCircle2 className="w-6 h-6" />
+                  ) : isQuota ? (
+                    <Zap className="w-6 h-6" />
+                  ) : isTakedown ? (
+                    <AlertTriangle className="w-6 h-6" />
+                  ) : (
+                    <Flame className="w-6 h-6" />
+                  )}
+                </div>
+              )}
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md ${badgeClass} text-[10px] font-black uppercase tracking-wide`}>
+                    {isPublished ? (
+                      <CheckCircle2 className="w-3 h-3" />
+                    ) : isQuota ? (
+                      <Zap className="w-3 h-3" />
+                    ) : isTakedown ? (
+                      <AlertTriangle className="w-3 h-3" />
+                    ) : (
+                      <Flame className="w-3 h-3 text-amber-600" />
+                    )}
+                    <span>{badgeText}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem(
+                          'jualrugi_last_dismissed_priority_alert',
+                          `${livePriorityAlert.eventId || livePriorityAlert.listingId}:${livePriorityAlert.timestamp}`
+                        );
+                      } catch {}
+                      setLivePriorityAlert(null);
+                    }}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                    aria-label="Tutup notifikasi"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <h4 className="text-xs sm:text-sm font-black text-slate-900 line-clamp-1">
+                  {livePriorityAlert.listingTitle}
+                </h4>
+                <p className="text-[11px] text-slate-600 line-clamp-2 leading-snug">
+                  {livePriorityAlert.body}
+                </p>
+                <div className="pt-1 flex items-center gap-2">
+                  {isQuota ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLivePriorityAlert(null);
+                        setIsPostModalOpen(true);
+                      }}
+                      className={`px-3 py-1 rounded-lg ${ctaClass} text-[11px] font-black transition cursor-pointer inline-flex items-center gap-1`}
+                    >
+                      <span>Pasang Iklan Sekarang</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  ) : isTakedown ? (
+                    <button
+                      type="button"
+                      onClick={() => setLivePriorityAlert(null)}
+                      className={`px-3 py-1 rounded-lg ${ctaClass} text-[11px] font-black transition cursor-pointer inline-flex items-center gap-1`}
+                    >
+                      <span>Saya Mengerti</span>
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const matched = listings.find((l) => l.id === livePriorityAlert.listingId);
+                          if (matched) {
+                            setSelectedListing(matched);
+                          } else if (livePriorityAlert.listingId) {
+                            fetchListingByIdFromSupabase(livePriorityAlert.listingId).then((found) => {
+                              if (found) setSelectedListing(found);
+                            });
+                          }
+                          setLivePriorityAlert(null);
+                        }}
+                        className={`px-3 py-1 rounded-lg ${ctaClass} text-[11px] font-black transition cursor-pointer inline-flex items-center gap-1`}
+                      >
+                        <span>Lihat Iklan</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                      <a
+                        href={livePriorityAlert.adLink || getDynamicAdLink(livePriorityAlert.listingId)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-bold text-sky-700 hover:underline inline-flex items-center gap-1"
+                      >
+                        <span>Buka Link</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Push / In-App & Email Notification Banner saat Iklan Selesai Dimoderasi & Resmi Tayang */}
       {adApprovedNotification && (
@@ -2630,7 +2807,9 @@ export default function App() {
         onConfigSaved={async () => {
           const remoteData = await fetchListingsFromSupabase();
           if (remoteData && remoteData.length > 0) {
-            setListings(remoteData);
+            const hydrated = applySavedPromoExpiries(remoteData);
+            const { updatedListings } = checkAndExpireListings(hydrated);
+            setListings(updatedListings);
           }
           showToast('⚡ Database Supabase terhubung & data disinkronkan!');
         }}

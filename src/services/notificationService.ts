@@ -448,6 +448,7 @@ export async function getCurrentBrowserPushSubscriptionJson(): Promise<PushSubsc
 
 export async function subscribeToWebPushNotifications(meta?: {
   userId?: string;
+  userEmail?: string;
   userRole?: string;
 }): Promise<{
   success: boolean;
@@ -533,7 +534,11 @@ export async function subscribeToWebPushNotifications(meta?: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         subscription: subscription.toJSON(),
-        userId: meta?.userId || 'guest',
+        userId:
+          [meta?.userId, meta?.userEmail]
+            .map((v) => String(v || '').trim())
+            .filter((v, idx, arr) => v && v !== 'guest' && arr.indexOf(v) === idx)
+            .join('|') || 'guest',
         userRole: meta?.userRole || 'buyer',
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
         supabaseConfig: getOptionalSupabaseConfig(),
@@ -601,6 +606,7 @@ export async function unsubscribeFromWebPushNotifications(): Promise<{
  */
 export async function syncExistingWebPushSubscription(meta?: {
   userId?: string;
+  userEmail?: string;
   userRole?: string;
 }): Promise<boolean> {
   if (!isWebPushSupported()) return false;
@@ -627,7 +633,11 @@ export async function syncExistingWebPushSubscription(meta?: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         subscription: sub.toJSON(),
-        userId: meta?.userId || 'guest',
+        userId:
+          [meta?.userId, meta?.userEmail]
+            .map((v) => String(v || '').trim())
+            .filter((v, idx, arr) => v && v !== 'guest' && arr.indexOf(v) === idx)
+            .join('|') || 'guest',
         userRole: meta?.userRole || 'buyer',
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
         supabaseConfig: getOptionalSupabaseConfig(),
@@ -724,3 +734,82 @@ export async function triggerPriorityWebPush(payload: {
   }
 }
 
+export async function triggerEventWebPush(payload: {
+  eventType: WebPushEventType;
+  listingId?: string;
+  listingTitle?: string;
+  recipientName?: string;
+  recipientEmail?: string;
+  targetUserId?: string;
+  targetEmail?: string;
+  sellerId?: string;
+  addedQuota?: number;
+  newTotalQuota?: number;
+  takedownReason?: string;
+  isEdit?: boolean;
+  sellingPrice?: number;
+  discountPercentage?: number;
+  location?: string;
+  imageUrl?: string;
+  adLink?: string;
+  includeFallback?: boolean;
+  isTest?: boolean;
+}): Promise<{
+  success: boolean;
+  sent: number;
+  failed: number;
+  totalSubscribers: number;
+  latestAlert?: PriorityWebAlertPayload;
+  message?: string;
+}> {
+  const cleanId =
+    payload.listingId || (payload.eventType === 'quota_activated' ? 'quota-activation' : 'bu-prioritas');
+  const cleanTitle = payload.listingTitle || 'Pemberitahuan JualRugi.my.id';
+  const localAlert = emitLocalPriorityWebAlert({
+    eventType: payload.eventType,
+    listingId: cleanId,
+    listingTitle: cleanTitle,
+    targetUserId: payload.targetUserId,
+    targetEmail: payload.targetEmail || payload.recipientEmail,
+    sellingPrice: payload.sellingPrice,
+    discountPercentage: payload.discountPercentage,
+    location: payload.location,
+    image: payload.imageUrl,
+    adLink: payload.adLink,
+    isTest: payload.isTest,
+  });
+
+  try {
+    const fallbackSubscription =
+      payload.includeFallback === false ? null : await getCurrentBrowserPushSubscriptionJson();
+    const res = await fetch('/api/push/send-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        listingId: cleanId,
+        listingTitle: cleanTitle,
+        supabaseConfig: getOptionalSupabaseConfig(),
+        fallbackSubscription: fallbackSubscription || undefined,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    return {
+      success: res.ok && data?.success !== false,
+      sent: Number(data?.sent || 0),
+      failed: Number(data?.failed || 0),
+      totalSubscribers: Number(data?.totalSubscribers || 0),
+      latestAlert: data?.latestAlert || localAlert,
+      message: data?.message,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      sent: 0,
+      failed: 1,
+      totalSubscribers: 0,
+      latestAlert: localAlert,
+      message: err?.message || 'Gagal menghubungi server push.',
+    };
+  }
+}

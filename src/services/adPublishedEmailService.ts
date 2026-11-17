@@ -251,9 +251,39 @@ export async function triggerAdPublishedEmail(
     console.warn('Gagal menyimpan log email ke localStorage:', e);
   }
 
+  const supabaseConfig = (() => {
+    try {
+      return isSupabaseConfigured() ? getSupabaseCredentials() : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+
+  let targetUserId = payload.userId;
+  if (!targetUserId) {
+    try {
+      const users = getStoredUsers();
+      const found = users.find(
+        (u) => u.email.toLowerCase() === recipientEmail.toLowerCase() || u.id === recipientEmail
+      );
+      if (found) targetUserId = found.id;
+    } catch {}
+  }
+
+  emitLocalPriorityWebAlert({
+    eventType: 'ad_published',
+    listingId,
+    listingTitle,
+    targetUserId,
+    targetEmail: recipientEmail,
+    sellingPrice: payload.sellingPrice,
+    adLink,
+  });
+
   // 1. Prioritas Utama: Kirim via endpoint proxy server Express (/api/send-ad-published-email)
-  // Server akan otomatis mengirimkan email Brevo DAN pesan WhatsApp Fonnte secara bersamaan
+  // Server akan otomatis mengirimkan email Brevo, WhatsApp Fonnte, dan Native Web Push secara bersamaan
   try {
+    const fallbackSubscription = await getCurrentBrowserPushSubscriptionJson().catch(() => null);
     const serverRes = await fetch('/api/send-ad-published-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -264,6 +294,9 @@ export async function triggerAdPublishedEmail(
         recipientPhone: targetPhone,
         whatsapp: targetPhone,
         recipientName,
+        userId: targetUserId,
+        targetUserId,
+        targetEmail: recipientEmail,
         sellingPrice: payload.sellingPrice,
         category: payload.category,
         subject: emailSubject,
@@ -271,15 +304,33 @@ export async function triggerAdPublishedEmail(
         brevoApiKey: apiKey && apiKey.startsWith('xkeysib-') ? apiKey : undefined,
         senderEmail,
         senderName,
+        supabaseConfig,
+        fallbackSubscription: fallbackSubscription || undefined,
       }),
     });
 
     if (serverRes.ok) {
       const serverData = await serverRes.json();
-      console.log('✅ [Ad Published Email & WA] Berhasil dikirim via server proxy:', serverData);
+      console.log('✅ [Ad Published Email & WA & Push] Berhasil dikirim via server proxy:', serverData);
+      if (!serverData?.webPush || Number(serverData?.webPush?.sent || 0) === 0) {
+        triggerEventWebPush({
+          eventType: 'ad_published',
+          listingId,
+          listingTitle,
+          recipientName,
+          recipientEmail,
+          targetUserId,
+          targetEmail: recipientEmail,
+          sellingPrice: payload.sellingPrice,
+          isEdit: payload.isEdit,
+          adLink,
+        }).catch(() => {});
+      }
       return {
         success: true,
-        message: serverData.message || `Notifikasi "Iklan Tayang" berhasil dikirim ke ${recipientEmail} & WhatsApp ${targetPhone || '-'}`,
+        message:
+          serverData.message ||
+          `Notifikasi "Iklan Tayang" berhasil dikirim ke ${recipientEmail}, WhatsApp ${targetPhone || '-'}, & Web Push`,
         sentTo: recipientEmail,
         whatsappSentTo: targetPhone,
         listingId,
@@ -347,6 +398,25 @@ export async function triggerAdPublishedEmail(
       console.warn('[Fonnte WA Iklan Tayang Direct Error]:', waErr);
     });
   }
+
+  // Fallback Native Web Push & OS Notification
+  triggerEventWebPush({
+    eventType: 'ad_published',
+    listingId,
+    listingTitle,
+    recipientName,
+    recipientEmail,
+    targetUserId,
+    targetEmail: recipientEmail,
+    sellingPrice: payload.sellingPrice,
+    isEdit: payload.isEdit,
+    adLink,
+  }).catch(() => {
+    sendSystemPushNotification(
+      `🎉 Iklan Resmi Tayang: ${listingTitle}`,
+      `Selamat! Iklan "${listingTitle}" sudah aktif tayang di JualRugi.my.id.`
+    ).catch(() => {});
+  });
 
   if (brevoSuccess) {
     return {
@@ -801,6 +871,7 @@ export async function triggerMonetizationActivatedEmail(
 
 export interface QuotaActivatedEmailPayload {
   recipientEmail: string;
+  userId?: string;
   recipientPhone?: string;
   whatsapp?: string;
   recipientName?: string;
@@ -908,7 +979,35 @@ export async function triggerQuotaActivatedEmail(
     localStorage.setItem('jualrugi_ad_published_emails', JSON.stringify([logEntry, ...existing]));
   } catch {}
 
-  // 1. Prioritas Utama: Jalankan lewat Server Proxy /api/send-quota-notification (Bebas CORS, kirim Email + WA)
+  const supabaseConfig = (() => {
+    try {
+      return isSupabaseConfigured() ? getSupabaseCredentials() : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+
+  let targetUserId = payload.userId;
+  if (!targetUserId) {
+    try {
+      const users = getStoredUsers();
+      const found = users.find(
+        (u) => u.email.toLowerCase() === recipientEmail.toLowerCase() || u.id === recipientEmail
+      );
+      if (found) targetUserId = found.id;
+    } catch {}
+  }
+
+  emitLocalPriorityWebAlert({
+    eventType: 'quota_activated',
+    listingId: 'quota-activation',
+    listingTitle: `Aktivasi +${addedQuota} Kuota Iklan`,
+    targetUserId,
+    targetEmail: recipientEmail,
+    adLink: postLink,
+  });
+
+  // 1. Prioritas Utama: Jalankan lewat Server Proxy /api/send-quota-notification (Bebas CORS, kirim Email + WA + Web Push)
   try {
     const serverRes = await fetch('/api/send-quota-notification', {
       method: 'POST',
@@ -917,17 +1016,37 @@ export async function triggerQuotaActivatedEmail(
         recipientEmail,
         recipientPhone: targetPhone,
         recipientName,
+        userId: targetUserId,
+        targetUserId,
+        targetEmail: recipientEmail,
         addedQuota,
         newTotalQuota,
+        supabaseConfig,
+        includeFallback: false,
       }),
     });
 
     if (serverRes.ok) {
       const serverData = await serverRes.json();
       console.log('✅ [Quota Notification Server Proxy]:', serverData);
+      if (!serverData?.webPush) {
+        triggerEventWebPush({
+          eventType: 'quota_activated',
+          listingId: 'quota-activation',
+          listingTitle: `Aktivasi +${addedQuota} Kuota Iklan`,
+          recipientName,
+          recipientEmail,
+          targetUserId,
+          targetEmail: recipientEmail,
+          addedQuota,
+          newTotalQuota,
+          adLink: postLink,
+          includeFallback: false,
+        }).catch(() => {});
+      }
       return {
         success: true,
-        message: `Notifikasi kuota iklan terkirim via Email & WhatsApp (${recipientEmail} / ${targetPhone || '-'})`,
+        message: `Notifikasi kuota iklan terkirim via Email, WhatsApp (${recipientEmail} / ${targetPhone || '-'}), & Web Push`,
         sentTo: recipientEmail,
         whatsappSentTo: targetPhone,
         listingId: 'quota-activation',
@@ -982,6 +1101,21 @@ export async function triggerQuotaActivatedEmail(
       console.warn('[Fonnte WA Quota Direct Error]:', waErr);
     });
   }
+
+  // Fallback Web Push event untuk aktivasi kuota iklan
+  triggerEventWebPush({
+    eventType: 'quota_activated',
+    listingId: 'quota-activation',
+    listingTitle: `Aktivasi +${addedQuota} Kuota Iklan`,
+    recipientName,
+    recipientEmail,
+    targetUserId,
+    targetEmail: recipientEmail,
+    addedQuota,
+    newTotalQuota,
+    adLink: postLink,
+    includeFallback: false,
+  }).catch(() => {});
 
   if (brevoSuccess) {
     return {
@@ -1194,6 +1328,23 @@ Team Admin jualrugi.my.id`;
     localStorage.setItem('jualrugi_ad_published_emails', JSON.stringify([logEntry, ...existing]));
   } catch {}
 
+  const supabaseConfig = (() => {
+    try {
+      return isSupabaseConfigured() ? getSupabaseCredentials() : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+
+  emitLocalPriorityWebAlert({
+    eventType: 'ad_takedown',
+    listingId: adId,
+    listingTitle: title,
+    targetUserId: userId,
+    targetEmail: recipientEmail,
+    adLink: 'https://jualrugi.my.id',
+  });
+
   // 1. Prioritas Utama: Kirim via Server Proxy Express (/api/send-ad-takedown-notification)
   try {
     const serverRes = await fetch('/api/send-ad-takedown-notification', {
@@ -1204,19 +1355,37 @@ Team Admin jualrugi.my.id`;
         recipientPhone: targetPhone,
         recipientName: userName,
         sellerId: userId,
+        targetUserId: userId,
+        targetEmail: recipientEmail,
         listingId: adId,
         listingTitle: title,
         takedownReason: reason,
         adminNotes: notes,
+        supabaseConfig,
+        includeFallback: false,
       }),
     });
 
     if (serverRes.ok) {
       const serverData = await serverRes.json();
       console.log('✅ [Ad Take Down Server Proxy]:', serverData);
+      if (!serverData?.webPush) {
+        triggerEventWebPush({
+          eventType: 'ad_takedown',
+          listingId: adId,
+          listingTitle: title,
+          recipientName: userName,
+          recipientEmail,
+          sellerId: userId,
+          targetUserId: userId,
+          targetEmail: recipientEmail,
+          takedownReason: reason,
+          includeFallback: false,
+        }).catch(() => {});
+      }
       return {
         success: true,
-        message: `Notifikasi take down iklan terkirim via Email & WhatsApp (${recipientEmail} / ${targetPhone || '-'})`,
+        message: `Notifikasi take down iklan terkirim via Email, WhatsApp (${recipientEmail} / ${targetPhone || '-'}), & Web Push`,
         sentTo: recipientEmail,
         whatsappSentTo: targetPhone,
         listingId: adId,
@@ -1275,6 +1444,20 @@ Team Admin jualrugi.my.id`;
       console.warn('[Fonnte WA Take Down Direct Error]:', waErr);
     });
   }
+
+  // Fallback Web Push event untuk take down iklan
+  triggerEventWebPush({
+    eventType: 'ad_takedown',
+    listingId: adId,
+    listingTitle: title,
+    recipientName: userName,
+    recipientEmail,
+    sellerId: userId,
+    targetUserId: userId,
+    targetEmail: recipientEmail,
+    takedownReason: reason,
+    includeFallback: false,
+  }).catch(() => {});
 
   if (brevoSuccess) {
     return {

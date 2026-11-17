@@ -3,8 +3,8 @@ import { MayarProductConfig, MonetizationPackage } from '../types';
 /**
  * DAFTAR KONSTANTA RESMI PEMBAYARAN MAYAR & ADMIN JUALRUGI.MY.ID
  */
-export const MAYAR_SUNDUL_URL = 'https://indo-digital.myr.id/plink/sundul-iklan';
-export const MAYAR_BU_PRIORITAS_URL = 'https://indo-digital.myr.id/plink/link-pembayaran-bu-prioritas';
+export const MAYAR_SUNDUL_URL = 'https://indo-digital.myr.id/plink/link-pembayaran-sundul-iklan';
+export const MAYAR_BU_PRIORITAS_URL = 'https://indo-digital.myr.id/plink/link-pembayaran-iklan-prioritas-bu';
 export const WA_ADMIN_PHONE = '6289673686625';
 
 /**
@@ -16,12 +16,13 @@ export const MAYAR_PRODUCTS: Record<MonetizationPackage, MayarProductConfig> = {
     name: 'Sundul Iklan',
     price: 50000,
     paymentUrl: MAYAR_SUNDUL_URL,
-    description: 'Pindahkan posisi iklan langsung ke urutan #1 teratas feed selama 24 jam penuh sejak diaktifkan Admin.',
+    description:
+      'Kunci (lock) posisi iklan di urutan Sundul teratas feed selama 1x24 jam sejak diaktifkan Admin. Setelah berakhir, kembali menjadi iklan biasa.',
     features: [
-      'Naik ke urutan #1 feed teratas selama 24 jam penuh',
-      'Mendapatkan bonus kuota +1 slot pasang iklan baru',
+      'Posisi di-lock di urutan Sundul teratas selama 1x24 jam sejak diaktifkan Admin',
+      'Bonus otomatis +1 slot kuota pasang iklan baru',
       'Meningkatkan views & chat COD hingga 3x lipat',
-      'Berlaku 24 jam sejak diaktifkan oleh Admin',
+      'Setelah 1x24 jam berakhir, iklan otomatis kembali jadi iklan biasa',
     ],
   },
   prioritas_bu: {
@@ -29,12 +30,13 @@ export const MAYAR_PRODUCTS: Record<MonetizationPackage, MayarProductConfig> = {
     name: 'Pasang BU Prioritas',
     price: 250000,
     paymentUrl: MAYAR_BU_PRIORITAS_URL,
-    description: 'Highlight kuning emas menyala & lencana eksklusif PALING BU selama 7 hari penuh sejak diaktivasi Admin.',
+    description:
+      'Kunci (lock) di posisi Prioritas Utama dengan highlight kuning emas & lencana PALING BU selama 3x24 jam sejak diaktifkan Admin.',
     features: [
-      'Lencana "PALING BU" & highlight kuning emas 7 hari penuh',
-      'Mendapatkan bonus kuota +1 slot pasang iklan baru',
-      'Prioritas utama di radar pencarian pembeli siap COD',
-      'Siaran ke Grup WA & Push Notifikasi App saat diaktivasi Admin',
+      'Posisi di-lock di Prioritas Utama & highlight emas selama 3x24 jam (72 jam)',
+      'Siaran otomatis ke Grup WhatsApp resmi & Push Notifikasi Web/Aplikasi saat diaktifkan Admin',
+      'Bonus otomatis +1 slot kuota pasang iklan baru',
+      'Setelah 3x24 jam berakhir, iklan otomatis kembali jadi iklan biasa',
     ],
   },
 };

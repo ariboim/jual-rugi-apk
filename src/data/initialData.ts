@@ -35,7 +35,7 @@ export const INITIAL_LISTINGS: Listing[] = [
       },
     ],
     isSuperBU: true,
-    superBUExpiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+    superBUExpiresAt: new Date(Date.now() + 3 * 86400000).toISOString(),
     createdAt: new Date(Date.now() - 1000 * 60 * 20).toISOString(), // 20 mins ago
     seller: {
       id: 'seller-agus',
@@ -87,7 +87,7 @@ export const INITIAL_LISTINGS: Listing[] = [
       },
     ],
     isSuperBU: true,
-    superBUExpiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+    superBUExpiresAt: new Date(Date.now() + 3 * 86400000).toISOString(),
     createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
     seller: {
       id: 'seller-bambang',
@@ -190,7 +190,7 @@ export const INITIAL_LISTINGS: Listing[] = [
       },
     ],
     isSuperBU: true,
-    superBUExpiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+    superBUExpiresAt: new Date(Date.now() + 3 * 86400000).toISOString(),
     createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
     seller: {
       id: 'seller-dewi',
@@ -344,7 +344,7 @@ export const INITIAL_LISTINGS: Listing[] = [
       },
     ],
     isSuperBU: true,
-    superBUExpiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+    superBUExpiresAt: new Date(Date.now() + 3 * 86400000).toISOString(),
     createdAt: new Date(Date.now() - 1000 * 60 * 300).toISOString(),
     seller: {
       id: 'seller-agus',

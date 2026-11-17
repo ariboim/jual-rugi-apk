@@ -88,6 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       } else {
         const res = await subscribeToWebPushNotifications({
           userId: currentUser?.id,
+          userEmail: currentUser?.email,
           userRole: currentUser?.role,
         });
         onPushFeedback?.(res.message);

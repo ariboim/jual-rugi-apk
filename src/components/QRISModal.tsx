@@ -56,8 +56,8 @@ export const QRISModal: React.FC<QRISModalProps> = ({
   const namaPengiklan = listing?.seller?.name || 'Pengiklan JualRugi';
 
   const isSundul = selectedPackage === 'sundul';
-  const namaPaket = isSundul ? 'Sundul' : 'Iklan Prioritas';
-  const nominal = isSundul ? 25000 : 75000;
+  const namaPaket = isSundul ? 'Sundul (1x24 Jam)' : 'Iklan Prioritas BU (3x24 Jam)';
+  const nominal = isSundul ? 50000 : 250000;
   const payUrl = isSundul ? MAYAR_SUNDUL_URL : MAYAR_BU_PRIORITAS_URL;
 
   // Generate WhatsApp confirmation URL with exact injected parameters
@@ -163,12 +163,12 @@ export const QRISModal: React.FC<QRISModalProps> = ({
                       Sundul Iklan
                     </span>
                     <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-800">
-                      Top #1 Feed
+                      Lock 1x24 Jam
                     </span>
                   </div>
-                  <div className="text-lg font-black text-slate-900">Rp 25.000</div>
+                  <div className="text-lg font-black text-slate-900">Rp 50.000</div>
                   <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                    Naik langsung ke peringkat #1 teratas beranda seketika & views melesat.
+                    Di-lock di posisi Sundul teratas feed selama <strong>1x24 jam</strong> sejak diaktifkan Admin.
                   </p>
                 </div>
 
@@ -202,12 +202,12 @@ export const QRISModal: React.FC<QRISModalProps> = ({
                       BU Prioritas
                     </span>
                     <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                      24 Jam Eksklusif
+                      Lock 3x24 Jam
                     </span>
                   </div>
-                  <div className="text-lg font-black text-amber-900">Rp 75.000</div>
+                  <div className="text-lg font-black text-amber-900">Rp 250.000</div>
                   <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                    Badge kuning emas menyala & prioritas terdepan radar pembeli siap bayar.
+                    Di-lock posisi Prioritas <strong>3x24 jam</strong>, highlight emas menyala + broadcast Grup WA &amp; Push App.
                   </p>
                 </div>
 
@@ -227,6 +227,46 @@ export const QRISModal: React.FC<QRISModalProps> = ({
             </div>
           </div>
 
+          {/* Keterangan Perbedaan Benefit Sebelum Lanjut ke Pembayaran Mayar */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5 text-[11px]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-black text-slate-900 text-xs">
+                📌 Perbandingan Benefit Paket (Sebelum Bayar ke Mayar)
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600">
+                Wajib Tahu
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className={`p-2.5 rounded-xl border ${isSundul ? 'bg-sky-50/90 border-sky-300' : 'bg-white border-slate-200'}`}>
+                <div className="font-black text-sky-900 mb-1">
+                  ⬆️ Sundul Iklan (Rp 50.000)
+                </div>
+                <ul className="space-y-1 text-slate-700 list-disc pl-3.5">
+                  <li>Posisi <strong>di-lock</strong> di urutan Sundul teratas selama <strong>1 x 24 jam</strong> sejak diaktifkan Admin.</li>
+                  <li>Bonus <strong>+1 slot kuota</strong> pasang iklan baru.</li>
+                  <li>Tampilan kartu standar (tanpa highlight emas &amp; tanpa siaran Grup WA).</li>
+                </ul>
+              </div>
+
+              <div className={`p-2.5 rounded-xl border ${!isSundul ? 'bg-amber-50/90 border-amber-300' : 'bg-white border-slate-200'}`}>
+                <div className="font-black text-amber-950 mb-1">
+                  🔥 Prioritas BU (Rp 250.000)
+                </div>
+                <ul className="space-y-1 text-slate-700 list-disc pl-3.5">
+                  <li>Posisi <strong>di-lock</strong> di slot Prioritas Utama selama <strong>3 x 24 jam (72 jam)</strong> sejak diaktifkan Admin.</li>
+                  <li><strong>Highlight kuning emas menyala</strong> + lencana eksklusif <strong>PALING BU</strong>.</li>
+                  <li><strong>Broadcast otomatis</strong> ke Grup WhatsApp &amp; Push Notifikasi Web/App + bonus <strong>+1 slot kuota</strong>.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-xl bg-amber-50/70 border border-amber-200 text-[10.5px] text-amber-950 font-medium leading-relaxed">
+              ⏳ <strong>Ketentuan Setelah Durasi Berakhir:</strong> Setelah masa aktif Sundul (1x24 jam) atau Prioritas BU (3x24 jam) berakhir, iklan otomatis kembali menjadi <strong>iklan biasa</strong> dan posisinya akan bergeser ke bawah seiring masuknya iklan baru.
+            </div>
+          </div>
+
           {/* Action Buttons: Buka Link Mayar Resmi */}
           <div className="space-y-2.5 pt-1">
             <button
@@ -240,8 +280,8 @@ export const QRISModal: React.FC<QRISModalProps> = ({
               <CreditCard className="w-4 h-4" />
               <span>
                 {isSundul
-                  ? 'Bayar Sundul Iklan - Rp 25.000 via Mayar'
-                  : 'Pasang BU Prioritas - Rp 75.000 via Mayar'}
+                  ? 'Bayar Sundul Iklan - Rp 50.000 via Mayar'
+                  : 'Pasang BU Prioritas - Rp 250.000 via Mayar'}
               </span>
               <ExternalLink className="w-3.5 h-3.5 text-white/80" />
             </button>

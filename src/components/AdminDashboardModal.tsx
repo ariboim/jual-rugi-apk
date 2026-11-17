@@ -51,6 +51,13 @@ import {
 import { Listing, UserProfile } from '../types';
 import { WA_ADMIN_PHONE } from '../data/mayarConfig';
 import {
+  isSundulActive as checkIsSundulActive,
+  isPriorityBUActive as checkIsPriorityBUActive,
+  getRemainingPromoTimeLabel,
+  SUNDUL_DURATION_MS,
+  PRIORITY_BU_DURATION_MS,
+} from '../services/listingLifecycle';
+import {
   AdReport,
   getStoredAdReports,
   updateAdReportStatus,
@@ -436,6 +443,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     // Isi Email & WA Sama Persis: 'Selamat kuota iklan anda telah diperbaharui,silakan pasang iklan anda sekarang https://jualrugi.my.id/?action=post Team Admin jualrugi.my.id'
     triggerQuotaActivatedEmail({
       recipientEmail: userEmail || 'seller@jualrugi.my.id',
+      userId,
       recipientPhone: targetPhone,
       whatsapp: targetPhone,
       recipientName: userName,
@@ -618,10 +626,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       if (!matchSearch) return false;
 
       if (filterType === 'sundul') {
-        return !!item.sundulAt;
+        return checkIsSundulActive(item);
       }
       if (filterType === 'superbu') {
-        return !!item.isSuperBU;
+        return checkIsPriorityBUActive(item);
       }
       return true;
     });
@@ -940,33 +948,52 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     showNotification(`⚡ Simulasi 1 laporan iklan untuk "${newDemo.listingTitle}" berhasil dimuat! Anda dapat langsung menguji Take Down, Blokir Penjual, Chat WA, dll.`);
   };
 
-  // Action: Toggle Sundul with Automatic Email Notification
+  // Action: Toggle Sundul with Automatic Email & WA Notification
   const handleToggleSundulWithEmail = async (listing: Listing) => {
-    const currentStatus = !!listing.sundulAt;
+    const currentStatus = checkIsSundulActive(listing);
     const willActivate = !currentStatus;
 
     onToggleSundul(listing.id, currentStatus);
 
     if (willActivate) {
+      const storedUsers = getStoredUsers();
+      const matchedUser = storedUsers.find(
+        (u) =>
+          u.id === listing.user_id ||
+          (listing.seller?.id && u.id === listing.seller.id) ||
+          (listing.seller?.name && u.name.toLowerCase() === listing.seller.name.toLowerCase())
+      );
+
       const sellerEmail =
-        listing.user_id === 'seller-agus'
+        matchedUser?.email ||
+        (listing as any).seller_email ||
+        (listing.user_id === 'seller-agus'
           ? 'agus.setiawan@gmail.com'
-          : `${listing.id.toLowerCase()}@jualrugi.my.id`;
+          : `${listing.id.toLowerCase()}@jualrugi.my.id`);
+
+      const sellerPhone =
+        matchedUser?.whatsapp ||
+        matchedUser?.phone ||
+        (listing.seller as any)?.whatsapp ||
+        (listing.seller as any)?.phone ||
+        '';
 
       try {
         await triggerMonetizationActivatedEmail({
           listingId: listing.id,
           listingTitle: listing.title,
           recipientEmail: sellerEmail,
-          recipientName: listing.seller?.name || 'Pengiklan',
+          recipientPhone: sellerPhone,
+          whatsapp: sellerPhone,
+          recipientName: listing.seller?.name || matchedUser?.name || 'Pengiklan',
           packageType: 'sundul',
         });
         showNotification(
-          `Sundul aktif! Email notifikasi otomatis dikirim ke ${sellerEmail}`
+          `Sundul aktif (Lock 1x24 Jam)! Notifikasi otomatis dikirim ke ${sellerEmail}${sellerPhone ? ` & WA ${sellerPhone}` : ''}`
         );
         loadEmailLogs();
       } catch (e) {
-        showNotification('Sundul aktif! (Log email tersimpan)');
+        showNotification('Sundul aktif 1x24 jam! (Log email tersimpan)');
       }
     } else {
       showNotification(`Status Sundul untuk ${listing.id} telah dinonaktifkan.`);
@@ -1202,7 +1229,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   // Action: Toggle BU Prioritas with Automatic Seller Notification + Priority WA Group Broadcast + Make.com Webhook POST
   const handleToggleSuperBUWithEmail = async (listing: Listing) => {
-    const currentStatus = !!listing.isSuperBU;
+    const currentStatus = checkIsPriorityBUActive(listing);
     const willActivate = !currentStatus;
 
     onToggleSuperBU(listing.id, currentStatus);
@@ -1547,7 +1574,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <span className={`text-xl font-black ${
                         activeTab === 'listings' && filterType === 'sundul' ? 'text-white' : 'text-sky-800'
                       }`}>
-                        {listings.filter((l) => !!l.sundulAt).length}
+                        {listings.filter((l) => checkIsSundulActive(l)).length}
                       </span>
                       <span className={`text-[10px] font-bold ${
                         activeTab === 'listings' && filterType === 'sundul' ? 'text-sky-100' : 'text-sky-600'
@@ -1582,7 +1609,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <span className={`text-xl font-black ${
                         activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-800'
                       }`}>
-                        {listings.filter((l) => !!l.isSuperBU).length}
+                        {listings.filter((l) => checkIsPriorityBUActive(l)).length}
                       </span>
                       <span className={`text-[10px] font-bold ${
                         activeTab === 'listings' && filterType === 'superbu' ? 'text-amber-950' : 'text-amber-700'
@@ -1822,8 +1849,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     className="text-xs px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-medium focus:outline-none cursor-pointer"
                   >
                     <option value="all">Semua Status ({listings.length})</option>
-                    <option value="sundul">Sundul Aktif ({listings.filter((l) => !!l.sundulAt).length})</option>
-                    <option value="superbu">BU Prioritas ({listings.filter((l) => !!l.isSuperBU).length})</option>
+                    <option value="sundul">Sundul Aktif ({listings.filter((l) => checkIsSundulActive(l)).length})</option>
+                    <option value="superbu">BU Prioritas ({listings.filter((l) => checkIsPriorityBUActive(l)).length})</option>
                   </select>
                 </div>
               )}
@@ -2246,12 +2273,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </tr>
                       ) : (
                         filteredListings.map((listing) => {
-                          const isSundulActive = !!listing.sundulAt;
-                          const isSuperBUActive = !!(
-                            listing.isSuperBU ||
-                            (listing as any).is_priority ||
-                            (listing as any).is_super_bu
-                          );
+                          const isSundulActive = checkIsSundulActive(listing);
+                          const isSuperBUActive = checkIsPriorityBUActive(listing);
 
                           return (
                             <tr key={listing.id} className="hover:bg-slate-50/80 transition">
@@ -2327,11 +2350,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                     <span>{isSundulActive ? 'Aktif (#1)' : 'Nonaktif'}</span>
                                   </button>
                                   {isSundulActive && listing.sundulAt && (
-                                    <span className="text-[9px] text-slate-400 font-mono">
-                                      {new Date(listing.sundulAt).toLocaleTimeString('id-ID', {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      })}
+                                    <span className="text-[9px] text-sky-700 font-bold">
+                                      {getRemainingPromoTimeLabel(
+                                        listing.sundulExpiresAt,
+                                        listing.sundulAt,
+                                        SUNDUL_DURATION_MS
+                                      )}
                                     </span>
                                   )}
                                 </div>
@@ -2354,7 +2378,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                   {isSuperBUActive && (
                                     <div className="flex flex-col items-center gap-1">
                                       <span className="text-[9px] text-amber-700 font-bold">
-                                        24 Jam Aktif
+                                        {getRemainingPromoTimeLabel(
+                                          listing.superBUExpiresAt,
+                                          listing.superBUActivatedAt || listing.createdAt,
+                                          PRIORITY_BU_DURATION_MS
+                                        )}
                                       </span>
                                       <AdminPriorityShareWaButton
                                         listing={listing}
