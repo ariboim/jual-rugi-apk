@@ -1754,7 +1754,18 @@ Team Admin jualrugi.my.id`;
       }
     }
 
-    // D. Fetch Asset Reguler
+    // D. Verifikasi Google Search Console HTML File
+    if (url.pathname === '/google4ecda37272523497.html' && (request.method === 'GET' || request.method === 'HEAD')) {
+      return new Response('google-site-verification: google4ecda37272523497.html', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+      });
+    }
+
+    // E. Fetch Asset Reguler
     const response = await env.ASSETS.fetch(request);
 
     // Fallback 404 untuk client-side routing SPA (termasuk /product/:id dan /iklan/:id)
