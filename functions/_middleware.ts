@@ -125,7 +125,7 @@ export async function onRequest(context: {
     return next();
   }
 
-  const pathMatch = url.pathname.match(/^\/(?:product|iklan)\/([^/?#]+)/i);
+  const pathMatch = url.pathname.match(/^\/(?:produk|product|iklan)\/([^/?#]+)/i);
   const requestedId = String(
     url.searchParams.get('id') ||
       url.searchParams.get('deal') ||

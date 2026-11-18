@@ -1449,6 +1449,7 @@ Team Admin jualrugi.my.id`;
       const seen = new Set();
       const urlBlocks = [
         `  <url>\n    <loc>${escapeXml(siteOrigin + '/')}</loc>\n    <lastmod>${escapeXml(nowIso)}</lastmod>\n    <changefreq>hourly</changefreq>\n    <priority>1.0</priority>\n  </url>`,
+        `  <url>\n    <loc>${escapeXml(siteOrigin + '/pasang-iklan')}</loc>\n    <lastmod>${escapeXml(nowIso)}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.9</priority>\n  </url>`,
       ];
 
       for (const item of activeItems) {
@@ -1515,7 +1516,7 @@ Team Admin jualrugi.my.id`;
       headers.set('Content-Type', 'text/html; charset=utf-8');
       headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
 
-      const pathMatch = url.pathname.match(/^\/(?:product|iklan)\/([^/?#]+)/i);
+      const pathMatch = url.pathname.match(/^\/(?:produk|product|iklan)\/([^/?#]+)/i);
       const requestedId = String(
         url.searchParams.get('id') ||
           url.searchParams.get('deal') ||

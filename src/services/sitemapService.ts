@@ -262,6 +262,14 @@ export function buildSitemapXml(
       '    <priority>1.0</priority>',
       '  </url>',
     ].join('\n'),
+    [
+      '  <url>',
+      `    <loc>${escapeXml(`${cleanOrigin}/pasang-iklan`)}</loc>`,
+      `    <lastmod>${escapeXml(nowIso)}</lastmod>`,
+      '    <changefreq>weekly</changefreq>',
+      '    <priority>0.9</priority>',
+      '  </url>',
+    ].join('\n'),
   ];
 
   for (const item of activeListings) {
