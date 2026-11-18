@@ -66,6 +66,7 @@ import { PromoBannerModal } from './components/PromoBannerModal';
 import { TopPromoBanner } from './components/TopPromoBanner';
 import { AuthModal } from './components/AuthModal';
 import { InFeedBanner } from './components/InFeedBanner';
+import { AdsterraNativeBanner } from './components/AdsterraNativeBanner';
 import { LocationPermissionModal } from './components/LocationPermissionModal';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { PanduanPDFModal } from './components/PanduanPDFModal';
@@ -2374,6 +2375,9 @@ export default function App() {
                 })}
               </div>
             )}
+
+            {/* Native Banner Iklan Adsterra */}
+            <AdsterraNativeBanner />
           </div>
         )}
 
