@@ -67,6 +67,7 @@ import { TopPromoBanner } from './components/TopPromoBanner';
 import { AuthModal } from './components/AuthModal';
 import { InFeedBanner } from './components/InFeedBanner';
 import { AdsterraNativeBanner } from './components/AdsterraNativeBanner';
+import { AdsterraMidBanner } from './components/AdsterraMidBanner';
 import { LocationPermissionModal } from './components/LocationPermissionModal';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { PanduanPDFModal } from './components/PanduanPDFModal';
@@ -2343,12 +2344,24 @@ export default function App() {
             ) : (
               <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4">
                 {filteredListings.map((item, index) => {
-                  // Pola OLX: Sisipkan banner setelah item ke-4 (index 3), atau di akhir jika daftar sedikit
+                  // Pola OLX: Sisipkan banner promo setelah item ke-4 (index 3), atau di akhir jika daftar sedikit
                   const shouldRenderBanner =
                     index === 3 ||
                     (filteredListings.length < 4 &&
                       index === filteredListings.length - 1 &&
                       selectedCategory !== 'Smartphone & Gadget');
+
+                  // Posisi tengah feed untuk Banner Adsterra 300x250 agar muncul di tengah-tengah post
+                  const midFeedIndex =
+                    filteredListings.length === 1
+                      ? 0
+                      : (() => {
+                          const rawMid = Math.floor(filteredListings.length / 2) - 1;
+                          if (rawMid === 3 && filteredListings.length >= 8) return 5;
+                          if (rawMid === 3 && filteredListings.length >= 6) return 2;
+                          return Math.max(0, rawMid);
+                        })();
+                  const shouldRenderMidAdsterra = index === midFeedIndex;
 
                   return (
                     <React.Fragment key={item.id}>
@@ -2370,6 +2383,9 @@ export default function App() {
                           onClick={handleNavigateSmartphoneCategory}
                         />
                       )}
+
+                      {/* Banner Iklan Adsterra 300x250 di Tengah-Tengah Post */}
+                      {shouldRenderMidAdsterra && <AdsterraMidBanner />}
                     </React.Fragment>
                   );
                 })}
