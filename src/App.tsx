@@ -44,6 +44,7 @@ import {
 } from './services/notificationService';
 import {
   triggerAdPublishedEmail,
+  triggerMonetizationActivatedEmail,
   triggerQuotaActivatedEmail,
   triggerPriorityAdGroupWhatsApp,
   getDynamicAdLink,
@@ -1298,6 +1299,61 @@ export default function App() {
       showToast('🔥 Pembayaran Mayar Rp 250.000 Berhasil! Iklan Di-Lock di Posisi Prioritas BU 3x24 Jam & Kuota +1 Slot Aktif!');
     }
 
+    // Trigger Notifikasi Otomatis sesuai Aturan Bisnis (#2 Sundul & #3 Prioritas BU)
+    const activatedListing = listings.find((item) => item.id === listingId);
+    const sellerEmail = currentUser.email || `${listingId.toLowerCase()}@jualrugi.my.id`;
+    const sellerPhone = currentUser.whatsapp || currentUser.phone || '';
+    const sellerName = currentUser.name || activatedListing?.seller?.name || 'Juragan JualRugi';
+
+    if (!isPriorityPackage) {
+      triggerMonetizationActivatedEmail({
+        listingId,
+        listingTitle: activatedListing?.title || `Iklan #${listingId}`,
+        userId: currentUser.id,
+        recipientEmail: sellerEmail,
+        recipientPhone: sellerPhone,
+        whatsapp: sellerPhone,
+        recipientName: sellerName,
+        packageType: 'sundul',
+      }).catch(() => {});
+    } else {
+      triggerMonetizationActivatedEmail({
+        listingId,
+        listingTitle: activatedListing?.title || `Iklan #${listingId}`,
+        userId: currentUser.id,
+        recipientEmail: sellerEmail,
+        recipientPhone: sellerPhone,
+        whatsapp: sellerPhone,
+        recipientName: sellerName,
+        packageType: 'prioritas',
+      }).catch(() => {});
+
+      const priorityPayload = {
+        listingId,
+        listingTitle: activatedListing?.title || `Iklan Prioritas #${listingId}`,
+        sellingPrice: activatedListing?.sellingPrice,
+        normalPrice: activatedListing?.normalPrice,
+        discountPercentage: activatedListing?.discountPercentage,
+        location: activatedListing?.location,
+        category: activatedListing?.category,
+        urgentReason: activatedListing?.urgentReason,
+        sellerName,
+        imageUrl: activatedListing?.imageUrl || activatedListing?.images?.[0],
+      };
+
+      triggerPriorityAdGroupWhatsApp(priorityPayload)
+        .then((waRes) => {
+          if (waRes?.skipped || !waRes?.webPush?.attempted) {
+            triggerPriorityWebPush(priorityPayload).catch(() => {});
+          } else {
+            emitLocalPriorityWebAlert(waRes?.webPush?.latestAlert || priorityPayload);
+          }
+        })
+        .catch(() => {
+          triggerPriorityWebPush(priorityPayload).catch(() => {});
+        });
+    }
+
     // Switch to home feed so user immediately sees their listing at the locked position
     setActiveTab('home');
   };
@@ -1827,15 +1883,18 @@ export default function App() {
         </div>
       )}
 
-      {/* Live In-Web Alert Notification (BU Prioritas, Iklan Tayang, Kuota Aktif, Take Down Admin) */}
+      {/* Live In-Web Alert Notification (BU Prioritas, Iklan Tayang, Sundul, Kuota Aktif, Take Down Admin) */}
       {livePriorityAlert && (() => {
         const eventType = livePriorityAlert.eventType || livePriorityAlert.type || 'priority_bu';
         const isPublished = eventType === 'ad_published';
+        const isSundul = eventType === 'ad_sundul';
         const isQuota = eventType === 'quota_activated';
         const isTakedown = eventType === 'ad_takedown';
 
         const cardBorder = isPublished
           ? 'border-emerald-400 shadow-emerald-950/20'
+          : isSundul
+          ? 'border-indigo-400 shadow-indigo-950/20'
           : isQuota
           ? 'border-sky-400 shadow-sky-950/20'
           : isTakedown
@@ -1844,6 +1903,8 @@ export default function App() {
 
         const iconBg = isPublished
           ? 'bg-emerald-500 text-white'
+          : isSundul
+          ? 'bg-indigo-600 text-white'
           : isQuota
           ? 'bg-sky-500 text-white'
           : isTakedown
@@ -1852,6 +1913,8 @@ export default function App() {
 
         const badgeClass = isPublished
           ? 'bg-emerald-100 text-emerald-900'
+          : isSundul
+          ? 'bg-indigo-100 text-indigo-900'
           : isQuota
           ? 'bg-sky-100 text-sky-900'
           : isTakedown
@@ -1860,6 +1923,8 @@ export default function App() {
 
         const badgeText = isPublished
           ? 'Iklan Resmi Tayang'
+          : isSundul
+          ? 'Sundul Iklan Aktif • 1x24 Jam'
           : isQuota
           ? 'Kuota Iklan Aktif'
           : isTakedown
@@ -1868,6 +1933,8 @@ export default function App() {
 
         const ctaClass = isPublished
           ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+          : isSundul
+          ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
           : isQuota
           ? 'bg-sky-600 hover:bg-sky-700 text-white'
           : isTakedown
@@ -1887,6 +1954,8 @@ export default function App() {
                 <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}>
                   {isPublished ? (
                     <CheckCircle2 className="w-6 h-6" />
+                  ) : isSundul ? (
+                    <Sparkles className="w-6 h-6" />
                   ) : isQuota ? (
                     <Zap className="w-6 h-6" />
                   ) : isTakedown ? (
@@ -1901,6 +1970,8 @@ export default function App() {
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md ${badgeClass} text-[10px] font-black uppercase tracking-wide`}>
                     {isPublished ? (
                       <CheckCircle2 className="w-3 h-3" />
+                    ) : isSundul ? (
+                      <Sparkles className="w-3 h-3" />
                     ) : isQuota ? (
                       <Zap className="w-3 h-3" />
                     ) : isTakedown ? (

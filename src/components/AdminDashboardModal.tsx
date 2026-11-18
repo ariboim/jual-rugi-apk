@@ -982,6 +982,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         await triggerMonetizationActivatedEmail({
           listingId: listing.id,
           listingTitle: listing.title,
+          userId: matchedUser?.id || listing.user_id || listing.seller?.id,
           recipientEmail: sellerEmail,
           recipientPhone: sellerPhone,
           whatsapp: sellerPhone,
@@ -1279,6 +1280,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           triggerMonetizationActivatedEmail({
             listingId: listing.id,
             listingTitle: listing.title,
+            userId: matchedUser?.id || listing.user_id || listing.seller?.id,
             recipientEmail: sellerEmail,
             recipientPhone: sellerPhone,
             whatsapp: sellerPhone,

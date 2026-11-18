@@ -1618,6 +1618,112 @@ Team Admin jualrugi.my.id`;
     }
   });
 
+  // Endpoint Khusus Peringatan Dini WhatsApp Personal Admin Saat Ada Iklan Dilaporkan (Rule #5)
+  app.post('/api/send-ad-reported-admin-wa', async (req, res) => {
+    try {
+      const body = req.body || {};
+      const cleanId = String(body.listingId || '').trim();
+      const title = String(body.listingTitle || '').trim();
+      const reason = String(body.reasonLabel || body.reason || '').trim();
+
+      if (!cleanId || !title || !reason) {
+        return res.status(400).json({
+          success: false,
+          error: 'Parameter listingId, listingTitle, dan reason wajib diisi.',
+        });
+      }
+
+      const normalizeIndonesianPhone = (raw?: unknown): string => {
+        const str = String(raw || '').trim();
+        if (!str) return '';
+        let digits = str.replace(/\D/g, '');
+        if (!digits) return '';
+        if (digits.startsWith('0')) digits = '62' + digits.slice(1);
+        else if (digits.startsWith('8')) digits = '62' + digits;
+        return digits.length >= 8 ? digits : '';
+      };
+
+      const targetAdminPhone =
+        normalizeIndonesianPhone(body.adminPhone || process.env.ADMIN_WHATSAPP_NUMBER) ||
+        '6289673686625';
+
+      const adLink =
+        typeof body.adLink === 'string' && body.adLink.trim()
+          ? body.adLink.trim()
+          : `https://jualrugi.my.id/product/${encodeURIComponent(cleanId)}`;
+
+      const priceNum = Number(body.listingPrice || 0);
+      const priceText = priceNum > 0 ? `Rp ${priceNum.toLocaleString('id-ID')}` : '-';
+      const notes = String(body.notes || '').trim() || 'Tidak ada catatan tambahan.';
+      const reporter = String(body.reporterName || 'Pembeli').trim();
+      const reporterContact = String(body.reporterContact || '-').trim();
+      const sellerName = String(body.sellerName || '-').trim();
+      const sellerId = String(body.sellerId || '-').trim();
+
+      const message =
+        typeof body.customMessage === 'string' && body.customMessage.trim()
+          ? body.customMessage.trim()
+          : `🚨 *PERINGATAN DINI MODERASI IKLAN - JUALRUGI.MY.ID* 🚨\n\n` +
+            `Ada laporan baru dari pengguna yang memerlukan pengecekan Admin segera:\n\n` +
+            `📌 *Judul Iklan:* ${title}\n` +
+            `🆔 *ID Iklan:* ${cleanId}\n` +
+            `💰 *Harga:* ${priceText}\n` +
+            `📍 *Lokasi:* ${String(body.listingLocation || '-').trim()}\n` +
+            `👤 *Penjual:* ${sellerName} (${sellerId})\n\n` +
+            `⚠️ *Alasan Laporan:*\n*${reason}*\n` +
+            `📝 *Kronologi / Catatan:*\n_${notes}_\n\n` +
+            `📣 *Pelapor:* ${reporter} (${reporterContact})\n\n` +
+            `🔗 *Link Detail Iklan (Cek / Take Down Manual):*\n${adLink}\n\n` +
+            `Mohon segera lakukan pengecekan atau take-down melalui Dashboard Admin jika terbukti melanggar SOP COD aman.\n` +
+            `---\n*Sistem Keamanan jualrugi.my.id*`;
+
+      if (body.dryRun === true) {
+        return res.status(200).json({
+          success: true,
+          dryRun: true,
+          targetAdminPhone,
+          adLink,
+          messagePreview: message,
+        });
+      }
+
+      const FONNTE_TOKEN = process.env.FONNTE_TOKEN || atob('RzJ3YjlMck1tYlRXSlAxdGJCdzM=');
+      const formData = new FormData();
+      formData.append('target', targetAdminPhone);
+      formData.append('message', message);
+      formData.append('countryCode', '62');
+
+      console.log(`[Server - Report Admin WA] Mengirim peringatan dini laporan iklan ${cleanId} ke Admin ${targetAdminPhone}...`);
+      const fonnteRes = await fetch('https://api.fonnte.com/send', {
+        method: 'POST',
+        headers: {
+          Authorization: FONNTE_TOKEN,
+        },
+        body: formData,
+      });
+
+      const fonnteData: any = await fonnteRes.json().catch(() => ({}));
+      const isOk = fonnteRes.ok && fonnteData?.status !== false;
+      console.log(`[Server - Report Admin WA Status]: ${fonnteRes.status}`, fonnteData);
+
+      return res.status(isOk ? 200 : 502).json({
+        success: isOk,
+        message: isOk
+          ? `Peringatan laporan iklan ${cleanId} berhasil dikirim ke WA Admin (${targetAdminPhone}).`
+          : fonnteData?.reason || 'Fonnte gagal mengirim notifikasi laporan ke Admin.',
+        targetAdminPhone,
+        adLink,
+        detail: fonnteData,
+      });
+    } catch (err: any) {
+      console.error('[Server - Report Admin WA Exception]:', err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || 'Gagal mengirim peringatan laporan ke WhatsApp Admin.',
+      });
+    }
+  });
+
   // In-memory data store for idempotency & user quotas
   const processedMayarTransactions = new Set<string>();
   const userQuotas = new Map<string, { quota: number; freeListingUsed: boolean; transactions: any[] }>();

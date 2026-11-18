@@ -772,6 +772,13 @@ export function buildEventPushPayload(input = {}) {
       `Selamat ${input.recipientName || 'Juragan'}, ${isEdit ? 'perubahan iklan' : 'iklan'} "${cleanTitle}" resmi tayang di JualRugi.my.id!`;
     url = input.url || `/?id=${encodeURIComponent(cleanId)}`;
     adLink = input.adLink || `${siteOrigin}/?id=${encodeURIComponent(cleanId)}`;
+  } else if (eventType === 'ad_sundul') {
+    title = input.title || `🚀 Sundul Iklan Aktif (Lock 1x24 Jam): ${cleanTitle}`;
+    body =
+      input.body ||
+      `Selamat ${input.recipientName || 'Juragan'}, iklan "${cleanTitle}" berhasil disundul & dikunci di posisi teratas daftar pencarian selama 1x24 jam!`;
+    url = input.url || `/?id=${encodeURIComponent(cleanId)}`;
+    adLink = input.adLink || `${siteOrigin}/?id=${encodeURIComponent(cleanId)}`;
   } else if (eventType === 'quota_activated') {
     const added = Number(input.addedQuota || 1);
     const total = Number(input.newTotalQuota || added);
@@ -812,6 +819,7 @@ export function buildEventPushPayload(input = {}) {
 /**
  * Mengirim Native Web Push untuk event personal/umum:
  * - ad_published (Iklan Tayang -> target seller / device aktif)
+ * - ad_sundul (Iklan Sundul -> target seller / device aktif)
  * - quota_activated (Aktivasi Kuota Iklan -> target pembeli kuota / device aktif)
  * - ad_takedown (Take Down Laporan Buyer -> target seller / device aktif)
  * - priority_bu (Iklan Prioritas BU -> seluruh subscriber)

@@ -13,7 +13,7 @@ function getOptionalSupabaseConfig() {
   return undefined;
 }
 
-export type WebPushEventType = 'priority_bu' | 'ad_published' | 'quota_activated' | 'ad_takedown';
+export type WebPushEventType = 'priority_bu' | 'ad_published' | 'ad_sundul' | 'quota_activated' | 'ad_takedown';
 
 export interface PriorityWebAlertPayload {
   type?: WebPushEventType;
@@ -59,6 +59,9 @@ export function emitLocalPriorityWebAlert(
   if (eventType === 'ad_published') {
     defaultTitle = `🎉 Iklan Resmi Tayang: ${cleanTitle}`;
     defaultBody = `Selamat! Iklan "${cleanTitle}" sudah aktif tayang di JualRugi.my.id.`;
+  } else if (eventType === 'ad_sundul') {
+    defaultTitle = `🚀 Sundul Iklan Aktif (Lock 1x24 Jam): ${cleanTitle}`;
+    defaultBody = `Selamat! Iklan "${cleanTitle}" berhasil disundul & dikunci di posisi teratas daftar pencarian selama 1x24 jam.`;
   } else if (eventType === 'quota_activated') {
     defaultTitle = '⚡ Kuota Iklan Sudah Aktif!';
     defaultBody = 'Selamat kuota iklan Anda telah diperbarui. Silakan pasang iklan Anda sekarang!';

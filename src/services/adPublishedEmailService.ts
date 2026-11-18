@@ -455,6 +455,7 @@ export interface MonetizationEmailPayload {
   listingId: string;
   listingTitle: string;
   recipientEmail: string;
+  userId?: string;
   recipientPhone?: string;
   whatsapp?: string;
   recipientName?: string;
@@ -725,25 +726,63 @@ export async function triggerMonetizationActivatedEmail(
 ): Promise<AdPublishedEmailResponse> {
   const { listingId, listingTitle, recipientEmail, recipientName, packageType } = payload;
   const adLink = getDynamicAdLink(listingId);
-  const packageLabel = packageType === 'sundul' ? 'sundul' : 'prioritas';
-  const packageName = packageType === 'sundul' ? 'Sundul Iklan (#1 Feed)' : 'BU Prioritas (Highlight Emas)';
+  const isSundul = packageType === 'sundul';
+  const packageLabel = isSundul ? 'sundul' : 'prioritas';
+  const packageName = isSundul ? 'Sundul Iklan (Lock #1 Feed 1x24 Jam)' : 'BU Prioritas (Lock Highlight 3x24 Jam)';
 
-  const textContent = `Selamat, iklan ${packageLabel} Anda sudah aktif!\n\nProduk: "${listingTitle}"\nSilakan cek iklan Anda melalui: ${adLink}`;
+  const textContent = isSundul
+    ? `Halo *${recipientName || 'Juragan'}*! 🚀\n\n` +
+      `Selamat, iklan sundul Anda sudah aktif dan *DIKUNCI DI POSISI ATAS* daftar pencarian selama *1x24 jam*!\n\n` +
+      `📌 Produk: *"${listingTitle}"*\n` +
+      `🔗 Cek iklan Anda sekarang:\n${adLink}\n\n` +
+      `---\n*Team Admin jualrugi.my.id*`
+    : `Selamat, iklan ${packageLabel} Anda sudah aktif!\n\nProduk: "${listingTitle}"\nSilakan cek iklan Anda melalui: ${adLink}`;
 
-  // Cari nomor WhatsApp penjual dari payload atau database lokal
-  let targetPhone = payload.recipientPhone || payload.whatsapp || '';
-  if (!targetPhone) {
+  // Cari nomor WhatsApp & userId penjual dari payload atau database lokal
+  let targetPhone = normalizeWhatsAppNumber(payload.recipientPhone || payload.whatsapp || '');
+  let targetUserId = payload.userId;
+  if (!targetPhone || !targetUserId) {
     try {
       const users = getStoredUsers();
       const found = users.find(
         (u) =>
+          (payload.userId && u.id === payload.userId) ||
           (recipientEmail && u.email.toLowerCase() === recipientEmail.toLowerCase()) ||
           (recipientName && u.name.toLowerCase() === recipientName.toLowerCase())
       );
       if (found) {
-        targetPhone = found.whatsapp || found.phone || '';
+        if (!targetPhone) targetPhone = normalizeWhatsAppNumber(found.whatsapp || found.phone || '');
+        if (!targetUserId) targetUserId = found.id;
       }
     } catch {}
+  }
+
+  // Trigger In-App + User-Scoped Web Push untuk Sundul Iklan (Rule #2)
+  if (isSundul) {
+    emitLocalPriorityWebAlert({
+      eventType: 'ad_sundul',
+      listingId,
+      listingTitle,
+      targetUserId,
+      targetEmail: recipientEmail,
+      adLink,
+    });
+
+    triggerEventWebPush({
+      eventType: 'ad_sundul',
+      listingId,
+      listingTitle,
+      recipientName,
+      recipientEmail,
+      targetUserId,
+      targetEmail: recipientEmail,
+      adLink,
+    }).catch(() => {
+      sendSystemPushNotification(
+        `🚀 Sundul Iklan Aktif (Lock 1x24 Jam): ${listingTitle}`,
+        `Selamat! Iklan "${listingTitle}" berhasil disundul ke posisi atas daftar pencarian.`
+      ).catch(() => {});
+    });
   }
 
   const htmlContent = `
@@ -757,13 +796,13 @@ export async function triggerMonetizationActivatedEmail(
   <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:16px;border:1px solid #bae6fd;padding:28px;box-shadow:0 4px 20px rgba(0,0,0,0.06);">
     <div style="text-align:center;margin-bottom:20px;">
       <span style="display:inline-block;background:#e0f2fe;color:#0284c7;padding:4px 14px;border-radius:9999px;font-size:12px;font-weight:bold;text-transform:uppercase;">
-        Pembayaran Terverifikasi Admin
+        Pembayaran Terverifikasi
       </span>
       <h2 style="color:#0369a1;margin:12px 0 6px;">Selamat, iklan ${packageLabel} Anda sudah aktif! 🎉</h2>
       <p style="font-weight:600;color:#334155;margin:4px 0;">"${listingTitle}"</p>
     </div>
     <p style="font-size:14px;line-height:1.6;color:#334155;">
-      Status paket <strong>${packageName}</strong> telah resmi diaktifkan oleh Admin JualRugi setelah verifikasi bukti pembayaran Mayar.
+      Status paket <strong>${packageName}</strong> telah resmi diaktifkan di JualRugi.my.id.
     </p>
     <div style="text-align:center;margin:24px 0;">
       <a href="${adLink}" style="display:inline-block;background:#0284c7;color:#ffffff;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:10px;text-decoration:none;" target="_blank" rel="noopener noreferrer">
@@ -810,7 +849,7 @@ export async function triggerMonetizationActivatedEmail(
     console.warn('Gagal menyimpan log email aktivasi ke localStorage:', e);
   }
 
-  // Kirim notifikasi WA ke penjual jika nomor valid
+  // Kirim notifikasi WA personal ke penjual jika nomor valid
   if (targetPhone && targetPhone.replace(/\D/g, '').length >= 8) {
     sendFonnteWhatsApp({
       targetPhone,
@@ -844,7 +883,7 @@ export async function triggerMonetizationActivatedEmail(
         const data = await response.json().catch(() => ({}));
         return {
           success: true,
-          message: `Email aktivasi ${packageLabel} berhasil dikirim ke ${recipientEmail}`,
+          message: `Email & WA aktivasi ${packageLabel} berhasil dikirim ke ${recipientEmail}`,
           sentTo: recipientEmail,
           whatsappSentTo: targetPhone || undefined,
           listingId,
@@ -1751,6 +1790,157 @@ export function getPriorityShareWhatsAppUrl(
 ): string {
   const text = buildPriorityShareWhatsAppMessage(listing, sellerNameOverride);
   return `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+}
+
+// =============================================================================
+// [5. ATURAN MODERASI: PERINGATAN DINI KE WHATSAPP PERSONAL ADMIN SAAT ADA REPORT]
+// =============================================================================
+export const ADMIN_MODERATION_WA_PHONE = '6289673686625';
+
+export interface AdReportedAdminWaPayload {
+  reportId?: string;
+  listingId: string;
+  listingTitle: string;
+  listingPrice?: number;
+  listingLocation?: string;
+  sellerId?: string;
+  sellerName?: string;
+  sellerWhatsapp?: string;
+  reporterName?: string;
+  reporterContact?: string;
+  reason?: string;
+  reasonLabel?: string;
+  notes?: string;
+  adminPhone?: string;
+}
+
+export interface AdReportedAdminWaResponse {
+  success: boolean;
+  message: string;
+  targetAdminPhone: string;
+  adLink: string;
+  provider: 'server_proxy' | 'fonnte_direct' | 'simulation';
+  detail?: any;
+}
+
+export function buildAdReportedAdminWaMessage(payload: AdReportedAdminWaPayload): string {
+  const cleanId = String(payload.listingId || '-').trim();
+  const title = String(payload.listingTitle || 'Iklan Tanpa Judul').trim();
+  const productUrl = `${AD_BASE_URL}/product/${encodeURIComponent(cleanId)}`;
+  const priceText =
+    typeof payload.listingPrice === 'number' && payload.listingPrice > 0
+      ? `Rp ${payload.listingPrice.toLocaleString('id-ID')}`
+      : '-';
+  const reasonText = String(payload.reasonLabel || payload.reason || 'Indikasi Pelanggaran').trim();
+  const notesText = String(payload.notes || '').trim() || 'Tidak ada catatan tambahan.';
+  const reporter = String(payload.reporterName || 'Pembeli').trim();
+  const reporterContact = String(payload.reporterContact || '-').trim();
+  const sellerName = String(payload.sellerName || '-').trim();
+
+  return (
+    `🚨 *PERINGATAN DINI MODERASI IKLAN - JUALRUGI.MY.ID* 🚨\n\n` +
+    `Ada laporan baru dari pengguna yang memerlukan pengecekan Admin segera:\n\n` +
+    `📌 *Judul Iklan:* ${title}\n` +
+    `🆔 *ID Iklan:* ${cleanId}\n` +
+    `💰 *Harga:* ${priceText}\n` +
+    `📍 *Lokasi:* ${payload.listingLocation || '-'}\n` +
+    `👤 *Penjual:* ${sellerName} (${payload.sellerId || '-'})\n\n` +
+    `⚠️ *Alasan Laporan:*\n*${reasonText}*\n` +
+    `📝 *Kronologi / Catatan:*\n_${notesText}_\n\n` +
+    `📣 *Pelapor:* ${reporter} (${reporterContact})\n\n` +
+    `🔗 *Link Detail Iklan (Cek / Take Down Manual):*\n${productUrl}\n\n` +
+    `Mohon segera lakukan pengecekan atau take-down melalui Dashboard Admin jika terbukti melanggar SOP COD aman.\n` +
+    `---\n*Sistem Keamanan jualrugi.my.id*`
+  );
+}
+
+/**
+ * Rule #5: Mengirim notifikasi WhatsApp Personal KHUSUS ke nomor WA Admin (6289673686625)
+ * secara otomatis ketika ada user lain yang melaporkan (report) sebuah iklan.
+ */
+export async function triggerAdReportedAdminWhatsApp(
+  payload: AdReportedAdminWaPayload
+): Promise<AdReportedAdminWaResponse> {
+  const targetAdminPhone = normalizeWhatsAppNumber(
+    payload.adminPhone || ADMIN_MODERATION_WA_PHONE
+  ) || ADMIN_MODERATION_WA_PHONE;
+  const cleanId = String(payload.listingId || '-').trim();
+  const adLink = `${AD_BASE_URL}/product/${encodeURIComponent(cleanId)}`;
+  const message = buildAdReportedAdminWaMessage(payload);
+
+  // Simpan log audit lokal
+  try {
+    const existingLogs = JSON.parse(
+      localStorage.getItem('jualrugi_ad_published_emails') || '[]'
+    );
+    localStorage.setItem(
+      'jualrugi_ad_published_emails',
+      JSON.stringify(
+        [
+          {
+            id: `wa-admin-report-${Date.now()}`,
+            listingId: cleanId,
+            listingTitle: `[REPORT ADMIN WA] ${payload.listingTitle}`,
+            recipientEmail: `Admin WA (${targetAdminPhone})`,
+            recipientPhone: targetAdminPhone,
+            packageType: 'ad_reported_admin_wa',
+            sentAt: new Date().toISOString(),
+            adLink,
+          },
+          ...existingLogs,
+        ].slice(0, 50)
+      )
+    );
+  } catch {}
+
+  // 1. Server-side proxy (/api/send-ad-reported-admin-wa)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch('/api/send-ad-reported-admin-wa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        adLink,
+        adminPhone: targetAdminPhone,
+        customMessage: message,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return {
+        success: data?.success !== false,
+        message: data?.message || `Peringatan laporan terkirim ke WhatsApp Admin (${targetAdminPhone}).`,
+        targetAdminPhone: data?.targetAdminPhone || targetAdminPhone,
+        adLink: data?.adLink || adLink,
+        provider: 'server_proxy',
+        detail: data,
+      };
+    }
+  } catch (err) {
+    console.warn('[AdReportedAdminWA] Server proxy unreachable, fallback ke sendFonnteWhatsApp:', err);
+  }
+
+  // 2. Fallback langsung melalui Fonnte
+  const waRes = await sendFonnteWhatsApp({
+    targetPhone: targetAdminPhone,
+    message,
+    title: `Laporan Iklan #${cleanId}`,
+    recipientName: 'Admin JualRugi.my.id',
+  });
+
+  return {
+    success: waRes.success,
+    message: waRes.message,
+    targetAdminPhone,
+    adLink,
+    provider: waRes.provider === 'fonnte_direct' ? 'fonnte_direct' : 'simulation',
+    detail: waRes.detail,
+  };
 }
 
 

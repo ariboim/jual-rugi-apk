@@ -16,6 +16,7 @@ import {
   createAdReport,
   AdReport,
 } from '../services/reportService';
+import { triggerAdReportedAdminWhatsApp } from '../services/adPublishedEmailService';
 
 const formatRupiah = (val: number) => 'Rp ' + val.toLocaleString('id-ID');
 
@@ -74,6 +75,25 @@ export const ReportListingModal: React.FC<ReportListingModalProps> = ({
         notes,
       });
 
+      // Rule #5: Otomatis kirim peringatan dini ke WhatsApp Personal Admin (6289673686625)
+      triggerAdReportedAdminWhatsApp({
+        reportId: newReport.id,
+        listingId: newReport.listingId,
+        listingTitle: newReport.listingTitle,
+        listingPrice: newReport.listingPrice,
+        listingLocation: newReport.listingLocation,
+        sellerId: newReport.sellerId,
+        sellerName: newReport.sellerName,
+        sellerWhatsapp: newReport.sellerWhatsapp,
+        reporterName: newReport.reporterName,
+        reporterContact: newReport.reporterContact,
+        reason: newReport.reason,
+        reasonLabel: newReport.reasonLabel,
+        notes: newReport.notes,
+      }).catch((waErr) => {
+        console.warn('[ReportListingModal] Gagal memicu WA Admin:', waErr);
+      });
+
       setIsSubmitting(false);
       setIsSuccess(true);
 
@@ -130,7 +150,7 @@ export const ReportListingModal: React.FC<ReportListingModalProps> = ({
               </h4>
               <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
                 Terima kasih atas bantuan Anda menjaga keamanan ekosistem COD JualRugi.
-                Laporan Anda telah diteruskan ke <strong>Dashboard Admin</strong> untuk penindakan segera.
+                Laporan Anda telah diteruskan ke <strong>Dashboard Admin &amp; WhatsApp Admin</strong> untuk pengecekan dan penindakan segera.
               </p>
             </div>
           </div>
