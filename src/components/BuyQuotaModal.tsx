@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   X,
-  CreditCard,
   Copy,
   Check,
   Clock,
@@ -38,7 +37,6 @@ export const BuyQuotaModal: React.FC<BuyQuotaModalProps> = ({
     QUOTA_SLOT_PACKAGES[1] // Default to 5 Kuota (Popular)
   );
   const [copiedMessage, setCopiedMessage] = useState(false);
-  const [copiedRekBca, setCopiedRekBca] = useState(false);
 
   if (!isOpen) return null;
 
@@ -60,12 +58,6 @@ export const BuyQuotaModal: React.FC<BuyQuotaModalProps> = ({
     navigator.clipboard?.writeText(rawMessage);
     setCopiedMessage(true);
     setTimeout(() => setCopiedMessage(false), 2500);
-  };
-
-  const handleCopyBca = () => {
-    navigator.clipboard?.writeText('883012345678');
-    setCopiedRekBca(true);
-    setTimeout(() => setCopiedRekBca(false), 2500);
   };
 
   return (
@@ -170,36 +162,6 @@ export const BuyQuotaModal: React.FC<BuyQuotaModalProps> = ({
               </div>
             );
           })}
-        </div>
-
-        {/* Detail Rekening Pembayaran */}
-        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 mb-3.5 text-xs text-slate-700">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="font-bold text-[11px] text-slate-800 flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-sky-600" />
-              Transfer Bank Resmi JualRugi:
-            </span>
-            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-md">
-              Verifikasi Cepat
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200">
-            <div>
-              <span className="text-[10px] text-slate-400 block">Bank BCA (PT Jual Rugi Digital)</span>
-              <span className="font-mono font-bold text-xs text-slate-900 tracking-wider">
-                8830-1234-5678
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleCopyBca}
-              className="px-2 py-1 text-[10px] font-bold rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
-            >
-              {copiedRekBca ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
-              <span>{copiedRekBca ? 'Tersalin' : 'Salin Rekening'}</span>
-            </button>
-          </div>
         </div>
 
         {/* Preview Format Pesan WhatsApp Wajib */}
