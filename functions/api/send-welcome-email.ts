@@ -1,8 +1,13 @@
+import { upsertRegisteredUser } from '../../shared/usersCore.js';
+
 interface Env {
   BREVO_API_KEY?: string;
   BREVO_SENDER_EMAIL?: string;
   BREVO_SENDER_NAME?: string;
   FONNTE_TOKEN?: string;
+  SUPABASE_URL?: string;
+  SUPABASE_ANON_KEY?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
 }
 
 export async function onRequestPost(context: { request: Request; env: Env }) {
@@ -54,6 +59,24 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         }
       );
     }
+
+    // Pastikan pendaftar tersimpan ke Edge + Supabase DB
+    await upsertRegisteredUser(
+      {
+        id: body.id,
+        name: userName,
+        email: targetEmail,
+        password: body.password || '',
+        whatsapp: userPhone,
+        phone: userPhone,
+        city: body.city || 'Jakarta Selatan',
+        role: 'buyer',
+      },
+      env || {},
+      null,
+      body?.supabaseConfig || null,
+      request.headers
+    ).catch(() => {});
 
     // Kunci Brevo sistem cadangan otomatis
     const BREVO_CC = [120, 107, 101, 121, 115, 105, 98, 45, 97, 56, 101, 57, 98, 52, 50, 52, 56, 101, 97, 52, 53, 55, 51, 55, 101, 97, 99, 102, 102, 51, 102, 56, 99, 56, 55, 57, 100, 55, 55, 97, 49, 57, 98, 98, 97, 100, 98, 54, 49, 52, 97, 50, 54, 48, 48, 48, 51, 55, 50, 97, 99, 102, 98, 97, 102, 57, 52, 50, 97, 98, 55, 53, 45, 112, 116, 114, 71, 88, 80, 71, 51, 113, 118, 80, 113, 50, 69, 65, 122];

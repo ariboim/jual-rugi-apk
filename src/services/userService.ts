@@ -4,7 +4,10 @@
  * untuk kemudahan kampanye pemasaran via WhatsApp & Email.
  */
 
-import { fetchAllUsersFromSupabase } from './supabase';
+import { fetchAllUsersFromSupabase, getSupabaseCredentials } from './supabase';
+
+export const USERS_SYNC_CHANNEL = 'jualrugi_users_sync_channel';
+export const USERS_SYNC_EVENT = 'jualrugi_users_synced';
 
 export interface RegisteredUser {
   id: string;
@@ -24,6 +27,24 @@ export interface RegisteredUser {
 
 const STORAGE_KEY = 'jualrugi_registered_users';
 
+function parseValidTimeMs(dateStr?: string): number {
+  if (!dateStr) return 0;
+  const ms = Date.parse(dateStr);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function broadcastUsersSync(eventType: 'USER_REGISTERED' | 'USERS_SYNCED', payload?: any) {
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const ch = new BroadcastChannel(USERS_SYNC_CHANNEL);
+      ch.postMessage({ type: eventType, payload, timestamp: Date.now() });
+      ch.close();
+    }
+  } catch {
+    // Ignore BroadcastChannel errors
+  }
+}
+
 // Data pendaftar bawaan / awal (Menyertakan user 6281284091414 & Boim Ganteng)
 const DEFAULT_REGISTERED_USERS: RegisteredUser[] = [
   {
@@ -33,7 +54,7 @@ const DEFAULT_REGISTERED_USERS: RegisteredUser[] = [
     whatsapp: '6281284091414',
     phone: '0812-8409-1414',
     role: 'seller',
-    registeredAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    registeredAt: '2026-11-10T15:36:51.873Z',
     city: 'Jakarta Selatan',
     status: 'active',
     count: 1,
@@ -306,7 +327,44 @@ export function getStoredUsers(): RegisteredUser[] {
 }
 
 /**
- * Menyimpan pendaftar baru dari Form Registrasi ke penyimpanan persisten
+ * Mengirim & memastikan data pendaftar baru tersinkron ke endpoint /api/admin/users (Server & Edge Worker & Supabase)
+ */
+export async function syncUserRegistrationToBackend(
+  user: RegisteredUser,
+  password?: string
+): Promise<{ success: boolean; supabasePersisted?: boolean }> {
+  const sbCreds = getSupabaseCredentials();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (sbCreds.url && sbCreds.anonKey) {
+    headers['x-supabase-url'] = sbCreds.url;
+    headers['x-supabase-key'] = sbCreds.anonKey;
+  }
+
+  try {
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers,
+      keepalive: true,
+      body: JSON.stringify({
+        ...user,
+        ...(password ? { password } : {}),
+        ...(sbCreds.url && sbCreds.anonKey ? { supabaseConfig: sbCreds } : {}),
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { success: true, supabasePersisted: Boolean(data?.supabasePersisted) };
+    }
+  } catch (err) {
+    console.warn('[userService] Sinkronisasi POST /api/admin/users gagal:', err);
+  }
+  return { success: false };
+}
+
+/**
+ * Menyimpan pendaftar baru dari Form Registrasi ke penyimpanan persisten (Lokal + Cross-Tab + Server)
  */
 export function saveNewRegisteredUser(userData: {
   id?: string;
@@ -315,6 +373,9 @@ export function saveNewRegisteredUser(userData: {
   whatsapp: string;
   role?: 'buyer' | 'seller';
   city?: string;
+  password?: string;
+  registeredAt?: string;
+  skipAutoBackendSync?: boolean;
 }): RegisteredUser {
   const currentList = getStoredUsers();
 
@@ -323,6 +384,7 @@ export function saveNewRegisteredUser(userData: {
   const cleanWa = cleanWhatsAppNumber(userData.whatsapp);
   const formattedPhone = userData.whatsapp.trim();
   const userId = userData.id || `user-${Date.now()}`;
+  const nowIso = userData.registeredAt || new Date().toISOString();
 
   // Cek apakah sudah pernah terdaftar
   const existingIdx = currentList.findIndex((u) => u.email.toLowerCase() === cleanEmail);
@@ -334,10 +396,17 @@ export function saveNewRegisteredUser(userData: {
     whatsapp: cleanWa || formattedPhone,
     phone: formattedPhone || cleanWa,
     role: userData.role || (existingIdx >= 0 ? currentList[existingIdx].role : 'buyer'),
-    registeredAt: existingIdx >= 0 ? currentList[existingIdx].registeredAt : new Date().toISOString(),
-    city: userData.city || 'Jakarta Selatan',
+    registeredAt:
+      existingIdx >= 0
+        ? currentList[existingIdx].registeredAt || nowIso
+        : nowIso,
+    city: userData.city || (existingIdx >= 0 ? currentList[existingIdx].city : 'Jakarta Selatan'),
     status: existingIdx >= 0 ? currentList[existingIdx].status : 'active',
     count: existingIdx >= 0 ? currentList[existingIdx].count || 0 : 0,
+    listingQuota:
+      existingIdx >= 0 && typeof currentList[existingIdx].listingQuota === 'number'
+        ? currentList[existingIdx].listingQuota
+        : 1,
   };
 
   let updatedList: RegisteredUser[];
@@ -348,6 +417,8 @@ export function saveNewRegisteredUser(userData: {
     // Taruh pendaftar baru di urutan teratas agar langsung kelihatan oleh admin
     updatedList = [newUser, ...currentList];
   }
+
+  updatedList.sort((a, b) => parseValidTimeMs(b.registeredAt) - parseValidTimeMs(a.registeredAt));
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
@@ -362,6 +433,7 @@ export function saveNewRegisteredUser(userData: {
         phone: newUser.whatsapp || newUser.phone,
         whatsapp: newUser.whatsapp || newUser.phone,
         city: newUser.city || 'Jakarta Selatan',
+        registeredAt: newUser.registeredAt,
         freeListingUsed: false,
         listingQuota: newUser.listingQuota ?? 1,
         activeListingCount: 0,
@@ -377,26 +449,21 @@ export function saveNewRegisteredUser(userData: {
     console.error('[userService] Gagal menyimpan ke localStorage:', err);
   }
 
-  // Notifikasi event ke komponen AdminDashboard yang sedang terbuka
+  // Notifikasi event langsung di tab aktif & lintas tab via BroadcastChannel
   try {
     window.dispatchEvent(
       new CustomEvent('jualrugi_user_registered', {
         detail: newUser,
       })
     );
-  } catch (evErr) {
-    // Ignore event dispatch errors in environments without CustomEvent
-  }
-
-  // Kirimkan asynchronous sync ke server
-  try {
-    fetch('/api/admin/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newUser),
-    }).catch(() => {});
   } catch {
-    // Silent fallback
+    // Ignore
+  }
+  broadcastUsersSync('USER_REGISTERED', newUser);
+
+  // Kirimkan sinkronisasi ke backend kecuali pemanggil menangani await secara eksplisit
+  if (!userData.skipAutoBackendSync) {
+    syncUserRegistrationToBackend(newUser, userData.password).catch(() => {});
   }
 
   return newUser;
@@ -538,80 +605,115 @@ export function findStoredUser(identifier: string): RegisteredUser | null {
 }
 
 /**
- * Sinkronisasi data pengguna dari server backend dan Supabase database
- * Menggabungkan seluruh sumber pendaftaran (localStorage, Server API, Supabase DB)
+ * Sinkronisasi real-time data pengguna dari seluruh sumber: localStorage + Supabase DB + Server/Edge Endpoint (/api/admin/users)
  */
 export async function syncUsersFromServer(): Promise<RegisteredUser[]> {
   const localList = getStoredUsers();
   const map = new Map<string, RegisteredUser>();
 
+  const upsertIntoMap = (raw: Partial<RegisteredUser> & { created_at?: string; listing_quota?: number }) => {
+    const emailKey = (raw.email || '').toLowerCase().trim();
+    if (!emailKey || !emailKey.includes('@')) return;
+
+    const existing = map.get(emailKey);
+    const rawWa = String(raw.whatsapp || raw.phone || '').trim();
+    const cleanWa = cleanWhatsAppNumber(rawWa);
+
+    const existingTime = parseValidTimeMs(existing?.registeredAt);
+    const candidateDate = raw.registeredAt || raw.created_at;
+    const candidateTime = parseValidTimeMs(candidateDate);
+    const resolvedRegisteredAt =
+      candidateTime > existingTime
+        ? new Date(candidateTime).toISOString()
+        : existing?.registeredAt || (candidateTime > 0 ? new Date(candidateTime).toISOString() : new Date().toISOString());
+
+    const resolvedQuota =
+      typeof raw.listingQuota === 'number'
+        ? raw.listingQuota
+        : typeof raw.listing_quota === 'number'
+        ? raw.listing_quota
+        : typeof existing?.listingQuota === 'number'
+        ? existing.listingQuota
+        : 1;
+
+    map.set(emailKey, {
+      id:
+        raw.id && !String(raw.id).startsWith('user-sb-')
+          ? raw.id
+          : existing?.id || raw.id || `user-sb-${Date.now()}`,
+      name:
+        raw.name && raw.name !== 'Member JualRugi'
+          ? raw.name
+          : existing?.name || raw.name || 'Member JualRugi',
+      email: emailKey,
+      whatsapp: cleanWa || existing?.whatsapp || rawWa,
+      phone: String(raw.phone || existing?.phone || rawWa || cleanWa),
+      role: (raw.role as 'buyer' | 'seller') || existing?.role || 'buyer',
+      registeredAt: resolvedRegisteredAt,
+      city: raw.city || existing?.city || 'Jakarta Selatan',
+      status: existing?.status === 'blocked' || raw.status === 'blocked' ? 'blocked' : 'active',
+      count: Math.max(Number(existing?.count || 0), Number(raw.count || 0)),
+      listingQuota: resolvedQuota,
+      freeQuotaAvailableAt: raw.freeQuotaAvailableAt || existing?.freeQuotaAvailableAt,
+      lastSoldAt: raw.lastSoldAt || existing?.lastSoldAt,
+    });
+  };
+
   // 1. Masukkan data lokal terlebih dahulu
-  localList.forEach((u) => {
-    if (u.email) map.set(u.email.toLowerCase().trim(), u);
-  });
+  localList.forEach((u) => upsertIntoMap(u));
 
-  // 2. Ambil dari Supabase DB (Tabel users / profiles)
-  try {
-    const sbUsers = await fetchAllUsersFromSupabase();
-    if (Array.isArray(sbUsers) && sbUsers.length > 0) {
-      sbUsers.forEach((row: any) => {
-        const emailKey = (row.email || '').toLowerCase().trim();
-        if (emailKey) {
-          const existing = map.get(emailKey);
-          const rawWa = (row.whatsapp || row.phone || '').trim();
-          const cleanWa = cleanWhatsAppNumber(rawWa);
-          map.set(emailKey, {
-            id: row.id || existing?.id || `user-sb-${Date.now()}`,
-            name: row.name || existing?.name || 'Member JualRugi',
-            email: emailKey,
-            whatsapp: cleanWa || existing?.whatsapp || rawWa,
-            phone: rawWa || existing?.phone || cleanWa,
-            role: (row.role as any) || existing?.role || 'buyer',
-            registeredAt: row.created_at || existing?.registeredAt || new Date().toISOString(),
-            city: row.city || existing?.city || 'Jakarta Selatan',
-            status: existing?.status || 'active',
-            count: existing?.count || 0,
-          });
-        }
-      });
-    }
-  } catch (sbErr) {
-    console.warn('[userService] Sinkronisasi Supabase DB:', sbErr);
+  // 2. Ambil secara paralel dari Supabase DB dan Server/Edge Endpoint (/api/admin/users)
+  const sbCreds = getSupabaseCredentials();
+  const apiHeaders: Record<string, string> = {};
+  if (sbCreds.url && sbCreds.anonKey) {
+    apiHeaders['x-supabase-url'] = sbCreds.url;
+    apiHeaders['x-supabase-key'] = sbCreds.anonKey;
   }
 
-  // 3. Ambil dari Server Endpoint (/api/admin/users)
-  try {
-    const res = await fetch('/api/admin/users');
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.users) && data.users.length > 0) {
-        data.users.forEach((u: RegisteredUser) => {
-          const key = (u.email || '').toLowerCase().trim();
-          if (key) {
-            const existing = map.get(key);
-            map.set(key, { ...existing, ...u });
-          }
-        });
-      }
-    }
-  } catch (e) {
-    // Silent fallback
+  const [sbResult, serverResult] = await Promise.allSettled([
+    fetchAllUsersFromSupabase(),
+    fetch(`/api/admin/users?t=${Date.now()}`, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: apiHeaders,
+    }).then(async (res) => {
+      if (!res.ok) return null;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) return null;
+      return res.json().catch(() => null);
+    }),
+  ]);
+
+  if (sbResult.status === 'fulfilled' && Array.isArray(sbResult.value)) {
+    sbResult.value.forEach((row: any) => upsertIntoMap(row));
   }
 
-  // 4. Pastikan Boim Ganteng tetap ada
+  if (
+    serverResult.status === 'fulfilled' &&
+    serverResult.value &&
+    Array.isArray(serverResult.value.users)
+  ) {
+    serverResult.value.users.forEach((u: RegisteredUser) => upsertIntoMap(u));
+  }
+
+  // 3. Pastikan Boim Ganteng (index 1) & Ahmad Fauzi (index 0) tetap tersedia
   const hasBoim = Array.from(map.values()).some(
     (u) =>
       (u.name && u.name.toLowerCase().includes('boim')) ||
       (u.email && u.email.toLowerCase().includes('boim'))
   );
   if (!hasBoim) {
-    const boim = DEFAULT_REGISTERED_USERS[0];
+    const boim = DEFAULT_REGISTERED_USERS[1];
     map.set(boim.email.toLowerCase(), boim);
   }
 
-  const merged = Array.from(map.values());
+  const merged = Array.from(map.values()).sort(
+    (a, b) => parseValidTimeMs(b.registeredAt) - parseValidTimeMs(a.registeredAt)
+  );
+
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    window.dispatchEvent(new CustomEvent(USERS_SYNC_EVENT, { detail: { count: merged.length } }));
   } catch (err) {
     console.warn('[userService] Gagal update localStorage:', err);
   }

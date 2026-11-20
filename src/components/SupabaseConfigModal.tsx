@@ -165,6 +165,13 @@ ON public.users FOR UPDATE
 TO anon, authenticated 
 USING (true);
 
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
+
 -- 4. Trigger Atomis Pengembalian Kuota (+1 Slot) Saat Iklan Expired / Deleted
 CREATE OR REPLACE FUNCTION public.fn_refund_listing_quota()
 RETURNS TRIGGER AS $$

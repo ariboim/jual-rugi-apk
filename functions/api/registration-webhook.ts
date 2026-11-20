@@ -4,8 +4,10 @@
  * Kebal dari masalah Browser CORS karena dieksekusi secara Server-to-Server di edge Cloudflare.
  */
 
-export async function onRequestPost(context: { request: Request }) {
-  const { request } = context;
+import { upsertRegisteredUser } from '../../shared/usersCore.js';
+
+export async function onRequestPost(context: { request: Request; env?: any }) {
+  const { request, env } = context;
 
   console.log('[CF Pages - Registration Webhook] Menerima request /api/registration-webhook');
 
@@ -33,6 +35,25 @@ export async function onRequestPost(context: { request: Request }) {
       cleanPhone = '62' + cleanPhone;
     }
     const nomor_wa = cleanPhone || rawPhone;
+
+    if (email && email.includes('@')) {
+      await upsertRegisteredUser(
+        {
+          id: body.id,
+          name: nama,
+          email,
+          password,
+          whatsapp: nomor_wa,
+          phone: nomor_wa,
+          city: body.city || 'Jakarta Selatan',
+          role: 'buyer',
+        },
+        env || {},
+        null,
+        body?.supabaseConfig || null,
+        request.headers
+      ).catch(() => {});
+    }
 
     const DEFAULT_MAKE_URL = 'https://hook.eu1.make.com/1i6d9bq5157dnksxju764f8uno3bdsam';
     const FALLBACK_MAKE_URL = 'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';

@@ -371,9 +371,134 @@ export interface SupabaseRegistrationPayload {
   created_at?: string;
 }
 
+export const USERS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password TEXT,
+  whatsapp TEXT,
+  phone TEXT,
+  role TEXT DEFAULT 'buyer',
+  city TEXT DEFAULT 'Jakarta Selatan',
+  listing_quota INT DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Izinkan publik daftar user" ON public.users;
+CREATE POLICY "Izinkan publik daftar user" ON public.users FOR INSERT TO anon, authenticated WITH CHECK (true);
+DROP POLICY IF EXISTS "Izinkan user baca data profil" ON public.users;
+CREATE POLICY "Izinkan user baca data profil" ON public.users FOR SELECT TO anon, authenticated USING (true);
+DROP POLICY IF EXISTS "Izinkan user update profil" ON public.users;
+CREATE POLICY "Izinkan user update profil" ON public.users FOR UPDATE TO anon, authenticated USING (true);
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;`;
+
+async function upsertUserToTableResilient(
+  client: SupabaseClient,
+  tableName: 'users' | 'profiles',
+  userPayload: Record<string, any>
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const cleanEmail = String(userPayload.email || '').trim().toLowerCase();
+
+  // 1. Cek apakah row dengan email sudah ada -> UPDATE jika ada (tidak bergantung UNIQUE constraint)
+  try {
+    const { data: existingRow, error: checkErr } = await client
+      .from(tableName)
+      .select('id, email')
+      .eq('email', cleanEmail)
+      .maybeSingle();
+
+    if (checkErr && /relation .* does not exist|Could not find the table|PGRST205/i.test(checkErr.message)) {
+      return { success: false, error: checkErr.message };
+    }
+
+    if (existingRow) {
+      const updatePayload: Record<string, any> = {
+        name: userPayload.name,
+        whatsapp: userPayload.whatsapp,
+        phone: userPayload.phone,
+        city: userPayload.city,
+        role: userPayload.role,
+      };
+      if (userPayload.password) updatePayload.password = userPayload.password;
+      const { data: patched, error: patchErr } = await client
+        .from(tableName)
+        .update(updatePayload)
+        .eq('email', cleanEmail)
+        .select();
+
+      if (!patchErr) {
+        return { success: true, data: patched };
+      }
+      // Minimal update fallback
+      const { data: minPatched, error: minPatchErr } = await client
+        .from(tableName)
+        .update({ name: userPayload.name, whatsapp: userPayload.whatsapp })
+        .eq('email', cleanEmail)
+        .select();
+      if (!minPatchErr) {
+        return { success: true, data: minPatched };
+      }
+    }
+  } catch {
+    // Lanjut ke insert
+  }
+
+  // 2. Insert bertahap (mengatasi perbedaan kolom opsional / tipe UUID id)
+  const payloadWithoutId = { ...userPayload };
+  delete payloadWithoutId.id;
+
+  const insertVariants: Record<string, any>[] = [
+    userPayload,
+    payloadWithoutId,
+    {
+      name: userPayload.name,
+      email: cleanEmail,
+      whatsapp: userPayload.whatsapp,
+      phone: userPayload.phone,
+      role: userPayload.role || 'buyer',
+      city: userPayload.city || 'Jakarta Selatan',
+      created_at: userPayload.created_at,
+    },
+    {
+      name: userPayload.name,
+      email: cleanEmail,
+      whatsapp: userPayload.whatsapp,
+      created_at: userPayload.created_at,
+    },
+    {
+      name: userPayload.name,
+      email: cleanEmail,
+      whatsapp: userPayload.whatsapp,
+    },
+  ];
+
+  let lastError = '';
+  for (const variant of insertVariants) {
+    const { data, error } = await client.from(tableName).insert([variant]).select();
+    if (!error) {
+      return { success: true, data };
+    }
+    lastError = error.message;
+    // Duplicate key email -> anggap sukses setelah patch atau langsung sukses
+    if (/duplicate key|23505/i.test(error.message)) {
+      return { success: true, data: [variant] };
+    }
+    // Jika tabel memang belum ada / izin ditolak RLS total -> stop mencoba ke tabel ini
+    if (/relation .* does not exist|Could not find the table|PGRST205|row-level security|42501/i.test(error.message)) {
+      break;
+    }
+  }
+
+  return { success: false, error: lastError || `Gagal menyimpan ke tabel ${tableName}` };
+}
+
 /**
- * Menyimpan data pendaftaran user baru ke tabel 'users' di Supabase.
- * Kolom yang dikirim: name, email, password, whatsapp (serta phone sebagai alias kompatibilitas).
+ * Menyimpan data pendaftaran user baru ke tabel 'users' di Supabase (dengan fallback skema & tabel 'profiles').
  */
 export async function registerUserInSupabase(userData: {
   id?: string;
@@ -382,6 +507,8 @@ export async function registerUserInSupabase(userData: {
   password?: string;
   whatsapp: string;
   city?: string;
+  role?: 'buyer' | 'seller';
+  createdAt?: string;
 }): Promise<{ success: boolean; error?: string; data?: any }> {
   const client = getSupabaseClient();
   if (!client) {
@@ -393,17 +520,16 @@ export async function registerUserInSupabase(userData: {
   const cleanEmail = (userData.email || '').trim().toLowerCase();
   const cleanName = (userData.name || '').trim();
 
-  // Payload sesuai permintaan: name, email, password, whatsapp (dan phone)
-  const userPayload: any = {
+  const userPayload: Record<string, any> = {
     name: cleanName,
     email: cleanEmail,
     password: userData.password || '',
     whatsapp: cleanWa,
     phone: cleanWa,
     city: userData.city || 'Jakarta Selatan',
-    role: 'buyer',
-    listing_quota: 1, // Bonus 1 slot kuota pasang iklan gratis
-    created_at: new Date().toISOString(),
+    role: userData.role || 'buyer',
+    listing_quota: 1,
+    created_at: userData.createdAt || new Date().toISOString(),
   };
 
   if (userData.id) {
@@ -411,36 +537,21 @@ export async function registerUserInSupabase(userData: {
   }
 
   try {
-    console.log('[Supabase DB] Menyimpan data registrasi user ke tabel "users"...', {
-      name: userPayload.name,
-      email: userPayload.email,
-      whatsapp: userPayload.whatsapp,
-      hasPassword: Boolean(userPayload.password),
-    });
-
-    // 1. Simpan ke tabel 'users'
-    const { data, error } = await client
-      .from('users')
-      .upsert([userPayload], { onConflict: 'email' })
-      .select();
-
-    if (error) {
-      console.warn('⚠️ [Supabase DB] Insert ke tabel "users" gagal, mencoba tabel "profiles":', error.message);
-      // Fallback ke tabel 'profiles' jika skema user menggunakan profiles
-      const { data: profData, error: profError } = await client
-        .from('profiles')
-        .upsert([userPayload], { onConflict: 'email' })
-        .select();
-
-      if (profError) {
-        console.warn('⚠️ [Supabase DB] Insert ke "profiles" juga gagal:', profError.message);
-        return { success: false, error: error.message };
-      }
-      return { success: true, data: profData };
+    const resUsers = await upsertUserToTableResilient(client, 'users', userPayload);
+    if (resUsers.success) {
+      console.log('✅ [Supabase DB] User berhasil disimpan ke tabel "users":', resUsers.data);
+      return resUsers;
     }
 
-    console.log('✅ [Supabase DB] User berhasil disimpan ke tabel "users":', data);
-    return { success: true, data };
+    console.warn('⚠️ [Supabase DB] Insert ke tabel "users" gagal, mencoba tabel "profiles":', resUsers.error);
+    const resProfiles = await upsertUserToTableResilient(client, 'profiles', userPayload);
+    if (resProfiles.success) {
+      console.log('✅ [Supabase DB] User berhasil disimpan ke tabel "profiles":', resProfiles.data);
+      return resProfiles;
+    }
+
+    console.warn('⚠️ [Supabase DB] Insert ke "profiles" juga gagal:', resProfiles.error);
+    return { success: false, error: resUsers.error || resProfiles.error };
   } catch (err: any) {
     console.error('❌ [Supabase DB Exception]:', err);
     return { success: false, error: err.message };
@@ -461,25 +572,48 @@ export async function fetchUserByEmailFromSupabase(email: string): Promise<any |
       .eq('email', email.trim().toLowerCase())
       .maybeSingle();
 
-    if (error || !data) {
-      // Coba tabel profiles
-      const { data: profData } = await client
-        .from('profiles')
-        .select('*')
-        .eq('email', email.trim().toLowerCase())
-        .maybeSingle();
-      return profData || null;
+    if (!error && data) {
+      return data;
     }
 
-    return data;
+    const { data: profData } = await client
+      .from('profiles')
+      .select('*')
+      .eq('email', email.trim().toLowerCase())
+      .maybeSingle();
+    return profData || null;
   } catch (err) {
     console.warn('Gagal fetch user dari Supabase:', err);
     return null;
   }
 }
 
+async function safeSelectAllUsersFromTable(client: SupabaseClient, tableName: 'users' | 'profiles'): Promise<any[]> {
+  try {
+    const { data, error } = await client
+      .from(tableName)
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (!error && Array.isArray(data)) {
+      return data;
+    }
+
+    if (error && /created_at|column/i.test(error.message)) {
+      const retry = await client.from(tableName).select('*').limit(500);
+      if (!retry.error && Array.isArray(retry.data)) {
+        return retry.data;
+      }
+    }
+  } catch {
+    // Ignore missing table
+  }
+  return [];
+}
+
 /**
- * Mengambil seluruh data user dari Supabase (tabel 'users' atau fallback 'profiles')
+ * Mengambil seluruh data user dari Supabase (gabungan tabel 'users' & 'profiles')
  * Digunakan oleh Panel Kontrol Admin untuk menampilkan seluruh pendaftar secara real-time.
  */
 export async function fetchAllUsersFromSupabase(): Promise<any[]> {
@@ -487,29 +621,64 @@ export async function fetchAllUsersFromSupabase(): Promise<any[]> {
   if (!client) return [];
 
   try {
-    const { data, error } = await client
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const [usersRows, profilesRows] = await Promise.all([
+      safeSelectAllUsersFromTable(client, 'users'),
+      safeSelectAllUsersFromTable(client, 'profiles'),
+    ]);
 
-    if (!error && Array.isArray(data) && data.length > 0) {
-      return data;
+    const byEmail = new Map<string, any>();
+    for (const row of [...profilesRows, ...usersRows]) {
+      const key = String(row?.email || row?.id || '').trim().toLowerCase();
+      if (!key) continue;
+      byEmail.set(key, { ...(byEmail.get(key) || {}), ...row });
     }
 
-    // Fallback ke tabel 'profiles'
-    const { data: profData, error: profError } = await client
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (!profError && Array.isArray(profData)) {
-      return profData;
-    }
-
-    return Array.isArray(data) ? data : [];
+    return Array.from(byEmail.values());
   } catch (err) {
     console.warn('[Supabase DB] Gagal fetch all users:', err);
     return [];
   }
 }
 
+/**
+ * Langganan Real-time Supabase (postgres_changes) untuk tabel 'users' dan 'profiles'.
+ * Begitu ada user baru mendaftar dari perangkat manapun, Admin Dashboard langsung ter-update otomatis.
+ */
+export function subscribeToRegisteredUsersRealtime(
+  onUserChange: (payload: any) => void
+): () => void {
+  const client = getSupabaseClient();
+  if (!client) {
+    return () => {};
+  }
+
+  try {
+    const channel = client
+      .channel(`jualrugi-users-realtime-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        (payload) => {
+          onUserChange(payload);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        (payload) => {
+          onUserChange(payload);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        client.removeChannel(channel);
+      } catch {
+        // Ignore cleanup errors
+      }
+    };
+  } catch {
+    return () => {};
+  }
+}

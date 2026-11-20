@@ -67,6 +67,8 @@ import {
 } from '../services/reportService';
 import {
   RegisteredUser,
+  USERS_SYNC_CHANNEL,
+  USERS_SYNC_EVENT,
   getStoredUsers,
   syncUsersFromServer,
   updateStoredUserQuota,
@@ -114,6 +116,7 @@ import {
   getSupabaseCredentials,
   saveSupabaseCredentials,
   testSupabaseConnection,
+  subscribeToRegisteredUsersRealtime,
 } from '../services/supabase';
 
 interface AdminDashboardModalProps {
@@ -204,9 +207,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [reportFilter, setReportFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all');
   const [reportSearchQuery, setReportSearchQuery] = useState('');
 
-  // Persistent Registered Users State (Disinkronkan dari localStorage & Server)
+  // Persistent Registered Users State (Disinkronkan Real-Time dari localStorage, Tab Lain, Server & Supabase)
   const [persistentUsers, setPersistentUsers] = useState<RegisteredUser[]>(() => getStoredUsers());
   const [isRefreshingUsers, setIsRefreshingUsers] = useState(false);
+  const [usersLastSyncedAt, setUsersLastSyncedAt] = useState<string | null>(null);
 
   // UI state
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -315,18 +319,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       const latest = await syncUsersFromServer();
       if (latest && latest.length > 0) {
         setPersistentUsers(latest);
+        setUsersLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         showNotification(`✅ Data pengguna berhasil disegarkan! Ditemukan ${latest.length} akun terdaftar.`);
       } else {
         const local = getStoredUsers();
         setPersistentUsers(local);
+        setUsersLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         showNotification(`✅ Data pengguna diperbarui (${local.length} akun).`);
       }
-    } catch (err) {
+    } catch {
       const local = getStoredUsers();
       setPersistentUsers(local);
       showNotification('✅ Data pengguna disegarkan dari penyimpanan lokal.');
     } finally {
-      setTimeout(() => setIsRefreshingUsers(false), 400);
+      setTimeout(() => setIsRefreshingUsers(false), 350);
     }
   };
 
@@ -342,6 +348,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       syncUsersFromServer().then((latest) => {
         if (latest && latest.length > 0) {
           setPersistentUsers(latest);
+          setUsersLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         }
       });
 
@@ -354,9 +361,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   }, [isOpen, activeTab]);
 
-  // Listener event pendaftaran user baru & laporan iklan baru
+  // Listener Real-Time: Event lokal, Cross-Tab (BroadcastChannel / storage), Supabase Realtime & Auto-Polling
   useEffect(() => {
-    const handleUserRegistered = () => {
+    const refreshFromLocalAndNotify = (notifyName?: string) => {
+      setPersistentUsers(getStoredUsers());
+      setUsersLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      if (notifyName && isOpen && isLoggedIn) {
+        showNotification(`🆕 Pendaftar baru masuk real-time: ${notifyName}`);
+      }
+    };
+
+    const handleUserRegistered = (ev: Event) => {
+      const customEv = ev as CustomEvent<RegisteredUser>;
+      refreshFromLocalAndNotify(customEv?.detail?.name);
+    };
+    const handleUsersSynced = () => {
       setPersistentUsers(getStoredUsers());
     };
     const handleNewReport = () => {
@@ -368,23 +387,86 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     };
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'jualrugi_registered_users') {
-        setPersistentUsers(getStoredUsers());
+        refreshFromLocalAndNotify();
       }
       if (e.key === 'jualrugi_ad_reports') {
         setAdReports(getStoredAdReports());
       }
     };
+
     window.addEventListener('jualrugi_user_registered', handleUserRegistered);
+    window.addEventListener(USERS_SYNC_EVENT, handleUsersSynced);
     window.addEventListener('jualrugi_new_ad_report', handleNewReport);
     window.addEventListener('jualrugi_ad_report_updated', handleReportUpdated);
     window.addEventListener('storage', handleStorageChange);
+
+    // Cross-Tab Instant BroadcastChannel
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel(USERS_SYNC_CHANNEL);
+        bc.onmessage = (msg) => {
+          if (msg?.data?.type === 'USER_REGISTERED') {
+            refreshFromLocalAndNotify(msg?.data?.payload?.name);
+            syncUsersFromServer().then((latest) => {
+              if (latest && latest.length > 0) setPersistentUsers(latest);
+            });
+          }
+        };
+      }
+    } catch {
+      // Ignore
+    }
+
+    // Supabase Realtime postgres_changes & Auto-Polling setiap 5 detik saat tab Manajemen Pengguna terbuka
+    let unsubscribeSupabaseRealtime = () => {};
+    let pollIntervalId: number | null = null;
+
+    if (isOpen && isLoggedIn) {
+      unsubscribeSupabaseRealtime = subscribeToRegisteredUsersRealtime((payload) => {
+        const newName = (payload?.new as any)?.name;
+        syncUsersFromServer().then((latest) => {
+          if (latest && latest.length > 0) {
+            setPersistentUsers(latest);
+            setUsersLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          }
+          if (payload?.eventType === 'INSERT' && newName) {
+            showNotification(`⚡ Pendaftar baru real-time dari database: ${newName}`);
+          }
+        });
+      });
+
+      if (activeTab === 'users') {
+        pollIntervalId = window.setInterval(() => {
+          syncUsersFromServer().then((latest) => {
+            if (latest && latest.length > 0) {
+              setPersistentUsers(latest);
+              setUsersLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+            }
+          });
+        }, 5000);
+      }
+    }
+
     return () => {
       window.removeEventListener('jualrugi_user_registered', handleUserRegistered);
+      window.removeEventListener(USERS_SYNC_EVENT, handleUsersSynced);
       window.removeEventListener('jualrugi_new_ad_report', handleNewReport);
       window.removeEventListener('jualrugi_ad_report_updated', handleReportUpdated);
       window.removeEventListener('storage', handleStorageChange);
+      if (bc) {
+        try {
+          bc.close();
+        } catch {
+          // Ignore
+        }
+      }
+      unsubscribeSupabaseRealtime();
+      if (pollIntervalId !== null) {
+        window.clearInterval(pollIntervalId);
+      }
     };
-  }, []);
+  }, [isOpen, isLoggedIn, activeTab]);
 
   const loadEmailLogs = () => {
     try {
@@ -709,13 +791,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       }
     });
 
-    // Urutkan pendaftar terbaru di posisi paling atas (Newest First)
+    // Urutkan pendaftar terbaru di posisi paling atas (Newest First, NaN-safe)
+    const parseTimeMs = (val?: string) => {
+      if (!val) return 0;
+      const ms = Date.parse(val);
+      return Number.isFinite(ms) ? ms : 0;
+    };
     const list = Array.from(userMap.values());
-    list.sort((a, b) => {
-      const timeA = new Date(a.registeredAt || 0).getTime();
-      const timeB = new Date(b.registeredAt || 0).getTime();
-      return timeB - timeA;
-    });
+    list.sort((a, b) => parseTimeMs(b.registeredAt) - parseTimeMs(a.registeredAt));
 
     return list;
   }, [persistentUsers, users, listings, blockedUserIds]);
@@ -1699,7 +1782,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           ? 'text-rose-700'
                           : 'text-slate-500'
                       }`}>
-                        {pendingReportCount > 0 ? 'Tindak! &rarr;' : 'Lihat &rarr;'}
+                        {pendingReportCount > 0 ? 'Tindak! →' : 'Lihat →'}
                       </span>
                     </div>
                   </button>
@@ -2574,8 +2657,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </button>
                     </div>
 
-                    {/* Toolbar Tombol Aksi: Refresh & Export */}
+                    {/* Toolbar Tombol Aksi: Live Indicator + Refresh + Export */}
                     <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      <span
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold"
+                        title="Sinkronisasi real-time otomatis setiap ada pendaftar baru"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Real-Time{usersLastSyncedAt ? ` • ${usersLastSyncedAt}` : ''}</span>
+                      </span>
+
                       <button
                         type="button"
                         onClick={handleRefreshUsers}

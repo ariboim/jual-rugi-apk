@@ -18,6 +18,10 @@ import {
   listPushSubscriptions,
   upsertPushSubscription,
 } from './shared/webPushCore.js';
+import {
+  listRegisteredUsers,
+  upsertRegisteredUser,
+} from './shared/usersCore.js';
 
 dotenv.config();
 dotenv.config({ path: '.env.local' });
@@ -167,6 +171,15 @@ function loadRegisteredUsersFromDisk(): any[] {
   saveRegisteredUsersToDisk(INITIAL_SERVER_USERS);
   return [...INITIAL_SERVER_USERS];
 }
+
+const usersLocalStore = {
+  load() {
+    return loadRegisteredUsersFromDisk();
+  },
+  save(list: any[]) {
+    saveRegisteredUsersToDisk(list);
+  },
+};
 
 async function startServer() {
   const app = express();
@@ -1999,27 +2012,35 @@ Team Admin jualrugi.my.id`;
         }
       }
 
-      // Simpan juga ke database pengguna server agar sinkron ke dashboard admin
-      const serverUserEntry = {
-        id: (req.body.id || `user-${Date.now()}`),
-        name: nama,
-        email: email,
-        whatsapp: nomor_wa,
-        phone: nomor_wa,
-        role: 'buyer',
-        registeredAt: new Date().toISOString(),
-        city: req.body.city || 'Jakarta Selatan',
-        status: 'active',
-        count: 0,
-      };
-      if (email) {
-        const uIdx = serverRegisteredUsers.findIndex((u) => u.email.toLowerCase() === email.toLowerCase());
+      // Simpan juga ke database pengguna server & Supabase agar sinkron real-time ke dashboard admin
+      const persistedRes = email
+        ? await upsertRegisteredUser(
+            {
+              id: req.body.id || `user-${Date.now()}`,
+              name: nama,
+              email,
+              password,
+              whatsapp: nomor_wa,
+              phone: nomor_wa,
+              role: 'buyer',
+              city: req.body.city || 'Jakarta Selatan',
+            },
+            process.env,
+            usersLocalStore,
+            req.body?.supabaseConfig || null,
+            req.headers as any
+          ).catch(() => null)
+        : null;
+
+      if (persistedRes?.user) {
+        const uIdx = serverRegisteredUsers.findIndex(
+          (u) => u.email.toLowerCase() === persistedRes.user.email.toLowerCase()
+        );
         if (uIdx >= 0) {
-          serverRegisteredUsers[uIdx] = { ...serverRegisteredUsers[uIdx], ...serverUserEntry };
+          serverRegisteredUsers[uIdx] = { ...serverRegisteredUsers[uIdx], ...persistedRes.user };
         } else {
-          serverRegisteredUsers.unshift(serverUserEntry);
+          serverRegisteredUsers.unshift(persistedRes.user);
         }
-        saveRegisteredUsersToDisk(serverRegisteredUsers);
       }
 
       return res.status(200).json({
@@ -2028,7 +2049,7 @@ Team Admin jualrugi.my.id`;
         status: makeRes.status,
         response: responseText,
         data: makePayload,
-        userId: serverUserEntry.id,
+        userId: persistedRes?.user?.id || req.body.id,
       });
     } catch (err: any) {
       console.error('[Server /api/registration-webhook Error]:', err);
@@ -2039,43 +2060,62 @@ Team Admin jualrugi.my.id`;
     }
   });
 
-  // Endpoint API Admin untuk Mengambil dan Menyimpan Data Pengguna
-  app.get('/api/admin/users', (req, res) => {
-    return res.json({
-      success: true,
-      users: serverRegisteredUsers,
-    });
+  // Endpoint API Admin untuk Mengambil dan Menyimpan Data Pengguna (Server Disk + Supabase Real-Time)
+  app.get('/api/admin/users', async (req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      const result = await listRegisteredUsers(
+        process.env,
+        usersLocalStore,
+        null,
+        req.headers as any
+      );
+      return res.json(result);
+    } catch (e: any) {
+      return res.json({
+        success: true,
+        users: serverRegisteredUsers,
+        count: serverRegisteredUsers.length,
+        fallback: true,
+        warning: e?.message,
+      });
+    }
   });
 
-  app.post('/api/admin/users', (req, res) => {
+  app.post('/api/admin/users', async (req, res) => {
     try {
       const u = req.body;
-      if (u && u.email) {
-        const cleanEmail = u.email.trim().toLowerCase();
+      if (!u || !u.email) {
+        return res.status(400).json({ success: false, error: 'Email pendaftar wajib diisi.' });
+      }
+
+      const result = await upsertRegisteredUser(
+        u,
+        process.env,
+        usersLocalStore,
+        u?.supabaseConfig || null,
+        req.headers as any
+      );
+
+      if (result?.user) {
+        const cleanEmail = result.user.email.toLowerCase();
         const existingIdx = serverRegisteredUsers.findIndex(
           (item) => item.email.toLowerCase() === cleanEmail
         );
-        const entry = {
-          id: u.id || `user-${Date.now()}`,
-          name: u.name || 'Pengguna Baru',
-          email: cleanEmail,
-          whatsapp: u.whatsapp || u.phone || '',
-          phone: u.phone || u.whatsapp || '',
-          role: u.role || 'buyer',
-          registeredAt: u.registeredAt || new Date().toISOString(),
-          city: u.city || 'Jakarta Selatan',
-          status: u.status || 'active',
-          count: u.count || 0,
-        };
-
         if (existingIdx >= 0) {
-          serverRegisteredUsers[existingIdx] = { ...serverRegisteredUsers[existingIdx], ...entry };
+          serverRegisteredUsers[existingIdx] = {
+            ...serverRegisteredUsers[existingIdx],
+            ...result.user,
+          };
         } else {
-          serverRegisteredUsers.unshift(entry);
+          serverRegisteredUsers.unshift(result.user);
         }
-        saveRegisteredUsersToDisk(serverRegisteredUsers);
       }
-      return res.json({ success: true, count: serverRegisteredUsers.length });
+
+      return res.json({
+        ...result,
+        count: serverRegisteredUsers.length,
+      });
     } catch (e: any) {
       return res.status(500).json({ success: false, error: e.message });
     }
@@ -2108,28 +2148,35 @@ Team Admin jualrugi.my.id`;
       }
       const userPhone = cleanPhone || '-';
 
-      // Pastikan data pendaftar tercatat di database admin
+      // Pastikan data pendaftar tercatat di database admin (Disk + Supabase)
       if (email) {
-        const cleanEmail = email.trim().toLowerCase();
-        const existingIdx = serverRegisteredUsers.findIndex((u) => u.email.toLowerCase() === cleanEmail);
-        const autoEntry = {
-          id: req.body.id || `user-${Date.now()}`,
-          name: userName,
-          email: cleanEmail,
-          whatsapp: userPhone !== '-' ? userPhone : '081298765432',
-          phone: userPhone !== '-' ? userPhone : '0812-9876-5432',
-          role: 'buyer',
-          registeredAt: new Date().toISOString(),
-          city: 'Jakarta Selatan',
-          status: 'active',
-          count: 0,
-        };
-        if (existingIdx >= 0) {
-          serverRegisteredUsers[existingIdx] = { ...serverRegisteredUsers[existingIdx], ...autoEntry };
-        } else {
-          serverRegisteredUsers.unshift(autoEntry);
+        const persisted = await upsertRegisteredUser(
+          {
+            id: req.body.id || `user-${Date.now()}`,
+            name: userName,
+            email: email.trim().toLowerCase(),
+            password: req.body.password || '',
+            whatsapp: userPhone !== '-' ? userPhone : '081298765432',
+            phone: userPhone !== '-' ? userPhone : '0812-9876-5432',
+            role: 'buyer',
+            city: req.body.city || 'Jakarta Selatan',
+          },
+          process.env,
+          usersLocalStore,
+          req.body?.supabaseConfig || null,
+          req.headers as any
+        ).catch(() => null);
+
+        if (persisted?.user) {
+          const existingIdx = serverRegisteredUsers.findIndex(
+            (u) => u.email.toLowerCase() === persisted.user.email.toLowerCase()
+          );
+          if (existingIdx >= 0) {
+            serverRegisteredUsers[existingIdx] = { ...serverRegisteredUsers[existingIdx], ...persisted.user };
+          } else {
+            serverRegisteredUsers.unshift(persisted.user);
+          }
         }
-        saveRegisteredUsersToDisk(serverRegisteredUsers);
       }
 
       const targetWebhook =

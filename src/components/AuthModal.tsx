@@ -15,7 +15,11 @@ import {
 import { UserProfile } from '../types';
 import { sendWelcomeEmailAutomation, sendRegistrationToMakeWebhook } from '../services/welcomeEmail';
 import { registerUserInSupabase, fetchUserByEmailFromSupabase } from '../services/supabase';
-import { saveNewRegisteredUser, findStoredUser, getStoredUsers } from '../services/userService';
+import {
+  saveNewRegisteredUser,
+  syncUserRegistrationToBackend,
+  findStoredUser,
+} from '../services/userService';
 import { BrandLogo } from './BrandLogo';
 
 interface AuthModalProps {
@@ -166,35 +170,58 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const regPhone = whatsapp.trim();
       const regPassword = password;
       const newUserId = `user-${Date.now()}`;
+      const registeredAtIso = new Date().toISOString();
 
-      // 0. Simpan ke database persisten pendaftar (User Service) agar langsung masuk ke Tab Manajemen Pengguna Admin
+      // 0. Simpan ke database persisten pendaftar (User Service + BroadcastChannel Real-Time)
+      let savedLocalUser = null;
       try {
-        saveNewRegisteredUser({
+        savedLocalUser = saveNewRegisteredUser({
           id: newUserId,
           name: regName,
           email: regEmail,
           whatsapp: regPhone,
           role: 'buyer',
           city: 'Jakarta Selatan',
+          password: regPassword,
+          registeredAt: registeredAtIso,
+          skipAutoBackendSync: true,
         });
       } catch (saveErr) {
         console.warn('[Auth] Gagal simpan ke userService lokal:', saveErr);
       }
 
-      // 1. Simpan Data Pendaftaran ke Database Supabase (Tabel 'users')
+      // 1. Pastikan tersimpan permanen ke Supabase DB & Endpoint /api/admin/users SEBELUM modal ditutup
       try {
-        console.log('[Auth] Menyimpan user ke Supabase database (Tabel users)...');
-        registerUserInSupabase({
-          id: newUserId,
-          name: regName,
-          email: regEmail,
-          password: regPassword,
-          whatsapp: regPhone,
-        }).catch((sbErr) => {
-          console.warn('[Auth] Catatan Supabase DB:', sbErr);
-        });
+        await Promise.allSettled([
+          registerUserInSupabase({
+            id: savedLocalUser?.id || newUserId,
+            name: regName,
+            email: regEmail,
+            password: regPassword,
+            whatsapp: regPhone,
+            city: 'Jakarta Selatan',
+            role: 'buyer',
+            createdAt: registeredAtIso,
+          }),
+          syncUserRegistrationToBackend(
+            savedLocalUser || {
+              id: newUserId,
+              name: regName,
+              email: regEmail,
+              whatsapp: regPhone,
+              phone: regPhone,
+              role: 'buyer',
+              registeredAt: registeredAtIso,
+              city: 'Jakarta Selatan',
+              status: 'active',
+              count: 0,
+              listingQuota: 1,
+            },
+            regPassword
+          ),
+        ]);
       } catch (sbEx) {
-        console.warn('[Auth] Supabase exception:', sbEx);
+        console.warn('[Auth] Supabase & backend sync note:', sbEx);
       }
 
       // 2. Kirim Data Registrasi ke Webhook Make.com (format JSON: nama, email, password, nomor_wa) & Welcome Email
@@ -225,14 +252,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setSuccessMessage(`Selamat ${regName}, pendaftaran akun berhasil! Data telah terkirim. Happy shopping! 🎉`);
 
       const authenticatedUser: UserProfile = {
-        id: newUserId,
+        id: savedLocalUser?.id || newUserId,
         name: regName,
         role: 'buyer',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
         email: regEmail,
         phone: regPhone,
         whatsapp: regPhone,
-        registeredAt: new Date().toISOString(),
+        registeredAt: registeredAtIso,
         city: 'Jakarta Selatan',
         freeListingUsed: false,
         listingQuota: 1, // Bonus 1 kuota gratis untuk pendaftar baru

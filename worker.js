@@ -8,10 +8,74 @@ import {
   listPushSubscriptions,
   upsertPushSubscription,
 } from './shared/webPushCore.js';
+import {
+  listRegisteredUsers,
+  upsertRegisteredUser,
+} from './shared/usersCore.js';
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // =========================================================================
+    // API ROUTE 0A: /api/admin/users (Manajemen Pengguna Real-Time Cloudflare Worker + Supabase)
+    // =========================================================================
+    if (url.pathname === '/api/admin/users') {
+      if (request.method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, x-supabase-url, x-supabase-key',
+          },
+        });
+      }
+
+      if (request.method === 'GET') {
+        try {
+          const result = await listRegisteredUsers(env || {}, null, null, request.headers);
+          return new Response(JSON.stringify(result), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store, no-cache, must-revalidate',
+              'Access-Control-Allow-Origin': '*',
+            },
+          });
+        } catch (err) {
+          return new Response(
+            JSON.stringify({ success: false, error: err?.message || 'Gagal membaca data pengguna.' }),
+            { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+          );
+        }
+      }
+
+      if (request.method === 'POST') {
+        try {
+          const body = await request.json().catch(() => ({}));
+          const result = await upsertRegisteredUser(
+            body,
+            env || {},
+            null,
+            body?.supabaseConfig || null,
+            request.headers
+          );
+          return new Response(JSON.stringify(result), {
+            status: result.success ? 200 : 400,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+            },
+          });
+        } catch (err) {
+          return new Response(
+            JSON.stringify({ success: false, error: err?.message || 'Gagal menyimpan data pengguna.' }),
+            { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+          );
+        }
+      }
+    }
 
     // =========================================================================
     // API ROUTE 0: /api/registration-webhook (Cloudflare Worker Handler)
@@ -28,6 +92,25 @@ export default {
         if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
         else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
         const nomor_wa = cleanPhone || rawPhone;
+
+        if (email && email.includes('@')) {
+          await upsertRegisteredUser(
+            {
+              id: body.id,
+              name: nama,
+              email,
+              password,
+              whatsapp: nomor_wa,
+              phone: nomor_wa,
+              city: body.city || 'Jakarta Selatan',
+              role: 'buyer',
+            },
+            env || {},
+            null,
+            body?.supabaseConfig || null,
+            request.headers
+          ).catch(() => {});
+        }
 
         const targetWebhook = body.webhookUrl || 'https://hook.eu1.make.com/1i6d9bq5157dnksxju764f8uno3bdsam';
         const fallbackWebhook = 'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
@@ -94,6 +177,23 @@ export default {
             { status: 400, headers: { 'Content-Type': 'application/json' } }
           );
         }
+
+        await upsertRegisteredUser(
+          {
+            id: body.id,
+            name: userName,
+            email: targetEmail,
+            password: body.password || '',
+            whatsapp: userPhone,
+            phone: userPhone,
+            city: body.city || 'Jakarta Selatan',
+            role: 'buyer',
+          },
+          env || {},
+          null,
+          body?.supabaseConfig || null,
+          request.headers
+        ).catch(() => {});
 
         // Kunci Brevo sistem cadangan otomatis
         const BREVO_CC = [120, 107, 101, 121, 115, 105, 98, 45, 97, 56, 101, 57, 98, 52, 50, 52, 56, 101, 97, 52, 53, 55, 51, 55, 101, 97, 99, 102, 102, 51, 102, 56, 99, 56, 55, 57, 100, 55, 55, 97, 49, 57, 98, 98, 97, 100, 98, 54, 49, 52, 97, 50, 54, 48, 48, 48, 51, 55, 50, 97, 99, 102, 98, 97, 102, 57, 52, 50, 97, 98, 55, 53, 45, 112, 116, 114, 71, 88, 80, 71, 51, 113, 118, 80, 113, 50, 69, 65, 122];
