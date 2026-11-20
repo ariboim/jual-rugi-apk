@@ -2795,7 +2795,6 @@ export default function App() {
         isOpen={isBuyQuotaModalOpen}
         onClose={() => setIsBuyQuotaModalOpen(false)}
         currentUser={currentUser}
-        onSimulateAdminApproval={(amount) => handleAddUserQuota(currentUser.id, amount)}
       />
 
       {/* DASHBOARD KONTROL ADMIN TERPROTEKSI */}

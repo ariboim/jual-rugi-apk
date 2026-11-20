@@ -4,10 +4,7 @@ import {
   Copy,
   Check,
   Clock,
-  Sparkles,
   Layers,
-  ArrowRight,
-  ShieldCheck,
   ExternalLink,
 } from 'lucide-react';
 import { UserProfile } from '../types';
@@ -24,14 +21,12 @@ interface BuyQuotaModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser: UserProfile;
-  onSimulateAdminApproval?: (amount: number) => void;
 }
 
 export const BuyQuotaModal: React.FC<BuyQuotaModalProps> = ({
   isOpen,
   onClose,
   currentUser,
-  onSimulateAdminApproval,
 }) => {
   const [selectedPackage, setSelectedPackage] = useState<QuotaSlotPackage>(
     QUOTA_SLOT_PACKAGES[1] // Default to 5 Kuota (Popular)
@@ -210,30 +205,13 @@ export const BuyQuotaModal: React.FC<BuyQuotaModalProps> = ({
             <span>Konfirmasi Transfer via WhatsApp Admin</span>
           </a>
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs cursor-pointer transition text-center"
-            >
-              Tutup
-            </button>
-
-            {onSimulateAdminApproval && (
-              <button
-                type="button"
-                onClick={() => {
-                  onSimulateAdminApproval(selectedPackage.amount);
-                  onClose();
-                }}
-                className="w-full py-2.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 font-extrabold text-xs cursor-pointer transition text-center flex items-center justify-center gap-1"
-                title="Simulasi aktivasi instan untuk pengujian demo"
-              >
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                <span>Tes Cepat (+{selectedPackage.amount} Kuota)</span>
-              </button>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs cursor-pointer transition text-center"
+          >
+            Tutup
+          </button>
         </div>
       </div>
     </div>
