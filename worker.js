@@ -114,7 +114,21 @@ export default {
 
         const targetWebhook = body.webhookUrl || 'https://hook.eu1.make.com/1i6d9bq5157dnksxju764f8uno3bdsam';
         const fallbackWebhook = 'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
-        const makePayload = { nama, email, password, nomor_wa };
+        const group_wa_url =
+          (typeof body.group_wa_url === 'string' && body.group_wa_url.trim()) ||
+          'https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi';
+        const pesan_wa =
+          (typeof body.pesan_wa === 'string' && body.pesan_wa.trim()) ||
+          `Halo *${nama}*! 👋\n\n` +
+            `Selamat datang di *jualrugi.my.id* — Platform Jual Beli Barang Bekas & Preloved Paling Praktis!\n\n` +
+            `Akun Anda dengan email *${email}* telah berhasil dibuat dan aktif sepenuhnya. Sekarang Anda sudah bisa mulai pasang iklan gratis atau mencari barang impian dengan penawaran terbaik.\n\n` +
+            `🔗 *Yuk pasang iklan sekarang*\n` +
+            `di https://jualrugi.my.id/#pasangiklan\n\n` +
+            `💬 *Yuk gabung Grup WhatsApp Komunitas JualRugi.my.id* untuk update barang BU harga miring & info promo terbaru:\n` +
+            `👉 ${group_wa_url}\n\n` +
+            `Jika butuh bantuan, tim kami siap membantu kapan saja. Silakan simpan nomor wa ini sebagai admin. Selamat bertransaksi, bro/sis! 🚀\n\n` +
+            `---\n*jualrugi.my.id*`;
+        const makePayload = { nama, email, password, nomor_wa, pesan_wa, group_wa_url };
 
         let makeRes = await fetch(targetWebhook, {
           method: 'POST',
@@ -348,10 +362,12 @@ export default {
               `Halo *${userName}*! 👋\n\n` +
               `Selamat datang di *jualrugi.my.id* — Platform Jual Beli Barang Bekas & Preloved Paling Praktis!\n\n` +
               `Akun Anda dengan email *${targetEmail}* telah berhasil dibuat dan aktif sepenuhnya. Sekarang Anda sudah bisa mulai pasang iklan gratis atau mencari barang impian dengan penawaran terbaik.\n\n` +
-              `🔗 *Silakan masuk ke akun Anda di sini:*\n` +
-              `https://jualrugi.my.id/login?email=${encodeURIComponent(targetEmail)}\n\n` +
-              `Jika butuh bantuan, tim kami siap membantu kapan, saja. \n` +
-              `Silakan simpan nomor wa ini sebagai admin Selamat bertransaksi, bro/sis! 🚀\n\n` +
+              `🔗 *Yuk pasang iklan sekarang*\n` +
+              `di https://jualrugi.my.id/#pasangiklan\n\n` +
+              `💬 *Yuk gabung Grup WhatsApp Komunitas JualRugi.my.id:*\n` +
+              `Dapatkan info kilat barang BU diskon sadis & tips aman COD tatap muka langsung bersama member lainnya:\n` +
+              `👉 https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi\n\n` +
+              `Jika butuh bantuan, tim kami siap membantu kapan saja. Silakan simpan nomor wa ini sebagai admin. Selamat bertransaksi, bro/sis! 🚀\n\n` +
               `---\n` +
               `*jualrugi.my.id*`;
 

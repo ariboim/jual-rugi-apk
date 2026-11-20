@@ -250,6 +250,7 @@ export async function sendRegistrationToMakeWebhook(
   const nomor_wa = cleanPhone || rawPhone;
 
   // Exact JSON payload yang dipersyaratkan oleh Make.com & Brevo Module
+  const pesan_wa = getWelcomeMessageText(nama || 'Member JualRugi', email);
   const payload = {
     nama,
     email,
@@ -257,6 +258,8 @@ export async function sendRegistrationToMakeWebhook(
     nomor_wa,
     name: nama,
     phone: nomor_wa,
+    pesan_wa,
+    group_wa_url: 'https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi',
     sender_name: 'jualrugi.my.id',
     sender_email: 'admin@jualrugi.my.id',
     subject: `Selamat Datang di JualRugi.my.id! 👋 - Panduan Transaksi COD Aman`,
@@ -386,15 +389,16 @@ export async function sendRegistrationToMakeWebhook(
  * Eksekusi Pengiriman Welcome Email Otomatis (Bekerja di Web, Mobile, Vercel & APK)
  */
 export function getWelcomeMessageText(name: string, email: string): string {
-  const encEmail = encodeURIComponent(email.trim());
   return (
     `Halo *${name}*! 👋\n\n` +
     `Selamat datang di *jualrugi.my.id* — Platform Jual Beli Barang Bekas & Preloved Paling Praktis!\n\n` +
     `Akun Anda dengan email *${email}* telah berhasil dibuat dan aktif sepenuhnya. Sekarang Anda sudah bisa mulai pasang iklan gratis atau mencari barang impian dengan penawaran terbaik.\n\n` +
-    `🔗 *Silakan masuk ke akun Anda di sini:*\n` +
-    `https://jualrugi.my.id/login?email=${encEmail}\n\n` +
-    `Jika butuh bantuan, tim kami siap membantu kapan, saja. \n` +
-    `Silakan simpan nomor wa ini sebagai admin Selamat bertransaksi, bro/sis! 🚀\n\n` +
+    `🔗 *Yuk pasang iklan sekarang*\n` +
+    `di https://jualrugi.my.id/#pasangiklan\n\n` +
+    `💬 *Yuk gabung Grup WhatsApp Komunitas JualRugi.my.id:*\n` +
+    `Dapatkan info kilat barang BU diskon sadis & tips aman COD tatap muka langsung bersama member lainnya:\n` +
+    `👉 https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi\n\n` +
+    `Jika butuh bantuan, tim kami siap membantu kapan saja. Silakan simpan nomor wa ini sebagai admin. Selamat bertransaksi, bro/sis! 🚀\n\n` +
     `---\n` +
     `*jualrugi.my.id*`
   );

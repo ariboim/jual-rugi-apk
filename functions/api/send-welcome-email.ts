@@ -234,10 +234,12 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       `Halo *${userName}*! 👋\n\n` +
       `Selamat datang di *jualrugi.my.id* — Platform Jual Beli Barang Bekas & Preloved Paling Praktis!\n\n` +
       `Akun Anda dengan email *${targetEmail}* telah berhasil dibuat dan aktif sepenuhnya. Sekarang Anda sudah bisa mulai pasang iklan gratis atau mencari barang impian dengan penawaran terbaik.\n\n` +
-      `🔗 *Silakan masuk ke akun Anda di sini:*\n` +
-      `https://jualrugi.my.id/login?email=${encodeURIComponent(targetEmail)}\n\n` +
-      `Jika butuh bantuan, tim kami siap membantu kapan, saja. \n` +
-      `Silakan simpan nomor wa ini sebagai admin Selamat bertransaksi, bro/sis! 🚀\n\n` +
+      `🔗 *Yuk pasang iklan sekarang*\n` +
+      `di https://jualrugi.my.id/#pasangiklan\n\n` +
+      `💬 *Yuk gabung Grup WhatsApp Komunitas JualRugi.my.id:*\n` +
+      `Dapatkan info kilat barang BU diskon sadis & tips aman COD tatap muka langsung bersama member lainnya:\n` +
+      `👉 https://chat.whatsapp.com/Be6mlNR46KKCsqcNh3Wnvi\n\n` +
+      `Jika butuh bantuan, tim kami siap membantu kapan saja. Silakan simpan nomor wa ini sebagai admin. Selamat bertransaksi, bro/sis! 🚀\n\n` +
       `---\n` +
       `*jualrugi.my.id*`;
 
