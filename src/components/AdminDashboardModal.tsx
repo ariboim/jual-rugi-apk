@@ -69,6 +69,8 @@ import {
   RegisteredUser,
   USERS_SYNC_CHANNEL,
   USERS_SYNC_EVENT,
+  UsersSyncDiagnostics,
+  getLastUsersSyncDiagnostics,
   getStoredUsers,
   syncUsersFromServer,
   updateStoredUserQuota,
@@ -117,6 +119,7 @@ import {
   saveSupabaseCredentials,
   testSupabaseConnection,
   subscribeToRegisteredUsersRealtime,
+  USERS_TABLE_SQL,
 } from '../services/supabase';
 
 interface AdminDashboardModalProps {
@@ -211,6 +214,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [persistentUsers, setPersistentUsers] = useState<RegisteredUser[]>(() => getStoredUsers());
   const [isRefreshingUsers, setIsRefreshingUsers] = useState(false);
   const [usersLastSyncedAt, setUsersLastSyncedAt] = useState<string | null>(null);
+  const [usersSyncDiag, setUsersSyncDiag] = useState<UsersSyncDiagnostics>(() =>
+    getLastUsersSyncDiagnostics()
+  );
+  const [copiedUsersSql, setCopiedUsersSql] = useState(false);
 
   // UI state
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -317,6 +324,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setIsRefreshingUsers(true);
     try {
       const latest = await syncUsersFromServer();
+      setUsersSyncDiag(getLastUsersSyncDiagnostics());
       if (latest && latest.length > 0) {
         setPersistentUsers(latest);
         setUsersLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -346,6 +354,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
       // Sinkronisasi data pengguna dari server & Supabase
       syncUsersFromServer().then((latest) => {
+        setUsersSyncDiag(getLastUsersSyncDiagnostics());
         if (latest && latest.length > 0) {
           setPersistentUsers(latest);
           setUsersLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -426,6 +435,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       unsubscribeSupabaseRealtime = subscribeToRegisteredUsersRealtime((payload) => {
         const newName = (payload?.new as any)?.name;
         syncUsersFromServer().then((latest) => {
+          setUsersSyncDiag(getLastUsersSyncDiagnostics());
           if (latest && latest.length > 0) {
             setPersistentUsers(latest);
             setUsersLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -439,6 +449,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       if (activeTab === 'users') {
         pollIntervalId = window.setInterval(() => {
           syncUsersFromServer().then((latest) => {
+            setUsersSyncDiag(getLastUsersSyncDiagnostics());
             if (latest && latest.length > 0) {
               setPersistentUsers(latest);
               setUsersLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -2721,6 +2732,37 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Status Penyimpanan Database Permanen */}
+                  {(!usersSyncDiag.supabaseConfigured || !usersSyncDiag.supabaseTableReady) && (
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-amber-950">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold">
+                            {!usersSyncDiag.supabaseConfigured
+                              ? 'Supabase belum terhubung di browser/server ini.'
+                              : 'Tabel public.users di Supabase belum aktif/terbaca.'}
+                          </span>{' '}
+                          <span className="text-amber-800">
+                            Agar seluruh data pendaftar lama &amp; baru tersimpan permanen lintas perangkat dan tidak hilang saat server/Cloudflare restart, jalankan SQL tabel <code className="font-mono bg-amber-100 px-1 rounded">public.users</code> &amp; set <code className="font-mono bg-amber-100 px-1 rounded">SUPABASE_URL</code> + <code className="font-mono bg-amber-100 px-1 rounded">SUPABASE_ANON_KEY</code>.
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(USERS_TABLE_SQL);
+                          setCopiedUsersSql(true);
+                          setTimeout(() => setCopiedUsersSql(false), 2500);
+                          showNotification('📋 SQL Tabel public.users disalin! Jalankan di Supabase SQL Editor.');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black shrink-0 self-start sm:self-center cursor-pointer"
+                      >
+                        {copiedUsersSql ? 'SQL Tersalin ✅' : 'Salin SQL Tabel Users'}
+                      </button>
+                    </div>
+                  )}
+
                   {/* Indikator Status Pencarian & Hasil Filter */}
                   {userSearchQuery && (
                     <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-between text-xs text-sky-950 font-medium">
@@ -2781,7 +2823,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                       return (
                         <div
-                          key={user.id}
+                          key={`${user.email}-${user.id}`}
                           className={`p-4 rounded-3xl border transition shadow-xs hover:shadow-md bg-white ${
                             isNew
                               ? 'border-emerald-300 ring-2 ring-emerald-100'
@@ -3031,7 +3073,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                           return (
                             <tr
-                              key={user.id}
+                              key={`${user.email}-${user.id}`}
                               className={`hover:bg-slate-50/80 transition ${
                                 isNew ? 'bg-emerald-50/20' : ''
                               }`}

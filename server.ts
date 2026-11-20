@@ -19,8 +19,12 @@ import {
   upsertPushSubscription,
 } from './shared/webPushCore.js';
 import {
+  getRuntimeSupabaseConfig,
   listRegisteredUsers,
+  resolveSupabaseUsersCredentials,
+  setRuntimeSupabaseConfig,
   upsertRegisteredUser,
+  upsertRegisteredUsersBatch,
 } from './shared/usersCore.js';
 
 dotenv.config();
@@ -51,18 +55,30 @@ const pushLocalStore = {
   },
 };
 
-function getServerEmailConfig(): { brevoApiKey?: string; brevoSenderEmail?: string } {
+function getServerEmailConfig(): {
+  brevoApiKey?: string;
+  brevoSenderEmail?: string;
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+} {
   try {
     const configPath = path.resolve(__dirname, 'server-email-config.json');
     if (fs.existsSync(configPath)) {
       const content = fs.readFileSync(configPath, 'utf8');
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      if (parsed?.supabaseUrl && parsed?.supabaseAnonKey) {
+        setRuntimeSupabaseConfig(parsed.supabaseUrl, parsed.supabaseAnonKey);
+      }
+      return parsed;
     }
   } catch (err) {
     console.warn('[Server Email Config Warn]:', err);
   }
   return {};
 }
+
+// Hydrate runtime Supabase config dari disk jika ada
+getServerEmailConfig();
 
 const USERS_FILE_PATH = path.resolve(__dirname, 'registered-users.json');
 
@@ -2078,10 +2094,54 @@ Team Admin jualrugi.my.id`;
     }
   });
 
+  // Endpoint API untuk Menyimpan dan Membaca Konfigurasi Publik Supabase (Project URL & Anon Key)
+  app.get('/api/supabase-config', (req, res) => {
+    const saved = getServerEmailConfig();
+    if (saved?.supabaseUrl && saved?.supabaseAnonKey) {
+      setRuntimeSupabaseConfig(saved.supabaseUrl, saved.supabaseAnonKey);
+    }
+    const resolved = resolveSupabaseUsersCredentials(process.env, null, req.headers as any);
+    const runtime = getRuntimeSupabaseConfig();
+    return res.json({
+      configured: resolved.valid,
+      url: resolved.url || runtime.url || saved.supabaseUrl || '',
+      anonKey: resolved.key || runtime.anonKey || saved.supabaseAnonKey || '',
+    });
+  });
+
+  app.post('/api/supabase-config', (req, res) => {
+    try {
+      const url = String(req.body?.url || '').trim().replace(/\/+$/, '');
+      const anonKey = String(req.body?.anonKey || '').trim();
+      const savedOk = setRuntimeSupabaseConfig(url, anonKey);
+      if (!savedOk) {
+        return res.status(400).json({ success: false, error: 'URL atau Anon Key Supabase tidak valid.' });
+      }
+      try {
+        const configPath = path.resolve(__dirname, 'server-email-config.json');
+        const current = getServerEmailConfig();
+        fs.writeFileSync(
+          configPath,
+          JSON.stringify({ ...current, supabaseUrl: url, supabaseAnonKey: anonKey }, null, 2),
+          'utf8'
+        );
+      } catch (diskErr) {
+        console.warn('[Server Supabase Config Save Warn]:', diskErr);
+      }
+      return res.json({ success: true, configured: true });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message });
+    }
+  });
+
   // Endpoint API Admin untuk Mengambil dan Menyimpan Data Pengguna (Server Disk + Supabase Real-Time)
   app.get('/api/admin/users', async (req, res) => {
     try {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      const hUrl = req.headers['x-supabase-url'] as string | undefined;
+      const hKey = req.headers['x-supabase-key'] as string | undefined;
+      if (hUrl && hKey) setRuntimeSupabaseConfig(hUrl, hKey);
+
       const result = await listRegisteredUsers(
         process.env,
         usersLocalStore,
@@ -2103,6 +2163,27 @@ Team Admin jualrugi.my.id`;
   app.post('/api/admin/users', async (req, res) => {
     try {
       const u = req.body;
+      if (u?.supabaseConfig?.url && u?.supabaseConfig?.anonKey) {
+        setRuntimeSupabaseConfig(u.supabaseConfig.url, u.supabaseConfig.anonKey);
+      }
+
+      if (Array.isArray(u?.users)) {
+        const batchRes = await upsertRegisteredUsersBatch(
+          u.users,
+          process.env,
+          usersLocalStore,
+          u?.supabaseConfig || null,
+          req.headers as any
+        );
+        const latest = await listRegisteredUsers(
+          process.env,
+          usersLocalStore,
+          u?.supabaseConfig || null,
+          req.headers as any
+        );
+        return res.json({ ...batchRes, ...latest });
+      }
+
       if (!u || !u.email) {
         return res.status(400).json({ success: false, error: 'Email pendaftar wajib diisi.' });
       }

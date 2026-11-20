@@ -14,7 +14,11 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { sendWelcomeEmailAutomation, sendRegistrationToMakeWebhook } from '../services/welcomeEmail';
-import { registerUserInSupabase, fetchUserByEmailFromSupabase } from '../services/supabase';
+import {
+  registerUserInSupabase,
+  fetchUserByEmailFromSupabase,
+  hydrateSupabaseCredentialsFromServer,
+} from '../services/supabase';
 import {
   saveNewRegisteredUser,
   syncUserRegistrationToBackend,
@@ -190,8 +194,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         console.warn('[Auth] Gagal simpan ke userService lokal:', saveErr);
       }
 
-      // 1. Pastikan tersimpan permanen ke Supabase DB & Endpoint /api/admin/users SEBELUM modal ditutup
+      // 1. Pastikan kredensial publik Supabase terhidrasi & data tersimpan permanen ke Supabase DB + /api/admin/users
       try {
+        await hydrateSupabaseCredentialsFromServer().catch(() => null);
         await Promise.allSettled([
           registerUserInSupabase({
             id: savedLocalUser?.id || newUserId,

@@ -4,10 +4,34 @@
  * untuk kemudahan kampanye pemasaran via WhatsApp & Email.
  */
 
-import { fetchAllUsersFromSupabase, getSupabaseCredentials } from './supabase';
+import {
+  fetchAllUsersFromSupabase,
+  getSupabaseCredentials,
+  hydrateSupabaseCredentialsFromServer,
+  registerUserInSupabase,
+} from './supabase';
 
 export const USERS_SYNC_CHANNEL = 'jualrugi_users_sync_channel';
 export const USERS_SYNC_EVENT = 'jualrugi_users_synced';
+
+export interface UsersSyncDiagnostics {
+  supabaseConfigured: boolean;
+  supabaseTableReady: boolean;
+  supabaseTableError?: string | null;
+  syncedAt?: string;
+  count: number;
+}
+
+let lastUsersSyncDiagnostics: UsersSyncDiagnostics = {
+  supabaseConfigured: false,
+  supabaseTableReady: false,
+  supabaseTableError: null,
+  count: 0,
+};
+
+export function getLastUsersSyncDiagnostics(): UsersSyncDiagnostics {
+  return { ...lastUsersSyncDiagnostics };
+}
 
 export interface RegisteredUser {
   id: string;
@@ -604,15 +628,31 @@ export function findStoredUser(identifier: string): RegisteredUser | null {
   );
 }
 
+const SEED_USER_EMAILS = new Set(DEFAULT_REGISTERED_USERS.map((u) => u.email.toLowerCase()));
+
+function isRealRegisteredUser(u: Partial<RegisteredUser>): boolean {
+  const email = String(u?.email || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) return false;
+  if (SEED_USER_EMAILS.has(email)) return false;
+  if (u?.id && String(u.id).startsWith('seed-')) return false;
+  return true;
+}
+
 /**
  * Sinkronisasi real-time data pengguna dari seluruh sumber: localStorage + Supabase DB + Server/Edge Endpoint (/api/admin/users)
+ * Bersifat akumulatif & non-destruktif: pendaftar lama tidak pernah terhapus saat ada registrasi baru atau restart server.
  */
 export async function syncUsersFromServer(): Promise<RegisteredUser[]> {
+  await hydrateSupabaseCredentialsFromServer().catch(() => null);
+
   const localList = getStoredUsers();
   const map = new Map<string, RegisteredUser>();
 
-  const upsertIntoMap = (raw: Partial<RegisteredUser> & { created_at?: string; listing_quota?: number }) => {
-    const emailKey = (raw.email || '').toLowerCase().trim();
+  const upsertIntoMap = (raw: Partial<RegisteredUser> & { created_at?: string; listing_quota?: number; full_name?: string }) => {
+    let emailKey = (raw.email || '').toLowerCase().trim();
+    if ((!emailKey || !emailKey.includes('@')) && raw.id && (raw.name || raw.full_name)) {
+      emailKey = `${String(raw.id).replace(/[^a-z0-9._-]/gi, '')}@member.jualrugi.my.id`.toLowerCase();
+    }
     if (!emailKey || !emailKey.includes('@')) return;
 
     const existing = map.get(emailKey);
@@ -636,15 +676,17 @@ export async function syncUsersFromServer(): Promise<RegisteredUser[]> {
         ? existing.listingQuota
         : 1;
 
+    const rawName = String(raw.name || raw.full_name || '').trim();
+
     map.set(emailKey, {
       id:
         raw.id && !String(raw.id).startsWith('user-sb-')
-          ? raw.id
-          : existing?.id || raw.id || `user-sb-${Date.now()}`,
+          ? String(raw.id)
+          : existing?.id || (raw.id ? String(raw.id) : `user-sb-${Date.now()}`),
       name:
-        raw.name && raw.name !== 'Member JualRugi'
-          ? raw.name
-          : existing?.name || raw.name || 'Member JualRugi',
+        rawName && rawName !== 'Member JualRugi'
+          ? rawName
+          : existing?.name || rawName || 'Member JualRugi',
       email: emailKey,
       whatsapp: cleanWa || existing?.whatsapp || rawWa,
       phone: String(raw.phone || existing?.phone || rawWa || cleanWa),
@@ -659,7 +701,7 @@ export async function syncUsersFromServer(): Promise<RegisteredUser[]> {
     });
   };
 
-  // 1. Masukkan data lokal terlebih dahulu
+  // 1. Masukkan data lokal terlebih dahulu agar data registrasi lama di browser tidak pernah hilang
   localList.forEach((u) => upsertIntoMap(u));
 
   // 2. Ambil secara paralel dari Supabase DB dan Server/Edge Endpoint (/api/admin/users)
@@ -684,17 +726,33 @@ export async function syncUsersFromServer(): Promise<RegisteredUser[]> {
     }),
   ]);
 
+  const sbEmails = new Set<string>();
   if (sbResult.status === 'fulfilled' && Array.isArray(sbResult.value)) {
-    sbResult.value.forEach((row: any) => upsertIntoMap(row));
+    sbResult.value.forEach((row: any) => {
+      const ek = String(row?.email || '').trim().toLowerCase();
+      if (ek && ek.includes('@')) sbEmails.add(ek);
+      upsertIntoMap(row);
+    });
   }
 
+  const serverEmails = new Set<string>();
+  let srvDiag: any = null;
   if (
     serverResult.status === 'fulfilled' &&
     serverResult.value &&
     Array.isArray(serverResult.value.users)
   ) {
-    serverResult.value.users.forEach((u: RegisteredUser) => upsertIntoMap(u));
+    srvDiag = serverResult.value;
+    serverResult.value.users.forEach((u: RegisteredUser) => {
+      const ek = String(u?.email || '').trim().toLowerCase();
+      if (ek && ek.includes('@')) serverEmails.add(ek);
+      upsertIntoMap(u);
+    });
   }
+
+  // 2b. Baca ulang localStorage terbaru setelah await jaringan agar registrasi yang baru terjadi di tengah sync tidak pernah tertimpa
+  const latestLocalAfterFetch = getStoredUsers();
+  latestLocalAfterFetch.forEach((u) => upsertIntoMap(u));
 
   // 3. Pastikan Boim Ganteng (index 1) & Ahmad Fauzi (index 0) tetap tersedia
   const hasBoim = Array.from(map.values()).some(
@@ -710,6 +768,59 @@ export async function syncUsersFromServer(): Promise<RegisteredUser[]> {
   const merged = Array.from(map.values()).sort(
     (a, b) => parseValidTimeMs(b.registeredAt) - parseValidTimeMs(a.registeredAt)
   );
+
+  // 4. Auto-Backfill 2 Arah (Non-Destruktif):
+  // Jika ada user riil di localStorage/Supabase yang belum tercatat di server (/api/admin/users) atau belum di Supabase,
+  // kirim ulang otomatis di latar belakang agar data lama & baru selalu terakumulasi lengkap di semua sumber.
+  const hasSbCreds = Boolean(sbCreds.url && sbCreds.anonKey && sbCreds.url.startsWith('http'));
+  const missingOnServerOrSupabase = merged.filter((u) => {
+    if (!isRealRegisteredUser(u)) return false;
+    const ek = u.email.toLowerCase();
+    const missingOnServer = srvDiag ? !serverEmails.has(ek) : false;
+    const missingOnSb = hasSbCreds && sbResult.status === 'fulfilled' ? !sbEmails.has(ek) : false;
+    return missingOnServer || missingOnSb;
+  });
+
+  if (missingOnServerOrSupabase.length > 0) {
+    fetch('/api/admin/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...apiHeaders,
+      },
+      body: JSON.stringify({
+        users: missingOnServerOrSupabase,
+        ...(hasSbCreds ? { supabaseConfig: sbCreds } : {}),
+      }),
+    }).catch(() => {});
+
+    if (hasSbCreds) {
+      missingOnServerOrSupabase
+        .filter((u) => !sbEmails.has(u.email.toLowerCase()))
+        .slice(0, 20)
+        .forEach((u) => {
+          registerUserInSupabase({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            whatsapp: u.whatsapp || u.phone || '',
+            city: u.city,
+            role: u.role,
+            createdAt: u.registeredAt,
+          }).catch(() => {});
+        });
+    }
+  }
+
+  lastUsersSyncDiagnostics = {
+    supabaseConfigured: Boolean(srvDiag?.supabaseConfigured || hasSbCreds),
+    supabaseTableReady: Boolean(
+      srvDiag?.supabaseTableReady || (hasSbCreds && sbResult.status === 'fulfilled' && sbEmails.size > 0)
+    ),
+    supabaseTableError: srvDiag?.supabaseTableError || null,
+    syncedAt: srvDiag?.syncedAt || new Date().toISOString(),
+    count: merged.length,
+  };
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));

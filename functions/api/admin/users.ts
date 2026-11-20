@@ -1,12 +1,22 @@
 /**
  * Cloudflare Pages Function: /api/admin/users
  * Mengambil dan menyimpan data pengguna terdaftar langsung di Edge Cloudflare + Supabase REST API.
+ * Mendukung penyimpanan tunggal maupun batch backfill agar data pendaftar lama & baru selalu terakumulasi.
  */
-import { listRegisteredUsers, upsertRegisteredUser } from '../../../shared/usersCore.js';
+import {
+  listRegisteredUsers,
+  setRuntimeSupabaseConfig,
+  upsertRegisteredUser,
+  upsertRegisteredUsersBatch,
+} from '../../../shared/usersCore.js';
 
 export async function onRequestGet(context: { request: Request; env: any }) {
   const { request, env } = context;
   try {
+    const hUrl = request.headers.get('x-supabase-url');
+    const hKey = request.headers.get('x-supabase-key');
+    if (hUrl && hKey) setRuntimeSupabaseConfig(hUrl, hKey);
+
     const result = await listRegisteredUsers(env || {}, null, null, request.headers);
     return new Response(JSON.stringify(result), {
       headers: {
@@ -34,6 +44,33 @@ export async function onRequestPost(context: { request: Request; env: any }) {
 
   try {
     const body: any = await request.json().catch(() => ({}));
+    if (body?.supabaseConfig?.url && body?.supabaseConfig?.anonKey) {
+      setRuntimeSupabaseConfig(body.supabaseConfig.url, body.supabaseConfig.anonKey);
+    }
+
+    if (Array.isArray(body?.users)) {
+      const batchResult = await upsertRegisteredUsersBatch(
+        body.users,
+        env || {},
+        null,
+        body?.supabaseConfig || null,
+        request.headers
+      );
+      const latest = await listRegisteredUsers(
+        env || {},
+        null,
+        body?.supabaseConfig || null,
+        request.headers
+      );
+      return new Response(JSON.stringify({ ...batchResult, ...latest }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
+
     const result = await upsertRegisteredUser(
       body,
       env || {},

@@ -9,13 +9,62 @@ import {
   upsertPushSubscription,
 } from './shared/webPushCore.js';
 import {
+  getRuntimeSupabaseConfig,
   listRegisteredUsers,
+  resolveSupabaseUsersCredentials,
+  setRuntimeSupabaseConfig,
   upsertRegisteredUser,
+  upsertRegisteredUsersBatch,
 } from './shared/usersCore.js';
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // =========================================================================
+    // API ROUTE 00: /api/supabase-config (Bagikan Kredensial Publik Supabase)
+    // =========================================================================
+    if (url.pathname === '/api/supabase-config') {
+      if (request.method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, x-supabase-url, x-supabase-key',
+          },
+        });
+      }
+
+      if (request.method === 'GET') {
+        const resolved = resolveSupabaseUsersCredentials(env || {}, null, request.headers);
+        const runtime = getRuntimeSupabaseConfig();
+        return new Response(
+          JSON.stringify({
+            configured: resolved.valid,
+            url: resolved.url || runtime.url || '',
+            anonKey: resolved.key || runtime.anonKey || '',
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store',
+              'Access-Control-Allow-Origin': '*',
+            },
+          }
+        );
+      }
+
+      if (request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const saved = setRuntimeSupabaseConfig(body?.url, body?.anonKey);
+        return new Response(JSON.stringify({ success: saved, configured: saved }), {
+          status: saved ? 200 : 400,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      }
+    }
 
     // =========================================================================
     // API ROUTE 0A: /api/admin/users (Manajemen Pengguna Real-Time Cloudflare Worker + Supabase)
@@ -34,6 +83,10 @@ export default {
 
       if (request.method === 'GET') {
         try {
+          const hUrl = request.headers.get('x-supabase-url');
+          const hKey = request.headers.get('x-supabase-key');
+          if (hUrl && hKey) setRuntimeSupabaseConfig(hUrl, hKey);
+
           const result = await listRegisteredUsers(env || {}, null, null, request.headers);
           return new Response(JSON.stringify(result), {
             status: 200,
@@ -54,6 +107,30 @@ export default {
       if (request.method === 'POST') {
         try {
           const body = await request.json().catch(() => ({}));
+          if (body?.supabaseConfig?.url && body?.supabaseConfig?.anonKey) {
+            setRuntimeSupabaseConfig(body.supabaseConfig.url, body.supabaseConfig.anonKey);
+          }
+
+          if (Array.isArray(body?.users)) {
+            const batchResult = await upsertRegisteredUsersBatch(
+              body.users,
+              env || {},
+              null,
+              body?.supabaseConfig || null,
+              request.headers
+            );
+            const latest = await listRegisteredUsers(
+              env || {},
+              null,
+              body?.supabaseConfig || null,
+              request.headers
+            );
+            return new Response(JSON.stringify({ ...batchResult, ...latest }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+            });
+          }
+
           const result = await upsertRegisteredUser(
             body,
             env || {},

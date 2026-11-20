@@ -56,14 +56,69 @@ export function getSupabaseClient(): SupabaseClient | null {
   return cachedClient;
 }
 
+export async function syncSupabaseCredentialsToServer(url: string, anonKey: string): Promise<boolean> {
+  const cleanUrl = String(url || '').trim().replace(/\/+$/, '');
+  const cleanKey = String(anonKey || '').trim();
+  if (!cleanUrl.startsWith('http') || cleanKey.length < 20) return false;
+  try {
+    const res = await fetch('/api/supabase-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: cleanUrl, anonKey: cleanKey }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+let hydrateCredsPromise: Promise<{ url: string; anonKey: string }> | null = null;
+export async function hydrateSupabaseCredentialsFromServer(): Promise<{ url: string; anonKey: string }> {
+  const current = getSupabaseCredentials();
+  if (current.url && current.anonKey && current.url.startsWith('http') && current.anonKey.length > 20) {
+    // Pastikan server/worker juga punya salinan jika baru dari localStorage
+    syncSupabaseCredentialsToServer(current.url, current.anonKey).catch(() => {});
+    return current;
+  }
+
+  if (!hydrateCredsPromise) {
+    hydrateCredsPromise = fetch('/api/supabase-config', { method: 'GET', cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) return current;
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) return current;
+        const data = await res.json().catch(() => null);
+        if (data?.url && data?.anonKey && String(data.url).startsWith('http') && String(data.anonKey).length > 20) {
+          try {
+            localStorage.setItem('jualrugi_supabase_url', String(data.url).trim());
+            localStorage.setItem('jualrugi_supabase_anon_key', String(data.anonKey).trim());
+            cachedClient = null;
+          } catch {}
+          return { url: String(data.url).trim(), anonKey: String(data.anonKey).trim() };
+        }
+        return current;
+      })
+      .catch(() => current)
+      .finally(() => {
+        setTimeout(() => {
+          hydrateCredsPromise = null;
+        }, 10000);
+      });
+  }
+  return hydrateCredsPromise;
+}
+
 /**
  * Simpan konfigurasi baru (URL & Anon Key)
  */
 export function saveSupabaseCredentials(url: string, anonKey: string) {
   try {
-    localStorage.setItem('jualrugi_supabase_url', url.trim());
-    localStorage.setItem('jualrugi_supabase_anon_key', anonKey.trim());
+    const cleanUrl = url.trim().replace(/\/+$/, '');
+    const cleanKey = anonKey.trim();
+    localStorage.setItem('jualrugi_supabase_url', cleanUrl);
+    localStorage.setItem('jualrugi_supabase_anon_key', cleanKey);
     cachedClient = null; // Reset cache agar client baru dibuat
+    syncSupabaseCredentialsToServer(cleanUrl, cleanKey).catch(() => {});
   } catch (e) {
     console.error(e);
   }
@@ -409,7 +464,8 @@ async function upsertUserToTableResilient(
     const { data: existingRow, error: checkErr } = await client
       .from(tableName)
       .select('id, email')
-      .eq('email', cleanEmail)
+      .ilike('email', cleanEmail)
+      .limit(1)
       .maybeSingle();
 
     if (checkErr && /relation .* does not exist|Could not find the table|PGRST205/i.test(checkErr.message)) {
@@ -428,7 +484,7 @@ async function upsertUserToTableResilient(
       const { data: patched, error: patchErr } = await client
         .from(tableName)
         .update(updatePayload)
-        .eq('email', cleanEmail)
+        .ilike('email', cleanEmail)
         .select();
 
       if (!patchErr) {
@@ -438,26 +494,33 @@ async function upsertUserToTableResilient(
       const { data: minPatched, error: minPatchErr } = await client
         .from(tableName)
         .update({ name: userPayload.name, whatsapp: userPayload.whatsapp })
-        .eq('email', cleanEmail)
+        .ilike('email', cleanEmail)
         .select();
       if (!minPatchErr) {
         return { success: true, data: minPatched };
       }
+      return { success: true, data: [existingRow] };
     }
   } catch {
     // Lanjut ke insert
   }
 
-  // 2. Insert bertahap (mengatasi perbedaan kolom opsional / tipe UUID id)
+  // 2. Insert bertahap (mengatasi perbedaan kolom opsional / tipe UUID id / full_name)
   const payloadWithoutId = { ...userPayload };
   delete payloadWithoutId.id;
+  const generatedUuid =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : undefined;
 
   const insertVariants: Record<string, any>[] = [
     userPayload,
     payloadWithoutId,
+    ...(generatedUuid ? [{ ...userPayload, id: generatedUuid }] : []),
     {
       name: userPayload.name,
       email: cleanEmail,
+      password: userPayload.password || '',
       whatsapp: userPayload.whatsapp,
       phone: userPayload.phone,
       role: userPayload.role || 'buyer',
@@ -468,12 +531,38 @@ async function upsertUserToTableResilient(
       name: userPayload.name,
       email: cleanEmail,
       whatsapp: userPayload.whatsapp,
+      phone: userPayload.phone,
+      role: userPayload.role || 'buyer',
+      city: userPayload.city || 'Jakarta Selatan',
+      created_at: userPayload.created_at,
+    },
+    {
+      ...(generatedUuid ? { id: generatedUuid } : {}),
+      name: userPayload.name,
+      email: cleanEmail,
+      whatsapp: userPayload.whatsapp,
       created_at: userPayload.created_at,
     },
     {
       name: userPayload.name,
       email: cleanEmail,
       whatsapp: userPayload.whatsapp,
+      created_at: userPayload.created_at,
+    },
+    {
+      name: userPayload.name,
+      email: cleanEmail,
+      whatsapp: userPayload.whatsapp,
+    },
+    {
+      ...(generatedUuid ? { id: generatedUuid } : {}),
+      full_name: userPayload.name,
+      email: cleanEmail,
+      phone: userPayload.whatsapp,
+    },
+    {
+      name: userPayload.name,
+      email: cleanEmail,
     },
   ];
 
@@ -484,8 +573,12 @@ async function upsertUserToTableResilient(
       return { success: true, data };
     }
     lastError = error.message;
-    // Duplicate key email -> anggap sukses setelah patch atau langsung sukses
-    if (/duplicate key|23505/i.test(error.message)) {
+    // Duplicate key email -> anggap sukses dan update data
+    if (/duplicate key|23505|already exists/i.test(error.message)) {
+      await client
+        .from(tableName)
+        .update({ name: userPayload.name, whatsapp: userPayload.whatsapp })
+        .ilike('email', cleanEmail);
       return { success: true, data: [variant] };
     }
     // Jika tabel memang belum ada / izin ditolak RLS total -> stop mencoba ke tabel ini
@@ -594,14 +687,14 @@ async function safeSelectAllUsersFromTable(client: SupabaseClient, tableName: 'u
       .from(tableName)
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(500);
+      .limit(1000);
 
     if (!error && Array.isArray(data)) {
       return data;
     }
 
     if (error && /created_at|column/i.test(error.message)) {
-      const retry = await client.from(tableName).select('*').limit(500);
+      const retry = await client.from(tableName).select('*').limit(1000);
       if (!retry.error && Array.isArray(retry.data)) {
         return retry.data;
       }
@@ -628,9 +721,11 @@ export async function fetchAllUsersFromSupabase(): Promise<any[]> {
 
     const byEmail = new Map<string, any>();
     for (const row of [...profilesRows, ...usersRows]) {
-      const key = String(row?.email || row?.id || '').trim().toLowerCase();
-      if (!key) continue;
-      byEmail.set(key, { ...(byEmail.get(key) || {}), ...row });
+      const emailOrId = String(row?.email || (row?.id ? `${row.id}@member.jualrugi.my.id` : ''))
+        .trim()
+        .toLowerCase();
+      if (!emailOrId) continue;
+      byEmail.set(emailOrId, { ...(byEmail.get(emailOrId) || {}), email: row?.email || emailOrId, ...row });
     }
 
     return Array.from(byEmail.values());
