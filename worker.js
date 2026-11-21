@@ -9,6 +9,7 @@ import {
   upsertPushSubscription,
 } from './shared/webPushCore.js';
 import {
+  claimOnceDispatch,
   getRuntimeSupabaseConfig,
   listRegisteredUsers,
   resolveSupabaseUsersCredentials,
@@ -160,15 +161,37 @@ export default {
     if (url.pathname === '/api/registration-webhook' && request.method === 'POST') {
       try {
         const body = await request.json().catch(() => ({}));
-        const nama = (body.nama || body.fullName || body.name || body.nama_user || 'Member JualRugi').trim();
-        const email = (body.email || '').trim().toLowerCase();
-        const password = body.password || '';
-        const rawPhone = (body.nomor_wa || body.whatsapp || body.phone || body.no_whatsapp || '').trim();
+        if (body?.type === 'UPDATE' && body?.table === 'users') {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              skipped: true,
+              reason: 'Supabase UPDATE event diabaikan agar tidak memicu double action webhook.',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+          );
+        }
+        const srcBody = body?.record && typeof body.record === 'object' ? body.record : body;
+        const nama = (srcBody.nama || srcBody.fullName || srcBody.name || srcBody.nama_user || 'Member JualRugi').trim();
+        const email = (srcBody.email || '').trim().toLowerCase();
+        const password = srcBody.password || body.password || '';
+        const rawPhone = (srcBody.nomor_wa || srcBody.whatsapp || srcBody.phone || srcBody.no_whatsapp || '').trim();
 
         let cleanPhone = rawPhone.replace(/\D/g, '');
         if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
         else if (cleanPhone.startsWith('8')) cleanPhone = '62' + cleanPhone;
         const nomor_wa = cleanPhone || rawPhone;
+
+        if (
+          !body?.forceTest &&
+          email &&
+          !claimOnceDispatch('worker-registration-webhook', `${email}|${nomor_wa}`, 120000)
+        ) {
+          return new Response(
+            JSON.stringify({ success: true, deduplicated: true, message: 'Webhook registrasi sudah diproses (deduplicated).' }),
+            { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+          );
+        }
 
         if (email && email.includes('@')) {
           await upsertRegisteredUser(
@@ -248,9 +271,20 @@ export default {
       console.log('[CF Worker - Welcome Email] Menerima request /api/send-welcome-email');
       try {
         const body = await request.json().catch(() => ({}));
-        const targetEmail = (body.email || body.email_user || body.recipientEmail || '').trim();
-        const userName = (body.fullName || body.name || body.nama_user || body.recipientName || 'Member JualRugi').trim();
-        const rawPhone = (body.whatsapp || body.phone || body.no_whatsapp || body.userPhone || '').trim();
+        if (body?.type === 'UPDATE' && body?.table === 'users') {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              skipped: true,
+              reason: 'Supabase UPDATE event diabaikan agar tidak memicu double action Welcome WA.',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        const srcBody = body?.record && typeof body.record === 'object' ? body.record : body;
+        const targetEmail = (srcBody.email || srcBody.email_user || srcBody.recipientEmail || '').trim().toLowerCase();
+        const userName = (srcBody.fullName || srcBody.name || srcBody.nama_user || srcBody.recipientName || 'Member JualRugi').trim();
+        const rawPhone = (srcBody.whatsapp || srcBody.phone || srcBody.no_whatsapp || srcBody.userPhone || '').trim();
         const clientKey = body.brevoApiKey;
 
         // Normalisasi Nomor WhatsApp (hanya angka & wajib format 628...)
@@ -266,6 +300,22 @@ export default {
           return new Response(
             JSON.stringify({ success: false, error: 'Email tujuan tidak valid.' }),
             { status: 400, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (
+          !body?.forceTest &&
+          !claimOnceDispatch('worker-welcome-wa-email', `${targetEmail}|${userPhone}`, 120000)
+        ) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              deduplicated: true,
+              message: `Notifikasi selamat datang untuk ${targetEmail} sudah terkirim (deduplicated).`,
+              emailSentTo: targetEmail,
+              whatsappSentTo: userPhone,
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
           );
         }
 

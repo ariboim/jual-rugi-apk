@@ -15,6 +15,7 @@ export interface WelcomeEmailPayload {
   nama?: string;
   password?: string;
   nomor_wa?: string;
+  forceTest?: boolean;
 }
 
 export interface RegistrationWebhookData {
@@ -23,6 +24,22 @@ export interface RegistrationWebhookData {
   password?: string;
   nomor_wa: string;
   city?: string;
+  forceTest?: boolean;
+}
+
+const recentClientDispatchLocks = new Map<string, number>();
+
+function claimClientDispatchLock(namespace: string, key: string, ttlMs = 60000): boolean {
+  const cleanKey = key.trim().toLowerCase();
+  if (!cleanKey) return true;
+  const now = Date.now();
+  const composite = `${namespace}:${cleanKey}`;
+  const exp = recentClientDispatchLocks.get(composite);
+  if (exp && exp > now) {
+    return false;
+  }
+  recentClientDispatchLocks.set(composite, now + ttlMs);
+  return true;
 }
 
 export interface WelcomeEmailResponse {
@@ -249,6 +266,15 @@ export async function sendRegistrationToMakeWebhook(
   }
   const nomor_wa = cleanPhone || rawPhone;
 
+  if (!data.forceTest && !claimClientDispatchLock('make-webhook', `${email}|${nomor_wa}`, 60000)) {
+    console.log('[Make.com Webhook] Deduplicated: registrasi ini sudah dikirim sebelumnya.');
+    return {
+      success: true,
+      message: 'Data registrasi sudah terkirim (deduplicated).',
+      method: 'deduplicated',
+    };
+  }
+
   // Exact JSON payload yang dipersyaratkan oleh Make.com & Brevo Module
   const pesan_wa = getWelcomeMessageText(nama || 'Member JualRugi', email);
   const payload = {
@@ -419,6 +445,20 @@ export async function sendWelcomeEmailAutomation(
   const userPhone = payload.nomor_wa || payload.phone || '';
   const welcomeText = getWelcomeMessageText(recipientName, recipientEmail);
 
+  if (
+    !payload.forceTest &&
+    !claimClientDispatchLock('welcome-automation', `${recipientEmail}|${userPhone}`, 60000)
+  ) {
+    console.log(`[Welcome Email Service] Deduplicated untuk ${recipientEmail}`);
+    return {
+      success: true,
+      provider: 'brevo_and_fonnte',
+      message: `Notifikasi selamat datang untuk ${recipientEmail} sudah diproses.`,
+      emailSentTo: recipientEmail,
+      whatsappSentTo: userPhone,
+    };
+  }
+
   console.log(`[Welcome Email Service] Memulai pengiriman otomatis untuk ${recipientEmail} (WA: ${userPhone})...`);
 
   // Kirim data ke Make.com Webhook secara asinkron tanpa menahan proses utama
@@ -427,6 +467,7 @@ export async function sendWelcomeEmailAutomation(
     email: recipientEmail,
     password: payload.password || '',
     nomor_wa: userPhone,
+    forceTest: payload.forceTest,
   }).catch((hookErr) => {
     console.warn('[Welcome Email Service] Make.com Webhook background error:', hookErr);
   });
@@ -453,6 +494,7 @@ export async function sendWelcomeEmailAutomation(
         nomor_wa: userPhone,
         phone: userPhone,
         password: payload.password || '',
+        forceTest: Boolean(payload.forceTest),
         brevoApiKey: activeBrevoKey,
         senderEmail: 'admin@jualrugi.my.id',
         senderName: 'jualrugi.my.id',

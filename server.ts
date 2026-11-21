@@ -19,6 +19,7 @@ import {
   upsertPushSubscription,
 } from './shared/webPushCore.js';
 import {
+  claimOnceDispatch,
   getRuntimeSupabaseConfig,
   listRegisteredUsers,
   resolveSupabaseUsersCredentials,
@@ -1960,10 +1961,19 @@ Team Admin jualrugi.my.id`;
   // Endpoint Khusus Pendaftaran User ke Webhook Make.com (Bebas dari masalah CORS & Timeout)
   app.post('/api/registration-webhook', async (req, res) => {
     try {
-      const nama = (req.body.nama || req.body.fullName || req.body.name || req.body.nama_user || 'Member JualRugi').trim();
-      const email = (req.body.email || '').trim().toLowerCase();
-      const password = req.body.password || '';
-      const rawPhone = (req.body.nomor_wa || req.body.whatsapp || req.body.phone || req.body.no_whatsapp || '').trim();
+      if (req.body?.type === 'UPDATE' && req.body?.table === 'users') {
+        return res.status(200).json({
+          success: true,
+          skipped: true,
+          reason: 'Supabase UPDATE event diabaikan agar tidak memicu double action webhook.',
+        });
+      }
+
+      const srcBody = req.body?.record && typeof req.body.record === 'object' ? req.body.record : req.body;
+      const nama = (srcBody.nama || srcBody.fullName || srcBody.name || srcBody.nama_user || 'Member JualRugi').trim();
+      const email = (srcBody.email || '').trim().toLowerCase();
+      const password = srcBody.password || req.body.password || '';
+      const rawPhone = (srcBody.nomor_wa || srcBody.whatsapp || srcBody.phone || srcBody.no_whatsapp || '').trim();
 
       // Normalisasi nomor WA (contoh: 0896... -> 62896...)
       let cleanPhone = rawPhone.replace(/\D/g, '');
@@ -1973,6 +1983,18 @@ Team Admin jualrugi.my.id`;
         cleanPhone = '62' + cleanPhone;
       }
       const nomor_wa = cleanPhone || rawPhone;
+
+      if (
+        !req.body?.forceTest &&
+        email &&
+        !claimOnceDispatch('server-registration-webhook', `${email}|${nomor_wa}`, 120000)
+      ) {
+        return res.status(200).json({
+          success: true,
+          deduplicated: true,
+          message: 'Webhook registrasi sudah diproses sebelumnya (deduplicated).',
+        });
+      }
 
       const targetWebhook =
         (req.body.webhookUrl && typeof req.body.webhookUrl === 'string' && req.body.webhookUrl.startsWith('http')
@@ -2223,7 +2245,17 @@ Team Admin jualrugi.my.id`;
   // Otomatisasi Welcome Email Endpoint (Terhubung ke Make.com Webhook & Gmail)
   app.post('/api/send-welcome-email', async (req, res) => {
     try {
-      const { name, email, phone, zapierWebhookUrl, webhookUrl } = req.body;
+      if (req.body?.type === 'UPDATE' && req.body?.table === 'users') {
+        return res.status(200).json({
+          success: true,
+          skipped: true,
+          reason: 'Supabase UPDATE event diabaikan agar tidak memicu double action Welcome WA.',
+        });
+      }
+
+      const srcBody = req.body?.record && typeof req.body.record === 'object' ? req.body.record : req.body;
+      const email = String(srcBody?.email || req.body?.email || '').trim().toLowerCase();
+      const { zapierWebhookUrl, webhookUrl } = req.body;
 
       if (!email || !email.includes('@')) {
         return res.status(400).json({
@@ -2237,8 +2269,8 @@ Team Admin jualrugi.my.id`;
         globalZapierWebhookUrl = activeWebhook.trim();
       }
 
-      const userName = (req.body.fullName || req.body.name || req.body.nama_user || req.body.recipientName || 'Member JualRugi').trim();
-      const rawPhone = (req.body.whatsapp || req.body.phone || req.body.no_whatsapp || '').trim();
+      const userName = (srcBody.fullName || srcBody.name || srcBody.nama_user || srcBody.recipientName || 'Member JualRugi').trim();
+      const rawPhone = (srcBody.whatsapp || srcBody.phone || srcBody.no_whatsapp || '').trim();
       let cleanPhone = rawPhone.replace(/\D/g, '');
       if (cleanPhone.startsWith('0')) {
         cleanPhone = '62' + cleanPhone.slice(1);
@@ -2246,6 +2278,20 @@ Team Admin jualrugi.my.id`;
         cleanPhone = '62' + cleanPhone;
       }
       const userPhone = cleanPhone || '-';
+
+      if (
+        !req.body?.forceTest &&
+        !claimOnceDispatch('server-welcome-wa-email', `${email}|${userPhone}`, 120000)
+      ) {
+        console.log(`[Server - Welcome Email] Deduplicated untuk ${email} (${userPhone})`);
+        return res.status(200).json({
+          success: true,
+          deduplicated: true,
+          message: `Notifikasi selamat datang untuk ${email} sudah terkirim sebelumnya (deduplicated).`,
+          emailSentTo: email,
+          whatsappSentTo: userPhone,
+        });
+      }
 
       // Pastikan data pendaftar tercatat di database admin (Disk + Supabase)
       if (email) {
@@ -2483,29 +2529,7 @@ Team Admin jualrugi.my.id`;
               }
             }
 
-            // D. Teruskan data registrasi baru ke Make.com Webhook lengkap dengan template HTML Foto 2, 3, 4
-            if (targetWebhook && targetWebhook.startsWith('http')) {
-              try {
-                fetch(targetWebhook, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    nama: userName,
-                    email: email,
-                    password: req.body.password || '',
-                    nomor_wa: userPhone,
-                    name: userName,
-                    phone: userPhone,
-                    sender_name: 'jualrugi.my.id',
-                    sender_email: 'admin@jualrugi.my.id',
-                    subject: welcomeSubject,
-                    htmlContent: welcomeHtml,
-                    textContent: pesanWa,
-                    registered_at: new Date().toISOString(),
-                  }),
-                }).catch((e) => console.warn('[Server] Make.com background webhook error:', e));
-              } catch (e) {}
-            }
+            // Make.com webhook tidak ditembak ulang dari sini karena sudah ditangani 1x oleh /api/registration-webhook.
 
             return res.status(200).json({
               success: true,

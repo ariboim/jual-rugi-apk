@@ -119,6 +119,7 @@ export const WelcomeEmailSetupModal: React.FC<WelcomeEmailSetupModalProps> = ({
         name: testName,
         email: testEmail,
         phone: '0812-8888-9999',
+        forceTest: true,
       });
 
       setTestResult(result);

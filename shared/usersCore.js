@@ -132,6 +132,40 @@ function runWithUsersWriteLock(fn) {
   return next;
 }
 
+/**
+ * Guard idempotensi agar webhook / notifikasi welcome WA tidak terkirim ganda/triple
+ * untuk user yang sama dalam rentang waktu singkat.
+ * @param {string} namespace
+ * @param {string} key
+ * @param {number} [ttlMs]
+ */
+export function claimOnceDispatch(namespace, key, ttlMs = 120000) {
+  const cleanNs = String(namespace || 'default').trim();
+  const cleanKey = String(key || '').trim().toLowerCase();
+  if (!cleanKey) return true;
+
+  if (!globalThis.__JUALRUGI_DISPATCH_LOCKS__) {
+    globalThis.__JUALRUGI_DISPATCH_LOCKS__ = new Map();
+  }
+  const store = globalThis.__JUALRUGI_DISPATCH_LOCKS__;
+  const now = Date.now();
+
+  if (store.size > 500) {
+    for (const [k, exp] of store.entries()) {
+      if (exp <= now) store.delete(k);
+    }
+  }
+
+  const composite = `${cleanNs}:${cleanKey}`;
+  const existingExp = store.get(composite);
+  if (existingExp && existingExp > now) {
+    return false;
+  }
+
+  store.set(composite, now + Math.max(5000, Number(ttlMs) || 120000));
+  return true;
+}
+
 export function setRuntimeSupabaseConfig(url = '', anonKey = '') {
   const cleanUrl = String(url || '').trim().replace(/\/+$/, '');
   const cleanKey = String(anonKey || '').trim();
@@ -395,10 +429,10 @@ async function persistRowToSupabaseTable(sb, tableName, payload, email) {
     Prefer: 'return=representation',
   };
 
-  // 1. Cek apakah user dengan email ini sudah ada (select=id,email saja agar kebal perbedaan kolom opsional)
+  // 1. Cek apakah user dengan email ini sudah ada
   try {
     const checkRes = await fetch(
-      `${sb.url}/rest/v1/${tableName}?select=id,email&email=ilike.${encodeURIComponent(email)}&limit=1`,
+      `${sb.url}/rest/v1/${tableName}?select=id,email,name,whatsapp,phone&email=ilike.${encodeURIComponent(email)}&limit=1`,
       {
         headers: {
           apikey: sb.key,
@@ -410,9 +444,22 @@ async function persistRowToSupabaseTable(sb, tableName, payload, email) {
     if (checkRes.ok) {
       const existingRows = await checkRes.json().catch(() => []);
       if (Array.isArray(existingRows) && existingRows.length > 0) {
+        const existing = existingRows[0] || {};
+        const sameName =
+          !payload.name ||
+          payload.name === 'Member JualRugi' ||
+          String(existing.name || '').trim() === String(payload.name || '').trim();
+        const existingWa = cleanWhatsAppDigits(existing.whatsapp || existing.phone || '');
+        const incomingWa = cleanWhatsAppDigits(payload.whatsapp || payload.phone || '');
+        const sameWa = !incomingWa || existingWa === incomingWa;
+
+        if (sameName && sameWa) {
+          return { ok: true, row: existing, table: tableName, skippedPatch: true };
+        }
+
         const patched = await patchExistingRowByEmail(sb, tableName, email, payload);
         if (patched?.ok) return patched;
-        return { ok: true, row: existingRows[0], table: tableName };
+        return { ok: true, row: existing, table: tableName };
       }
     } else if (checkRes.status === 404) {
       return { ok: false, error: `Table ${tableName} not found (404)` };

@@ -13,7 +13,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { sendWelcomeEmailAutomation, sendRegistrationToMakeWebhook } from '../services/welcomeEmail';
+import { sendWelcomeEmailAutomation } from '../services/welcomeEmail';
 import {
   registerUserInSupabase,
   fetchUserByEmailFromSupabase,
@@ -161,6 +161,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setGeneralError(null);
 
     if (mode === 'register') {
@@ -194,54 +195,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         console.warn('[Auth] Gagal simpan ke userService lokal:', saveErr);
       }
 
-      // 1. Pastikan kredensial publik Supabase terhidrasi & data tersimpan permanen ke Supabase DB + /api/admin/users
+      // 1. Pastikan kredensial publik Supabase terhidrasi & data tersimpan ke Supabase DB terlebih dahulu
+      //    (berurutan agar tidak memicu balapan double INSERT/UPDATE pada webhook Supabase)
       try {
         await hydrateSupabaseCredentialsFromServer().catch(() => null);
-        await Promise.allSettled([
-          registerUserInSupabase({
-            id: savedLocalUser?.id || newUserId,
+        await registerUserInSupabase({
+          id: savedLocalUser?.id || newUserId,
+          name: regName,
+          email: regEmail,
+          password: regPassword,
+          whatsapp: regPhone,
+          city: 'Jakarta Selatan',
+          role: 'buyer',
+          createdAt: registeredAtIso,
+        }).catch(() => null);
+
+        await syncUserRegistrationToBackend(
+          savedLocalUser || {
+            id: newUserId,
             name: regName,
             email: regEmail,
-            password: regPassword,
             whatsapp: regPhone,
-            city: 'Jakarta Selatan',
+            phone: regPhone,
             role: 'buyer',
-            createdAt: registeredAtIso,
-          }),
-          syncUserRegistrationToBackend(
-            savedLocalUser || {
-              id: newUserId,
-              name: regName,
-              email: regEmail,
-              whatsapp: regPhone,
-              phone: regPhone,
-              role: 'buyer',
-              registeredAt: registeredAtIso,
-              city: 'Jakarta Selatan',
-              status: 'active',
-              count: 0,
-              listingQuota: 1,
-            },
-            regPassword
-          ),
-        ]);
+            registeredAt: registeredAtIso,
+            city: 'Jakarta Selatan',
+            status: 'active',
+            count: 0,
+            listingQuota: 1,
+          },
+          regPassword
+        ).catch(() => null);
       } catch (sbEx) {
         console.warn('[Auth] Supabase & backend sync note:', sbEx);
       }
 
-      // 2. Kirim Data Registrasi ke Webhook Make.com (format JSON: nama, email, password, nomor_wa) & Welcome Email
+      // 2. Trigger Welcome Email, WhatsApp Fonnte, & Webhook Make.com (cukup 1x tanpa duplikasi)
       try {
-        console.log('[Auth] Mengirim data pendaftaran ke Make.com Webhook...');
-        sendRegistrationToMakeWebhook({
-          nama: regName,
-          email: regEmail,
-          password: regPassword,
-          nomor_wa: regPhone,
-        }).catch((hookErr) => {
-          console.warn('[Auth] Gagal kirim ke Make.com Webhook:', hookErr);
-        });
-
-        // Trigger Welcome Email & WhatsApp Otomatis
         await sendWelcomeEmailAutomation({
           name: regName,
           email: regEmail,
@@ -249,6 +239,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           nama: regName,
           password: regPassword,
           nomor_wa: regPhone,
+          userId: savedLocalUser?.id || newUserId,
         });
       } catch (authDispatchErr) {
         console.warn('[Auth] Notifikasi pendaftaran mengalami kendala:', authDispatchErr);

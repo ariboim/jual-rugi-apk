@@ -4,7 +4,7 @@
  * Kebal dari masalah Browser CORS karena dieksekusi secara Server-to-Server di edge Cloudflare.
  */
 
-import { upsertRegisteredUser } from '../../shared/usersCore.js';
+import { upsertRegisteredUser, claimOnceDispatch } from '../../shared/usersCore.js';
 
 export async function onRequestPost(context: { request: Request; env?: any }) {
   const { request, env } = context;
@@ -22,10 +22,22 @@ export async function onRequestPost(context: { request: Request; env?: any }) {
       );
     }
 
-    const nama = (body.nama || body.fullName || body.name || body.nama_user || 'Member JualRugi').trim();
-    const email = (body.email || '').trim().toLowerCase();
-    const password = body.password || '';
-    const rawPhone = (body.nomor_wa || body.whatsapp || body.phone || body.no_whatsapp || '').trim();
+    if (body?.type === 'UPDATE' && body?.table === 'users') {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: 'Supabase UPDATE event diabaikan agar tidak memicu double action webhook.',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    const srcBody = body?.record && typeof body.record === 'object' ? body.record : body;
+    const nama = (srcBody.nama || srcBody.fullName || srcBody.name || srcBody.nama_user || 'Member JualRugi').trim();
+    const email = (srcBody.email || '').trim().toLowerCase();
+    const password = srcBody.password || body.password || '';
+    const rawPhone = (srcBody.nomor_wa || srcBody.whatsapp || srcBody.phone || srcBody.no_whatsapp || '').trim();
 
     // Normalisasi nomor WhatsApp
     let cleanPhone = rawPhone.replace(/\D/g, '');
@@ -35,6 +47,21 @@ export async function onRequestPost(context: { request: Request; env?: any }) {
       cleanPhone = '62' + cleanPhone;
     }
     const nomor_wa = cleanPhone || rawPhone;
+
+    if (
+      !body?.forceTest &&
+      email &&
+      !claimOnceDispatch('cf-registration-webhook', `${email}|${nomor_wa}`, 120000)
+    ) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          deduplicated: true,
+          message: 'Webhook registrasi untuk user ini sudah diproses (deduplicated).',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
 
     if (email && email.includes('@')) {
       await upsertRegisteredUser(

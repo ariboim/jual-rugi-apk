@@ -1,4 +1,4 @@
-import { upsertRegisteredUser } from '../../shared/usersCore.js';
+import { upsertRegisteredUser, claimOnceDispatch } from '../../shared/usersCore.js';
 
 interface Env {
   BREVO_API_KEY?: string;
@@ -33,9 +33,21 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       );
     }
 
-    const targetEmail = (body.email || body.email_user || body.recipientEmail || '').trim();
-    const userName = (body.fullName || body.name || body.nama_user || body.recipientName || 'Member JualRugi').trim();
-    const rawPhone = (body.whatsapp || body.phone || body.no_whatsapp || body.userPhone || '').trim();
+    if (body?.type === 'UPDATE' && body?.table === 'users') {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: 'Supabase UPDATE event diabaikan agar tidak memicu double action Welcome WA.',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const srcBody = body?.record && typeof body.record === 'object' ? body.record : body;
+    const targetEmail = (srcBody.email || srcBody.email_user || srcBody.recipientEmail || '').trim().toLowerCase();
+    const userName = (srcBody.fullName || srcBody.name || srcBody.nama_user || srcBody.recipientName || 'Member JualRugi').trim();
+    const rawPhone = (srcBody.whatsapp || srcBody.phone || srcBody.no_whatsapp || srcBody.userPhone || '').trim();
 
     // Normalisasi Nomor WhatsApp (hanya angka & wajib format 628...)
     let cleanPhone = rawPhone.replace(/\D/g, '');
@@ -55,6 +67,26 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         }),
         {
           status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    if (
+      !body?.forceTest &&
+      !claimOnceDispatch('cf-welcome-wa-email', `${targetEmail}|${userPhone}`, 120000)
+    ) {
+      console.log(`[CF Pages - Welcome Email] Deduplicated untuk ${targetEmail} (${userPhone})`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          deduplicated: true,
+          message: `Welcome WA & Email untuk ${targetEmail} sudah terkirim sebelumnya (deduplicated).`,
+          emailSentTo: targetEmail,
+          whatsappSentTo: userPhone,
+        }),
+        {
+          status: 200,
           headers: { 'Content-Type': 'application/json' },
         }
       );
@@ -308,37 +340,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       }
     }
 
-    // E. Teruskan data registrasi ke Webhook Make.com (Payload: nama, email, password, nomor_wa)
-    const MAKE_WEBHOOK_URL = 'https://hook.eu1.make.com/1i6d9bq5157dnksxju764f8uno3bdsam';
-    const MAKE_FALLBACK_URL = 'https://hook.eu1.make.com/1i6d9bq5i57dnksxju764f8uno3bdsam';
-    const makePayload = {
-      nama: userName,
-      email: targetEmail,
-      password: body.password || '',
-      nomor_wa: userPhone,
-    };
-    try {
-      fetch(MAKE_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(makePayload),
-      }).then(async (res) => {
-        const text = await res.text().catch(() => '');
-        if (!res.ok || text.includes('Webhook not found')) {
-          fetch(MAKE_FALLBACK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(makePayload),
-          }).catch(() => {});
-        }
-      }).catch(() => {
-        fetch(MAKE_FALLBACK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(makePayload),
-        }).catch(() => {});
-      });
-    } catch (e) {}
+    // Webhook Make.com ditangani terpisah oleh /api/registration-webhook agar tidak terjadi double/triple trigger.
 
     if (brevoSuccess || fonnteSuccess) {
       return new Response(
