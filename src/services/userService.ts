@@ -292,14 +292,39 @@ export function getSellerWhatsAppNumber(listing: any): string {
   return clean || '6281288991234';
 }
 
+export const WHATSAPP_SAFETY_TEMPLATE_NOTICE =
+  '⚠️ Catatan Keamanan Transaksi JualRugi.my.id:\n' +
+  '• Transaksi wajib COD tatap muka & cek fisik barang langsung.\n' +
+  '• DILARANG transfer DP / uang muka / booking sebelum melihat barang.\n' +
+  '• Pembeli diwajibkan segera *Laporkan Iklan* ke Admin jika penjual memaksa transfer DP tanpa melihat barang dengan alasan apa pun.';
+
 /**
- * Membuat tautan dinamis wa.me ke seller dengan pesan otomatis:
- * "Halo kak, saya tertarik dengan produk *[nama_produk]* yang ada di JualRugi.my.id"
+ * Menambahkan instruksi keamanan anti-DP & Laporkan Iklan ke template chat seller WhatsApp
+ */
+export function appendSellerSafetyNotice(baseMessage: string): string {
+  const cleanBase = (baseMessage || '').trim();
+  if (!cleanBase) return WHATSAPP_SAFETY_TEMPLATE_NOTICE;
+  if (cleanBase.includes('Laporkan Iklan') && cleanBase.includes('DILARANG transfer DP')) {
+    return cleanBase;
+  }
+  return `${cleanBase}\n\n${WHATSAPP_SAFETY_TEMPLATE_NOTICE}`;
+}
+
+/**
+ * Membuat isi pesan template chat seller resmi JualRugi.my.id
+ */
+export function buildSellerWhatsAppChatMessage(listing: any): string {
+  const productName = listing?.title || 'Produk JualRugi';
+  const baseMessage = `Halo kak, saya tertarik dengan produk *${productName}* yang ada di JualRugi.my.id`;
+  return appendSellerSafetyNotice(baseMessage);
+}
+
+/**
+ * Membuat tautan dinamis wa.me ke seller dengan pesan otomatis + pengingat keamanan anti-DP
  */
 export function buildSellerWhatsAppChatUrl(listing: any): string {
   const sellerPhone = getSellerWhatsAppNumber(listing);
-  const productName = listing?.title || 'Produk JualRugi';
-  const message = `Halo kak, saya tertarik dengan produk *${productName}* yang ada di JualRugi.my.id`;
+  const message = buildSellerWhatsAppChatMessage(listing);
   return `https://wa.me/${sellerPhone}?text=${encodeURIComponent(message)}`;
 }
 

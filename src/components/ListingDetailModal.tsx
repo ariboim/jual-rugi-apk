@@ -26,9 +26,12 @@ import { getAdExpiryInfo, isListingOwner, isPriorityBUActive } from '../services
 import {
   getSellerWhatsAppNumber,
   buildSellerWhatsAppChatUrl,
+  buildSellerWhatsAppChatMessage,
+  appendSellerSafetyNotice,
 } from '../services/userService';
 import { hasUserReportedListing } from '../services/reportService';
 import { ReportListingModal } from './ReportListingModal';
+import { openWhatsAppSafetyWarning } from './WhatsAppSafetyWarningModal';
 
 export const WhatsAppIcon: React.FC<{ className?: string }> = ({
   className = 'w-4 h-4',
@@ -116,6 +119,7 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
   // Nomor WhatsApp Seller dinamis & Tautan Direct Chat WhatsApp resmi:
   // wa.me/[nomor_hp_seller]?text=Halo kak, saya tertarik dengan produk *[nama_produk]* yang ada di JualRugi.my.id
   const sellerWaNumber = useMemo(() => getSellerWhatsAppNumber(listing), [listing]);
+  const sellerDirectChatMessage = useMemo(() => buildSellerWhatsAppChatMessage(listing), [listing]);
   const sellerDirectChatUrl = useMemo(() => buildSellerWhatsAppChatUrl(listing), [listing]);
 
   // Validasi Kepemilikan (Auth Check): HANYA seller/pemilik listing yang boleh melihat info tanggal kadaluarsa
@@ -573,6 +577,16 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                 href={sellerDirectChatUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openWhatsAppSafetyWarning({
+                    whatsappUrl: sellerDirectChatUrl,
+                    sellerName: listing.seller?.name,
+                    listingTitle: listing.title,
+                    messagePreview: sellerDirectChatMessage,
+                    onOpenReport: () => setIsReportModalOpen(true),
+                  });
+                }}
                 className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-black flex items-center gap-1.5 border border-emerald-200 transition cursor-pointer shrink-0 shadow-2xs active:scale-95"
                 title="Chat Langsung via WhatsApp"
               >
@@ -590,7 +604,9 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {quickOffers.map((offer, idx) => {
-                  const offerWaMessage = `Halo kak, saya tertarik dengan produk *${listing.title}* yang ada di JualRugi.my.id. Boleh nego di harga ${formatRupiah(offer)}? Siap COD hari ini.`;
+                  const offerWaMessage = appendSellerSafetyNotice(
+                    `Halo kak, saya tertarik dengan produk *${listing.title}* yang ada di JualRugi.my.id. Boleh nego di harga ${formatRupiah(offer)}? Siap COD hari ini.`
+                  );
                   const offerWaLink = `https://wa.me/${sellerWaNumber}?text=${encodeURIComponent(offerWaMessage)}`;
 
                   return (
@@ -599,7 +615,19 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
                       href={offerWaLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={() => onQuickMakeOffer && onQuickMakeOffer(listing, offer)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        openWhatsAppSafetyWarning({
+                          whatsappUrl: offerWaLink,
+                          sellerName: listing.seller?.name,
+                          listingTitle: listing.title,
+                          messagePreview: offerWaMessage,
+                          onConfirmProceed: () => {
+                            if (onQuickMakeOffer) onQuickMakeOffer(listing, offer);
+                          },
+                          onOpenReport: () => setIsReportModalOpen(true),
+                        });
+                      }}
                       className="py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-xs font-semibold text-emerald-950 transition text-center cursor-pointer active:scale-95 shadow-xs block"
                       title={`Kirim penawaran ${formatRupiah(offer)} ke WhatsApp penjual`}
                     >
@@ -760,6 +788,16 @@ export const ListingDetailModal: React.FC<ListingDetailModalProps> = ({
               href={sellerDirectChatUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => {
+                e.preventDefault();
+                openWhatsAppSafetyWarning({
+                  whatsappUrl: sellerDirectChatUrl,
+                  sellerName: listing.seller?.name,
+                  listingTitle: listing.title,
+                  messagePreview: sellerDirectChatMessage,
+                  onOpenReport: () => setIsReportModalOpen(true),
+                });
+              }}
               className="grow py-3 px-4 rounded-2xl bg-[#25D366] hover:bg-[#20ba5a] active:scale-95 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all truncate text-center"
               title="Chat Seller via WhatsApp resmi"
             >

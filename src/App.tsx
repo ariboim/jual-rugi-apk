@@ -61,6 +61,7 @@ import { ChatModal } from './components/ChatModal';
 import { QRISModal, MonetizationType } from './components/QRISModal';
 import { SellerDashboard } from './components/SellerDashboard';
 import { CODSafetyGuideModal } from './components/CODSafetyGuideModal';
+import { WhatsAppSafetyWarningModal } from './components/WhatsAppSafetyWarningModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { CategoryFilter } from './components/CategoryFilter';
 import { PromoBannerModal } from './components/PromoBannerModal';
@@ -2922,6 +2923,9 @@ export default function App() {
         defaultEmail={currentUser.email || 'bca.ccpl@gmail.com'}
         onSuccessToast={(msg) => showToast(msg)}
       />
+
+      {/* Kartu Peringatan Keamanan Transaksi Sebelum Chat WhatsApp Seller */}
+      <WhatsAppSafetyWarningModal />
 
       {/* Live Activity Social Proof Ticker (FOMO & Promo Booster) */}
       <LiveActivityTicker />

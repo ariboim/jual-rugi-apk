@@ -2,6 +2,8 @@ import React from 'react';
 import { MapPin, Flame, ShieldCheck, Clock, CheckCircle2, Lock } from 'lucide-react';
 import { Listing } from '../types';
 import { isPriorityBUActive } from '../services/listingLifecycle';
+import { appendSellerSafetyNotice } from '../services/userService';
+import { openWhatsAppSafetyWarning } from './WhatsAppSafetyWarningModal';
 
 export const WhatsAppIcon: React.FC<{ className?: string }> = ({
   className = 'w-4 h-4',
@@ -68,7 +70,9 @@ export const ListingCard: React.FC<ListingCardProps> = ({
     if (clean.length >= 9) targetPhone = clean;
   }
 
-  const messageText = `Halo kak, saya tertarik dengan produk *${listing.title}*`;
+  const messageText = appendSellerSafetyNotice(
+    `Halo kak, saya tertarik dengan produk *${listing.title}*`
+  );
   const whatsappUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(messageText)}`;
 
   return (
@@ -271,8 +275,17 @@ export const ListingCard: React.FC<ListingCardProps> = ({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                if (onQuickChat) onQuickChat(e);
+                openWhatsAppSafetyWarning({
+                  whatsappUrl,
+                  sellerName: listing.seller?.name,
+                  listingTitle: listing.title,
+                  messagePreview: messageText,
+                  onConfirmProceed: () => {
+                    if (onQuickChat) onQuickChat(e);
+                  },
+                });
               }}
               className="mt-3 w-full py-2.5 px-2 rounded-xl text-xs font-black bg-[#25D366] hover:bg-[#20ba5a] active:scale-95 text-white shadow-md shadow-emerald-500/25 flex items-center justify-center gap-1.5 cursor-pointer transition-all text-center"
               title={`Chat Seller via WhatsApp untuk produk ${listing.title}`}
